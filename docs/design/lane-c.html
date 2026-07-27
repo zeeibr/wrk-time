@@ -1,0 +1,670 @@
+<style>
+/* ============ host-owned device shell (verbatim) ============ */
+.shot{margin:0;flex:0 0 auto}
+.dev{width:316px;height:666px;padding:8px;border-radius:46px;background:linear-gradient(160deg,#3a3d40,#17191a 40%,#2c2f31);box-shadow:0 2px 3px rgba(0,0,0,.4),0 30px 60px -30px rgba(0,0,0,.7);position:relative}
+.dev__island{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:86px;height:25px;border-radius:99px;background:#000;z-index:9}
+.dev__screen{width:300px;height:650px;border-radius:38px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.sysbar{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:15px 24px 0;color:var(--sys-fg,#fff);font:600 13px/1 -apple-system,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.homebar{flex:0 0 auto;height:24px;display:grid;place-items:center}
+.homebar::after{content:"";width:112px;height:4px;border-radius:99px;background:var(--sys-fg,#fff);opacity:.4}
+
+/* ============ BASELINE — lane C ============ */
+.lc{
+  --paper:#FAFAF8;
+  --paper-2:#F1F3F1;
+  --rule:#DDE2E0;
+  --rule-soft:#E9ECEA;
+  --ink:#0E1413;
+  --ink-2:#454E4B;
+  --ink-3:#656E6A;
+  --active:#1B3A8C;
+  --ontarget:#2E6F53;
+  --caution:#99560F;
+  --sans:"Helvetica Neue",Helvetica,-apple-system,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  display:flex;flex-wrap:wrap;align-items:flex-start;gap:40px 34px;
+  padding:44px 34px;background:#E7EAE8;font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+.lc .cap{
+  margin:16px 2px 0;max-width:316px;
+  font:400 11.5px/1.5 var(--sans);color:#4B5350;letter-spacing:.005em;
+}
+.lc .cap b{font-weight:500;color:#1B211F}
+
+/* screen roots */
+.lc .lcS{--sys-fg:#0E1413;background:var(--paper);color:var(--ink)}
+.lc .lcS--4{--sys-fg:#F2F4F2;background:linear-gradient(178deg,#0B100F 0%,#131A18 52%,#0C1211 100%);color:#F7F8F6}
+
+.lc .lcx-pg{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 16px 0}
+
+/* icons */
+.lc .ic{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;display:block}
+.lc .ic--hair{stroke-width:1.3}
+.lc .ic--thick{stroke-width:2}
+
+/* ---- masthead ---- */
+.lc .lcx-mast{display:flex;justify-content:space-between;align-items:baseline}
+.lc .mast__b{font:500 9px/1 var(--mono);letter-spacing:.24em;color:var(--ink)}
+.lc .mast__d{font:400 9px/1 var(--mono);letter-spacing:.13em;color:var(--ink-3)}
+.lc .h1{
+  margin-top:9px;font:300 25px/1.06 var(--sans);letter-spacing:-.032em;color:var(--ink);
+}
+.lc .h1 em{font-style:normal;font-weight:500}
+.lc .subhead{margin-top:6px;font:400 10.5px/1.45 var(--sans);color:var(--ink-2);letter-spacing:.005em}
+.lc .rule-firm{height:1.5px;background:var(--ink);margin-top:11px}
+.lc .rule-hair{height:1px;background:var(--rule)}
+
+/* ---- marginal index rail ---- */
+.lc .sec{display:grid;grid-template-columns:22px 1fr;column-gap:14px;position:relative}
+.lc .sec+.sec{margin-top:17px}
+.lc .sec__idx{display:flex;flex-direction:column;align-items:flex-start;padding-top:2px;border-right:1px solid var(--rule);margin-right:-7px;padding-right:6px}
+.lc .idx__n{font:500 9px/1 var(--mono);letter-spacing:.06em;color:var(--ink)}
+.lc .idx__v{
+  margin-top:8px;writing-mode:vertical-rl;transform:rotate(180deg);
+  font:400 7.5px/1 var(--mono);letter-spacing:.2em;color:var(--ink-3);
+}
+.lc .sec__body{min-width:0}
+.lc .secHead{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:5px}
+.lc .secHead__t{font:500 12.5px/1 var(--sans);letter-spacing:-.008em;color:var(--ink)}
+.lc .secHead__m{font:400 7.5px/1 var(--mono);letter-spacing:.18em;color:var(--ink-3)}
+.lc .secHead+.rule-firm{margin-top:0;height:1.2px}
+
+/* ---- schedule ---- */
+.lc .sked{list-style:none;margin:0;padding:0}
+.lc .sked__r{display:grid;grid-template-columns:36px 1fr 22px;column-gap:8px;align-items:start;padding:10px 0 11px;border-bottom:1px solid var(--rule)}
+.lc .sked__t{font:400 9.5px/1.35 var(--mono);letter-spacing:.02em;color:var(--ink-2);font-variant-numeric:tabular-nums;padding-top:1px}
+.lc .sked__r.is-next .sked__t{color:var(--active);font-weight:500}
+.lc .sked__tag{display:block;font:500 7px/1 var(--mono);letter-spacing:.2em;color:var(--active);margin-bottom:4px}
+.lc .sked__ttl{display:block;font:500 12px/1.25 var(--sans);letter-spacing:-.006em;color:var(--ink)}
+.lc .sked__sub{display:flex;align-items:center;gap:5px;margin-top:4px;font:400 8.5px/1.3 var(--mono);letter-spacing:.03em;color:var(--ink-3)}
+.lc .sked__sub .ic{width:11px;height:11px;flex:0 0 auto;stroke-width:1.6}
+.lc .sked__s{width:22px;height:22px;color:var(--ink-3)}
+.lc .sked__s .ic{width:18px;height:18px;margin:2px auto 0}
+.lc .sked__r.is-done .sked__s{color:var(--ontarget)}
+.lc .sked__r.is-next .sked__s{color:var(--active)}
+.lc .sked__r.is-done .sked__ttl{color:var(--ink-2);font-weight:400}
+.lc .sked__mk{display:grid;grid-template-columns:36px 1fr auto;column-gap:8px;align-items:center;padding:7px 0 8px;border-bottom:1px dotted var(--rule)}
+.lc .mk__l{font:400 9.5px/1.2 var(--sans);letter-spacing:.01em;color:var(--ink-2)}
+.lc .mk__r{font:400 7.5px/1 var(--mono);letter-spacing:.15em;color:var(--ink-3)}
+
+/* ---- two-up meters ---- */
+.lc .two{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;padding-top:11px}
+.lc .two>div+div{border-left:1px solid var(--rule);padding-left:12px;margin-left:-1px}
+.lc .mtr__k{font:400 7.5px/1 var(--mono);letter-spacing:.17em;color:var(--ink-3)}
+.lc .mtr__v{margin-top:8px;font:300 24px/1 var(--sans);letter-spacing:-.038em;color:var(--ink);font-variant-numeric:tabular-nums}
+.lc .mtr__u{margin-left:4px;font:400 7.5px/1 var(--mono);letter-spacing:.12em;color:var(--ink-3)}
+.lc .mtr__c{margin-top:7px;font:400 8.5px/1.35 var(--mono);letter-spacing:.03em;color:var(--ink-3)}
+.lc .segs{display:flex;gap:2px;margin-top:9px;height:6px}
+.lc .segs span{flex:1 1 auto;background:var(--rule-soft);border-bottom:1px solid var(--rule)}
+.lc .segs span.on{background:var(--ink);border-bottom-color:var(--ink)}
+.lc .bar{position:relative;height:6px;margin-top:9px;background:var(--rule-soft);border-bottom:1px solid var(--rule)}
+.lc .bar__f{position:absolute;left:0;top:0;bottom:0;width:66%;background:var(--ontarget)}
+.lc .bar__t{position:absolute;left:calc(100% - 1.5px);top:-3px;bottom:-3px;width:1.5px;background:var(--ink)}
+
+/* ---- trend strip ---- */
+.lc .trendTop{display:flex;justify-content:space-between;align-items:baseline;padding-top:2px}
+.lc .trendTop__v{font:300 20px/1 var(--sans);letter-spacing:-.035em;font-variant-numeric:tabular-nums}
+.lc .trendTop__v span{font:400 7.5px/1 var(--mono);letter-spacing:.13em;color:var(--ink-3);margin-left:4px}
+.lc .trendTop__d{display:flex;align-items:center;gap:4px;font:500 9px/1 var(--mono);letter-spacing:.06em;color:var(--ontarget)}
+.lc .trendTop__d .ic{width:12px;height:12px;stroke-width:1.7}
+.lc .spark{display:block;width:100%;height:auto;margin-top:6px}
+.lc .sp-area{fill:rgba(14,20,19,.07)}
+.lc .sp-line{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.lc .sp-dot{fill:var(--ink)}
+.lc .sp-halo{fill:var(--paper)}
+.lc .spAx{display:flex;justify-content:space-between;margin-top:4px;font:400 7.5px/1 var(--mono);letter-spacing:.14em;color:var(--ink-3)}
+
+/* ---- tab bar ---- */
+.lc .tabs{margin-top:auto;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--rule);background:var(--paper)}
+.lc .tab{display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 8px;color:var(--ink-3);border-top:2px solid transparent;margin-top:-1px}
+.lc .tab .ic{width:21px;height:21px}
+.lc .tab span{font:400 8px/1 var(--mono);letter-spacing:.13em}
+.lc .tab.is-on{color:var(--ink);border-top-color:var(--ink)}
+.lc .tab.is-on span{font-weight:500;color:var(--ink)}
+
+/* ---- screen 2 : mid-set ---- */
+.lc .lcx-pg--set{padding:14px 16px 0}
+.lc .setTop{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:9px;border-bottom:1.5px solid var(--ink)}
+.lc .setTop__l{font:500 9px/1 var(--mono);letter-spacing:.24em}
+.lc .setTop__r{font:400 8px/1 var(--mono);letter-spacing:.15em;color:var(--ink-3)}
+.lc .rndHead{display:flex;justify-content:space-between;align-items:baseline;margin-top:15px}
+.lc .rndHead__k{font:400 7.5px/1 var(--mono);letter-spacing:.2em;color:var(--ink-3)}
+.lc .rndHead__v{font:500 9.5px/1 var(--mono);letter-spacing:.1em;color:var(--ink);font-variant-numeric:tabular-nums}
+.lc .rnds{display:flex;align-items:flex-end;gap:3px;height:7px;margin-top:8px}
+.lc .rnd{flex:1 1 auto;height:3px;background:var(--rule)}
+.lc .rnd.on{background:var(--ink)}
+.lc .rnd.now{height:7px;background:var(--active)}
+.lc .workKey{margin-top:19px;display:flex;align-items:center;gap:7px;font:500 8px/1 var(--mono);letter-spacing:.24em;color:var(--active)}
+.lc .workKey .ic{width:13px;height:13px;stroke-width:1.7}
+.lc .bignum{
+  margin-top:7px;font:200 108px/.84 var(--sans);letter-spacing:-.062em;color:var(--ink);
+  font-variant-numeric:tabular-nums;display:block;
+}
+.lc .bigmeta{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
+.lc .bigmeta__l{font:400 8px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3)}
+.lc .gauge{position:relative;height:7px;margin-top:16px;background:var(--rule-soft);border-bottom:1px solid var(--rule)}
+.lc .gauge__f{position:absolute;left:0;top:0;bottom:0;width:31.7%;background:var(--active)}
+.lc .gauge__tk{position:absolute;top:-3px;width:1px;height:13px;background:var(--rule)}
+.lc .gaugeAx{display:flex;justify-content:space-between;margin-top:5px;font:400 7.5px/1 var(--mono);letter-spacing:.13em;color:var(--ink-3)}
+.lc .exer{margin-top:21px;font:400 23px/1.08 var(--sans);letter-spacing:-.028em;color:var(--ink)}
+.lc .exerCap{margin-top:8px;padding-top:8px;border-top:1px solid var(--rule);font:400 8.5px/1.5 var(--mono);letter-spacing:.03em;color:var(--ink-2)}
+.lc .nextHead{margin-top:16px;display:flex;justify-content:space-between;align-items:baseline;padding-bottom:5px;border-bottom:1.2px solid var(--ink)}
+.lc .nextHead__k{font:500 7.5px/1 var(--mono);letter-spacing:.22em;color:var(--ink)}
+.lc .nextHead__m{font:400 7.5px/1 var(--mono);letter-spacing:.14em;color:var(--ink-3)}
+.lc .nextRow{display:grid;grid-template-columns:14px 1fr auto;column-gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid var(--rule)}
+.lc .nextRow__i{font:400 7.5px/1 var(--mono);color:var(--ink-3)}
+.lc .nextRow__t{font:400 11.5px/1.2 var(--sans);color:var(--ink)}
+.lc .nextRow__t b{display:block;font:400 8px/1.3 var(--mono);letter-spacing:.04em;color:var(--ink-3);margin-top:3px;font-weight:400}
+.lc .nextRow__v{font:400 12.5px/1 var(--sans);letter-spacing:-.01em;color:var(--ink);font-variant-numeric:tabular-nums}
+.lc .ctrls{margin-top:auto;display:flex;justify-content:center;align-items:flex-start;gap:30px;padding:12px 0 10px}
+.lc .ctrl{display:flex;flex-direction:column;align-items:center;gap:6px}
+.lc .ctrl__b{width:44px;height:44px;border-radius:99px;border:1px solid var(--rule);display:grid;place-items:center;color:var(--ink-2);background:var(--paper)}
+.lc .ctrl__b .ic{width:20px;height:20px}
+.lc .ctrl--main .ctrl__b{width:58px;height:58px;background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.lc .ctrl--main .ctrl__b .ic{width:24px;height:24px}
+.lc .ctrl span{font:400 7.5px/1 var(--mono);letter-spacing:.18em;color:var(--ink-3)}
+.lc .ctrl--main span{color:var(--ink);font-weight:500}
+
+/* ---- screen 3 : metrics plate ---- */
+.lc .figKey{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px}
+.lc .figKey__l{font:500 7.5px/1 var(--mono);letter-spacing:.2em;color:var(--ink)}
+.lc .figKey__r{font:400 7.5px/1 var(--mono);letter-spacing:.13em;color:var(--ink-3)}
+.lc .plate{display:block;width:268px;height:190px;margin-top:7px}
+.lc .pl-grid line{stroke:var(--rule);stroke-width:1}
+.lc .pl-axis{stroke:var(--ink);stroke-width:1.2}
+.lc .pl-axisY{stroke:var(--rule);stroke-width:1}
+.lc .pl-tick line{stroke:var(--ink-3);stroke-width:1}
+.lc .pl-lab text,.lc .pl-ax{font:400 7.5px var(--mono);letter-spacing:.08em;fill:var(--ink-3)}
+.lc .pl-goal{stroke:var(--ontarget);stroke-width:1.2;stroke-dasharray:1 3;stroke-linecap:round}
+.lc .pl-goalLab{font:500 7.5px var(--mono);letter-spacing:.06em;fill:var(--ontarget)}
+.lc .pl-band{fill:rgba(27,58,140,.085)}
+.lc .pl-area{fill:rgba(14,20,19,.075)}
+.lc .pl-proj{fill:none;stroke:var(--active);stroke-width:1.3;stroke-dasharray:4 3.2;stroke-linecap:round}
+.lc .pl-act{fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.lc .pl-now{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:1 3}
+.lc .pl-halo{fill:var(--paper)}
+.lc .pl-dot{fill:var(--ink)}
+.lc .pl-end{fill:var(--ontarget)}
+.lc .pl-lead{stroke:var(--ink);stroke-width:.8}
+.lc .pl-annV{font:400 15px var(--sans);letter-spacing:-.03em;fill:var(--ink)}
+.lc .pl-annK{font:400 7.5px var(--mono);letter-spacing:.1em;fill:var(--ink-3)}
+.lc .pl-proj-lab{font:400 7.5px var(--mono);letter-spacing:.12em;fill:var(--active)}
+.lc .pl-tgt{font:500 7.5px var(--mono);letter-spacing:.11em;fill:var(--ontarget)}
+.lc .plateNote{margin-top:8px;padding-top:7px;border-top:1px solid var(--rule);font:400 8.5px/1.5 var(--mono);letter-spacing:.02em;color:var(--ink-3)}
+
+.lc .tbl{width:268px;border-collapse:collapse;margin-top:5px;table-layout:fixed}
+.lc .tbl th{
+  font:500 7.5px/1 var(--mono);letter-spacing:.18em;color:var(--ink-3);
+  text-align:left;padding:0 0 6px;border-bottom:1.5px solid var(--ink);font-weight:500;
+}
+.lc .tbl th.r{text-align:right}
+.lc .tbl td{padding:6px 0;border-bottom:1px solid var(--rule);vertical-align:baseline}
+.lc .tbl tr:last-child td{border-bottom:1px solid var(--ink)}
+.lc .t-i{font:400 7.5px/1 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.lc .t-k{font:400 11.5px/1.2 var(--sans);letter-spacing:-.004em;color:var(--ink)}
+.lc .t-v{text-align:right;font:500 13.5px/1 var(--sans);letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.lc .t-u{padding-left:6px;font:400 7.5px/1 var(--mono);letter-spacing:.08em;color:var(--ink-3)}
+.lc .t-s{text-align:right;font:500 7.5px/1 var(--mono);letter-spacing:.09em;color:var(--ink-3)}
+.lc .t-s.ok{color:var(--ontarget)}
+.lc .t-s.warn{color:var(--caution)}
+.lc .tblNote{margin-top:7px;font:400 8.5px/1.5 var(--mono);letter-spacing:.02em;color:var(--ink-3)}
+
+/* ---- screen 4 : lock ---- */
+.lc .lock{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:0 16px}
+.lc .lockDate{margin-top:44px;text-align:center;font:400 13px/1 var(--sans);letter-spacing:.005em;color:rgba(247,248,246,.72)}
+.lc .lockClock{margin-top:9px;text-align:center;font:300 86px/.96 var(--sans);letter-spacing:-.045em;color:#F7F8F6;font-variant-numeric:tabular-nums}
+.lc .lockW{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:22px}
+.lc .lw{border:1px solid rgba(247,248,246,.18);border-radius:14px;padding:9px 8px 10px;background:rgba(247,248,246,.05)}
+.lc .lw__k{display:flex;align-items:center;gap:4px;font:400 7px/1 var(--mono);letter-spacing:.14em;color:rgba(247,248,246,.62)}
+.lc .lw__k .ic{width:10px;height:10px;stroke-width:1.7}
+.lc .lw__v{margin-top:7px;font:300 18px/1 var(--sans);letter-spacing:-.03em;color:#F7F8F6;font-variant-numeric:tabular-nums}
+.lc .lw__u{font:400 7px/1 var(--mono);letter-spacing:.1em;color:rgba(247,248,246,.55);margin-left:3px}
+.lc .lw__v.warn{color:#E4A25C}
+
+.lc .lcx-la{margin-top:auto;margin-bottom:14px;background:var(--paper);border-radius:22px;padding:13px 14px 14px;color:var(--ink)}
+.lc .la__top{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1.2px solid var(--ink)}
+.lc .la__brand{display:flex;align-items:center;gap:5px;font:500 7.5px/1 var(--mono);letter-spacing:.22em;color:var(--ink)}
+.lc .la__brand .ic{width:12px;height:12px;stroke-width:1.7;color:var(--active)}
+.lc .la__rnd{font:500 7.5px/1 var(--mono);letter-spacing:.12em;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.lc .la__mid{display:flex;justify-content:space-between;align-items:flex-end;margin-top:11px}
+.lc .la__ttl{display:block;font:500 14px/1.15 var(--sans);letter-spacing:-.016em;color:var(--ink)}
+.lc .la__sub{display:block;margin-top:5px;font:400 8px/1.35 var(--mono);letter-spacing:.03em;color:var(--ink-3)}
+.lc .la__num{font:300 38px/.86 var(--sans);letter-spacing:-.05em;color:var(--ink);font-variant-numeric:tabular-nums}
+.lc .la__rnds{display:flex;gap:2.5px;align-items:flex-end;height:6px;margin-top:12px}
+.lc .la__rnds i{flex:1 1 auto;height:2.5px;background:var(--rule);font-style:normal}
+.lc .la__rnds i.on{background:var(--ink)}
+.lc .la__rnds i.now{height:6px;background:var(--active)}
+.lc .la__foot{display:flex;justify-content:space-between;align-items:baseline;margin-top:9px}
+.lc .la__foot span{font:400 8px/1 var(--mono);letter-spacing:.12em;color:var(--ink-3)}
+.lc .la__foot b{font:500 8px/1 var(--mono);letter-spacing:.12em;color:var(--ink);font-weight:500}
+.lc .lockBtns{display:flex;justify-content:space-between;padding:0 22px 8px}
+.lc .lockBtn{width:42px;height:42px;border-radius:99px;background:rgba(247,248,246,.13);display:grid;place-items:center;color:#F7F8F6}
+.lc .lockBtn .ic{width:19px;height:19px}
+
+@media (prefers-reduced-motion:reduce){.lc *{animation:none!important;transition:none!important}}
+</style>
+
+<div class="lc">
+
+  <!-- ═══════════════ 1 · TODAY ═══════════════ -->
+  <figure class="shot">
+    <div class="dev"><div class="dev__island"></div><div class="dev__screen lcS lcS--1">
+      <div class="sysbar"><span>7:04</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+      <div class="lcx-pg">
+        <div class="lcx-mast">
+          <span class="mast__b">BASELINE</span>
+          <span class="mast__d">DAY 12 / 84 · BLOCK I</span>
+        </div>
+        <div class="h1">Saturday <em>26 July</em></div>
+        <div class="subhead">Two sessions. Window opens 12:30.</div>
+        <div class="rule-firm"></div>
+
+        <div style="height:14px"></div>
+
+        <!-- §01 -->
+        <div class="sec">
+          <div class="sec__idx"><span class="idx__n">01</span><span class="idx__v">SCHEDULE</span></div>
+          <div class="sec__body">
+            <ul class="sked">
+              <li class="sked__r is-done">
+                <span class="sked__t">07:30</span>
+                <span>
+                  <span class="sked__ttl">Walking pad — incline blocks</span>
+                  <span class="sked__sub">
+                    <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="12.8" cy="4.3" r="1.9"/><path d="M11.4 8.1 8.5 10.4l1.7 3.3-1.5 4.6"/><path d="M11.4 8.1l3.3 1.7 1 3.2"/><path d="M10.2 13.7l3.7 1 .8 3.9"/></svg>
+                    6 × 60 S @ 4 % · 18 MIN
+                  </span>
+                </span>
+                <span class="sked__s"><svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M4.6 11.6 8.8 15.9 17.6 6.4"/></svg></span>
+              </li>
+
+              <li class="sked__mk">
+                <span class="sked__t">12:30</span>
+                <span class="mk__l">Eating window opens</span>
+                <span class="mk__r">FAST 16:00</span>
+              </li>
+
+              <li class="sked__r is-next">
+                <span class="sked__t">18:15</span>
+                <span>
+                  <span class="sked__tag">NEXT</span>
+                  <span class="sked__ttl">Beam &amp; rings — lower</span>
+                  <span class="sked__sub">
+                    <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M2.8 8.6v4.8"/><path d="M5.6 6.8v8.4"/><path d="M16.4 6.8v8.4"/><path d="M19.2 8.6v4.8"/><path d="M5.6 11h10.8"/></svg>
+                    8 × 60 S · 15 LB · 22 MIN
+                  </span>
+                </span>
+                <span class="sked__s"><svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M7.6 4.9 17 11.1 7.6 17.3Z"/></svg></span>
+              </li>
+
+              <li class="sked__mk" style="border-bottom:0">
+                <span class="sked__t">20:30</span>
+                <span class="mk__l">Window closes · fast begins</span>
+                <span class="mk__r">16:8</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- §02 -->
+        <div class="sec">
+          <div class="sec__idx"><span class="idx__n">02</span><span class="idx__v">LOAD</span></div>
+          <div class="sec__body">
+            <div class="secHead"><span class="secHead__t">Load</span><span class="secHead__m">WEEK 2 OF 12</span></div>
+            <div class="rule-firm"></div>
+            <div class="two">
+              <div>
+                <div class="mtr__k">VOLUME</div>
+                <div class="mtr__v">68<span class="mtr__u">/ 90 MIN</span></div>
+                <div class="segs"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
+                <div class="mtr__c">5 of 6 sessions</div>
+              </div>
+              <div>
+                <div class="mtr__k">FAST ELAPSED</div>
+                <div class="mtr__v">10:34<span class="mtr__u">H:MM</span></div>
+                <div class="bar"><span class="bar__f"></span><span class="bar__t"></span></div>
+                <div class="mtr__c">5 h 26 m to open</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- §03 -->
+        <div class="sec">
+          <div class="sec__idx"><span class="idx__n">03</span><span class="idx__v">TREND</span></div>
+          <div class="sec__body">
+            <div class="secHead"><span class="secHead__t">Mass</span><span class="secHead__m">LOFTILLA · 14 D</span></div>
+            <div class="rule-firm"></div>
+            <div class="trendTop">
+              <span class="trendTop__v">168.4<span>LB</span></span>
+              <span class="trendTop__d">
+                <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M3.6 6.2 9.4 12.6l3.2-3.2 5.8 6.2"/><path d="M13.4 15.6h5v-5"/></svg>
+                −0.8 / 7 D
+              </span>
+            </div>
+            <svg class="spark" viewBox="0 0 232 48" width="232" height="48" role="img" aria-label="Fourteen day weight trend, 171.0 down to 168.4 pounds">
+              <path class="sp-area" d="M4 10 L21.2 11 L38.5 14 L55.7 16 L72.9 19 L90.2 21 L107.4 24 L124.6 28 L141.8 30 L159.1 31 L176.3 33 L193.5 34 L210.8 35 L228 36 L228 44 L4 44 Z"/>
+              <path class="sp-line" d="M4 10 L21.2 11 L38.5 14 L55.7 16 L72.9 19 L90.2 21 L107.4 24 L124.6 28 L141.8 30 L159.1 31 L176.3 33 L193.5 34 L210.8 35 L228 36"/>
+              <circle class="sp-halo" cx="228" cy="36" r="4.2"/>
+              <circle class="sp-dot" cx="228" cy="36" r="2.4"/>
+            </svg>
+            <div class="spAx"><span>13 JUL · 171.0</span><span>GOAL 148.0</span></div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab is-on">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><rect x="3.5" y="4.6" width="15" height="13.9" rx="2.6"/><path d="M3.5 9.2h15"/><path d="M7.4 2.9v3.4"/><path d="M14.6 2.9v3.4"/><path d="M7.4 13h4.4"/></svg>
+            <span>TODAY</span>
+          </div>
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="12.6" r="7"/><path d="M11 12.6V8.9"/><path d="M8.8 2.7h4.4"/><path d="M17.7 6.4 19 5.1"/></svg>
+            <span>TIMER</span>
+          </div>
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M3.6 3.6v14.8h14.8"/><path d="M6.6 14.4 10 10.2l3 2.4 4.2-6"/></svg>
+            <span>METRICS</span>
+          </div>
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="7.5" r="3.1"/><path d="M4.8 18.4a6.2 6.2 0 0 1 12.4 0"/></svg>
+            <span>COACH</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="homebar"></div>
+    </div></div>
+    <figcaption class="cap"><b>Today.</b> The day set as a schedule, not a feed — sessions carry load and duration, window markers are set as printed rules with hanging captions, and a marginal index runs the sections.</figcaption>
+  </figure>
+
+  <!-- ═══════════════ 2 · MID-SET ═══════════════ -->
+  <figure class="shot">
+    <div class="dev"><div class="dev__island"></div><div class="dev__screen lcS lcS--2">
+      <div class="sysbar"><span>7:19</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+      <div class="lcx-pg lcx-pg--set">
+        <div class="setTop">
+          <span class="setTop__l">BASELINE</span>
+          <span class="setTop__r">SESSION 02 · LOWER</span>
+        </div>
+
+        <div class="rndHead">
+          <span class="rndHead__k">ROUND</span>
+          <span class="rndHead__v">03 / 08</span>
+        </div>
+        <div class="rnds">
+          <span class="rnd on"></span><span class="rnd on"></span><span class="rnd now"></span><span class="rnd"></span><span class="rnd"></span><span class="rnd"></span><span class="rnd"></span><span class="rnd"></span>
+        </div>
+
+        <div class="workKey">
+          <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7.4"/><path d="M11 5.8V11l3.8 2.2"/></svg>
+          WORK
+        </div>
+        <span class="bignum">0:41</span>
+        <div class="bigmeta">
+          <span class="bigmeta__l">SECONDS REMAINING</span>
+          <span class="bigmeta__l">OF 1:00</span>
+        </div>
+
+        <div class="gauge">
+          <span class="gauge__f"></span>
+          <span class="gauge__tk" style="left:16.66%"></span>
+          <span class="gauge__tk" style="left:33.33%"></span>
+          <span class="gauge__tk" style="left:50%"></span>
+          <span class="gauge__tk" style="left:66.66%"></span>
+          <span class="gauge__tk" style="left:83.33%"></span>
+        </div>
+        <div class="gaugeAx"><span>0 S</span><span>ELAPSED 19 S</span><span>60 S</span></div>
+
+        <div class="exer">Beam front squat</div>
+        <div class="exerCap">15 LB BALA BEAM · THREE COUNTS DOWN, ONE UP · HEELS FLAT, RIBS DOWN</div>
+
+        <div class="nextHead">
+          <span class="nextHead__k">UP NEXT</span>
+          <span class="nextHead__m">2 ITEMS</span>
+        </div>
+        <div class="nextRow">
+          <span class="nextRow__i">01</span>
+          <span class="nextRow__t">Rest<b>SEATED · BREATHE THROUGH NOSE</b></span>
+          <span class="nextRow__v">0:45</span>
+        </div>
+        <div class="nextRow" style="border-bottom-color:#0E1413">
+          <span class="nextRow__i">02</span>
+          <span class="nextRow__t">Ring halo<b>3 BALA RINGS · 8 EACH SIDE</b></span>
+          <span class="nextRow__v">1:00</span>
+        </div>
+
+        <div class="ctrls">
+          <div class="ctrl">
+            <div class="ctrl__b"><svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M6.2 6.2 15.8 15.8"/><path d="M15.8 6.2 6.2 15.8"/></svg></div>
+            <span>END</span>
+          </div>
+          <div class="ctrl ctrl--main">
+            <div class="ctrl__b"><svg class="ic ic--thick" viewBox="0 0 22 22" aria-hidden="true"><path d="M8.4 5.2v11.6"/><path d="M13.6 5.2v11.6"/></svg></div>
+            <span>PAUSE</span>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl__b"><svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 5.4 13.4 11 6 16.6Z"/><path d="M16.4 5.2v11.6"/></svg></div>
+            <span>SKIP</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="homebar"></div>
+    </div></div>
+    <figcaption class="cap"><b>Mid-set.</b> One 116 px numeral at −0.06 em does the work; the segmented round rule and the 60-second gauge are read at arm's length, the prescription sits underneath as a caption to its rule.</figcaption>
+  </figure>
+
+  <!-- ═══════════════ 3 · METRICS ═══════════════ -->
+  <figure class="shot">
+    <div class="dev"><div class="dev__island"></div><div class="dev__screen lcS lcS--3">
+      <div class="sysbar"><span>21:36</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+      <div class="lcx-pg">
+        <div class="lcx-mast">
+          <span class="mast__b">BASELINE</span>
+          <span class="mast__d">BLOCK I · 26 JUL</span>
+        </div>
+        <div class="h1">Metrics</div>
+        <div class="rule-firm"></div>
+
+        <div class="figKey">
+          <span class="figKey__l">FIG. 01 — MASS</span>
+          <span class="figKey__r">ACTUAL vs PROJECTION</span>
+        </div>
+
+        <svg class="plate" viewBox="0 0 268 190" width="268" height="190" role="img" aria-label="Weight 168.4 pounds on day 12, projected to 148.0 pounds by 6 October">
+          <g class="pl-grid">
+            <line x1="34" y1="18.7" x2="262" y2="18.7"/>
+            <line x1="34" y1="45.3" x2="262" y2="45.3"/>
+            <line x1="34" y1="72" x2="262" y2="72"/>
+            <line x1="34" y1="98.7" x2="262" y2="98.7"/>
+          </g>
+          <g class="pl-lab">
+            <text x="28" y="21.2" text-anchor="end">170</text>
+            <text x="28" y="47.8" text-anchor="end">165</text>
+            <text x="28" y="74.5" text-anchor="end">160</text>
+            <text x="28" y="101.2" text-anchor="end">155</text>
+          </g>
+
+          <path class="pl-band" d="M66.6 27.2 L262 116.8 L262 155.2 Z"/>
+
+          <line class="pl-goal" x1="34" y1="136" x2="262" y2="136"/>
+          <text class="pl-goalLab" x="28" y="138.6" text-anchor="end">148</text>
+
+          <path class="pl-area" d="M34 13.9 L39.4 15.5 L44.9 18.1 L47.6 19.2 L50.3 20.8 L53 22.9 L55.7 24 L58.4 24.5 L61.1 25.6 L63.9 26.1 L66.6 27.2 L66.6 168 L34 168 Z"/>
+          <path class="pl-proj" d="M66.6 27.2 L262 136"/>
+          <path class="pl-act" d="M34 13.9 L39.4 15.5 L44.9 18.1 L47.6 19.2 L50.3 20.8 L53 22.9 L55.7 24 L58.4 24.5 L61.1 25.6 L63.9 26.1 L66.6 27.2"/>
+
+          <line class="pl-now" x1="66.6" y1="32" x2="66.6" y2="168"/>
+          <circle class="pl-halo" cx="66.6" cy="27.2" r="4.8"/>
+          <circle class="pl-dot" cx="66.6" cy="27.2" r="2.5"/>
+          <circle class="pl-end" cx="262" cy="136" r="2.5"/>
+
+          <line class="pl-lead" x1="72" y1="27.2" x2="100" y2="27.2"/>
+          <text class="pl-annV" x="104" y="24">168.4</text>
+          <text class="pl-annK" x="104" y="36">LB · DAY 12 · 26 JUL</text>
+          <text class="pl-proj-lab" x="150" y="110">PROJECTION ± 3.6 LB</text>
+          <text class="pl-tgt" x="256" y="130" text-anchor="end">TARGET 148.0</text>
+
+          <line class="pl-axis" x1="34" y1="168" x2="262" y2="168"/>
+          <line class="pl-axisY" x1="34" y1="8" x2="34" y2="168"/>
+          <g class="pl-tick">
+            <line x1="34" y1="168" x2="34" y2="172"/>
+            <line x1="110" y1="168" x2="110" y2="172"/>
+            <line x1="186" y1="168" x2="186" y2="172"/>
+            <line x1="262" y1="168" x2="262" y2="172"/>
+          </g>
+          <text class="pl-ax" x="34" y="182">14 JUL</text>
+          <text class="pl-ax" x="262" y="182" text-anchor="end">06 OCT</text>
+        </svg>
+
+        <div class="plateNote">LOFTILLA · 7-DAY MEAN · PROJECTION BAND ±3.6 LB</div>
+
+        <div style="height:10px"></div>
+
+        <table class="tbl">
+          <colgroup>
+            <col style="width:20px"/><col style="width:92px"/><col style="width:60px"/><col style="width:36px"/><col style="width:60px"/>
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="t-i">§</th>
+              <th>SIGNAL</th>
+              <th class="r">VALUE</th>
+              <th></th>
+              <th class="r">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="t-i">01</td><td class="t-k">Rate of loss</td>
+              <td class="t-v">−0.80</td><td class="t-u">LB/WK</td><td class="t-s ok">ON TARGET</td>
+            </tr>
+            <tr>
+              <td class="t-i">02</td><td class="t-k">Sessions</td>
+              <td class="t-v">5 / 6</td><td class="t-u">WK 2</td><td class="t-s ok">ON TARGET</td>
+            </tr>
+            <tr>
+              <td class="t-i">03</td><td class="t-k">Mean fast</td>
+              <td class="t-v">15:48</td><td class="t-u">H:MM</td><td class="t-s ok">ON TARGET</td>
+            </tr>
+            <tr>
+              <td class="t-i">04</td><td class="t-k">Sleep</td>
+              <td class="t-v">7:12</td><td class="t-u">H:MM</td><td class="t-s">STEADY</td>
+            </tr>
+            <tr>
+              <td class="t-i">05</td><td class="t-k">HRV</td>
+              <td class="t-v">64</td><td class="t-u">MS</td><td class="t-s">STEADY</td>
+            </tr>
+            <tr>
+              <td class="t-i">06</td><td class="t-k">Stress load</td>
+              <td class="t-v">ELEV.</td><td class="t-u">2 D</td><td class="t-s warn">BACK OFF</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="tblNote">WHOOP 7-DAY MEANS · RHR 58 BPM, UNCHANGED · WK 3 RE-PLAN DROPS ONE BEAM ROUND</div>
+
+        <div class="tabs">
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><rect x="3.5" y="4.6" width="15" height="13.9" rx="2.6"/><path d="M3.5 9.2h15"/><path d="M7.4 2.9v3.4"/><path d="M14.6 2.9v3.4"/><path d="M7.4 13h4.4"/></svg>
+            <span>TODAY</span>
+          </div>
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="12.6" r="7"/><path d="M11 12.6V8.9"/><path d="M8.8 2.7h4.4"/><path d="M17.7 6.4 19 5.1"/></svg>
+            <span>TIMER</span>
+          </div>
+          <div class="tab is-on">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M3.6 3.6v14.8h14.8"/><path d="M6.6 14.4 10 10.2l3 2.4 4.2-6"/></svg>
+            <span>METRICS</span>
+          </div>
+          <div class="tab">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="7.5" r="3.1"/><path d="M4.8 18.4a6.2 6.2 0 0 1 12.4 0"/></svg>
+            <span>COACH</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="homebar"></div>
+    </div></div>
+    <figcaption class="cap"><b>Metrics.</b> A statistical plate, not a widget: ruled gridlines, a dashed projection inside a confidence band, an emphasized current point with leader and annotation, and a ruled signals table with hanging figures and a mono unit column.</figcaption>
+  </figure>
+
+  <!-- ═══════════════ 4 · LOCK SCREEN ═══════════════ -->
+  <figure class="shot">
+    <div class="dev"><div class="dev__island"></div><div class="dev__screen lcS lcS--4">
+      <div class="sysbar"><span>6:41</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+      <div class="lock">
+        <div class="lockDate">Saturday, 26 July</div>
+        <div class="lockClock">6:41</div>
+
+        <div class="lockW">
+          <div class="lw">
+            <div class="lw__k">
+              <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7.4"/><path d="M11 5.8V11l3.8 2.2"/></svg>
+              FAST
+            </div>
+            <div class="lw__v">10:11<span class="lw__u">H</span></div>
+          </div>
+          <div class="lw">
+            <div class="lw__k">
+              <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M2.6 11h3.6l2-4.4 3 9.2 2.4-6 1.6 3.4h3.8"/></svg>
+              HRV
+            </div>
+            <div class="lw__v">64<span class="lw__u">MS</span></div>
+          </div>
+          <div class="lw">
+            <div class="lw__k">
+              <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M17.9 12.6A7.2 7.2 0 0 1 9.4 4.1 7.4 7.4 0 1 0 17.9 12.6Z"/></svg>
+              SLEEP
+            </div>
+            <div class="lw__v">7:12<span class="lw__u">H</span></div>
+          </div>
+        </div>
+
+        <div class="lcx-la">
+          <div class="la__top">
+            <span class="la__brand">
+              <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M2.8 8.6v4.8"/><path d="M5.6 6.8v8.4"/><path d="M16.4 6.8v8.4"/><path d="M19.2 8.6v4.8"/><path d="M5.6 11h10.8"/></svg>
+              BASELINE
+            </span>
+            <span class="la__rnd">ROUND 03 / 08 · WORK</span>
+          </div>
+
+          <div class="la__mid">
+            <span>
+              <span class="la__ttl">Beam front squat</span>
+              <span class="la__sub">15 LB BEAM · 3 DOWN, 1 UP</span>
+            </span>
+            <span class="la__num">0:41</span>
+          </div>
+
+          <div class="la__rnds">
+            <i class="on"></i><i class="on"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+
+          <div class="la__foot">
+            <span>NEXT — REST 0:45, RING HALO</span>
+            <b>22 MIN</b>
+          </div>
+        </div>
+
+        <div class="lockBtns">
+          <div class="lockBtn">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M7.9 3.2h6.2v3.3l-1.7 2.5v9.2a1.4 1.4 0 0 1-2.8 0V9l-1.7-2.5Z"/><path d="M7.9 6.5h6.2"/></svg>
+          </div>
+          <div class="lockBtn">
+            <svg class="ic" viewBox="0 0 22 22" aria-hidden="true"><path d="M3.4 8.4a2 2 0 0 1 2-2h1.9l1.2-2h5l1.2 2h1.9a2 2 0 0 1 2 2v7.4a2 2 0 0 1-2 2H5.4a2 2 0 0 1-2-2Z"/><circle cx="11" cy="12.1" r="3.1"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="homebar"></div>
+    </div></div>
+    <figcaption class="cap"><b>Lock screen.</b> The protocol inverted — paper card on ink ground. Same rules, same mono keys, same tabular numeral, so the Live Activity reads as the app and not as a notification wearing its colours.</figcaption>
+  </figure>
+
+</div>

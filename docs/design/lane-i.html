@@ -1,0 +1,584 @@
+<style>
+/* ═══════════ LANE I — "MARQUE" · maximum Signal, made livable ═══════════ */
+
+/* host-owned device shell (verbatim values, scoped) */
+.li .shot{margin:0;flex:0 0 auto}
+.li .dev{width:316px;height:666px;padding:8px;border-radius:46px;background:linear-gradient(160deg,#3a3d40,#17191a 40%,#2c2f31);box-shadow:0 2px 3px rgba(0,0,0,.4),0 30px 60px -30px rgba(0,0,0,.7);position:relative}
+.li .dev__island{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:86px;height:25px;border-radius:99px;background:#000;z-index:9}
+.li .dev__screen{width:300px;height:650px;border-radius:38px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.li .sysbar{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:15px 24px 0;color:var(--sys-fg,#fff);font:600 13px/1 -apple-system,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.li .homebar{flex:0 0 auto;height:24px;display:grid;place-items:center}
+.li .homebar::after{content:"";width:112px;height:4px;border-radius:99px;background:var(--sys-fg,#fff);opacity:.4}
+
+.li{
+  display:flex;gap:30px;
+  --gr:#EDE8DB;    /* oat — warm ground */
+  --gr2:#E1DAC6;   /* deep oat — panel / inactive field */
+  --ink:#14140F;   /* ink */
+  --fd:#0E3B34;    /* spruce — the chromatic field */
+  --sg:#F0A21C;    /* amber — LIVE INTERVAL ONLY */
+  --fc:"Avenir Next Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --fu:-apple-system,"Avenir Next","Helvetica Neue",Helvetica,sans-serif;
+  --fm:ui-monospace,"SF Mono",Menlo,monospace;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;
+}
+.li :where(figure,h1,h2,h3,p,ul,ol,li,dl,dt,dd,nav,button,table){margin:0;padding:0;border:0;list-style:none;background:none;color:inherit;font:inherit}
+.li :where(b,strong){font-weight:inherit}
+.li :where(svg){display:block}
+.li :where(div,span,p,b,i,em,u,small){box-sizing:border-box}
+
+/* ---------- shared poster atoms ---------- */
+.li-pane{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.li-rule{height:1px;background:currentColor;opacity:.24;flex:0 0 auto}
+.li-rule--hard{height:2px;opacity:1}
+.li-mono{font-family:var(--fm);font-size:11px;line-height:1.15;letter-spacing:.1em;text-transform:uppercase}
+
+.li-meta{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
+  padding:11px 20px 8px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.13em;text-transform:uppercase}
+.li-meta b{font-weight:400;display:flex;align-items:center;gap:6px;letter-spacing:.2em}
+.li-meta span{opacity:.66}
+
+/* ruled counter grid — C's discipline holding D's counters */
+.li-grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid currentColor;border-bottom:1px solid rgba(20,20,15,.26)}
+.li-grid>div{padding:8px 6px 9px 11px;border-left:1px solid rgba(20,20,15,.26)}
+.li-grid>div:first-child{border-left:0;padding-left:20px}
+.li-grid b{display:block;font-family:var(--fc);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.025em}
+.li-grid i{display:block;margin-top:5px;font-style:normal;font-family:var(--fm);font-size:11px;line-height:1.1;letter-spacing:.05em;text-transform:uppercase;opacity:.62}
+
+/* tab slab */
+.li-tabs{flex:0 0 auto;background:var(--ink);color:var(--gr);display:grid;grid-template-columns:repeat(4,1fr);padding:7px 8px 6px;gap:3px}
+.li-tab{display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 0 4px;opacity:.52}
+.li-tab span{font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.06em;text-transform:uppercase}
+.li-tab--on{opacity:1;background:var(--gr);color:var(--ink)}
+
+/* ═══════════ 1 — TODAY ═══════════ */
+.li .liS--1{background:var(--gr);color:var(--ink);--sys-fg:#14140F}
+.li-t__kick{padding:0 20px;margin-top:11px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.07em;text-transform:uppercase;opacity:.62;white-space:nowrap}
+.li-t__h{padding:0 20px;margin-top:5px;font-family:var(--fc);font-weight:700;font-size:54px;line-height:.84;letter-spacing:-.038em;text-transform:uppercase}
+.li-t__say{padding:0 20px;margin-top:9px;font-family:var(--fu);font-size:12.5px;line-height:1.4;letter-spacing:-.005em;opacity:.74}
+.li-t__grid{margin-top:11px}
+
+.li-t__qh{display:flex;justify-content:space-between;padding:11px 20px 6px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase;opacity:.62}
+.li-t__q{display:grid;grid-template-columns:17px 22px 1fr auto;align-items:center;gap:9px;padding:8px 20px;border-top:1px solid rgba(20,20,15,.2)}
+.li-t__q em{font-style:normal;font-family:var(--fm);font-size:11px;letter-spacing:.04em;opacity:.5}
+.li-t__q b{font-family:var(--fc);font-weight:600;font-size:16px;line-height:1.05;letter-spacing:.005em;text-transform:uppercase;white-space:nowrap}
+.li-t__q b u{display:block;text-decoration:none;font-family:var(--fu);font-weight:400;font-size:11px;line-height:1.2;letter-spacing:0;text-transform:none;opacity:.6;margin-top:2px}
+.li-t__q span{font-family:var(--fm);font-size:11px;letter-spacing:.04em;text-transform:uppercase;opacity:.74;white-space:nowrap}
+
+/* the start control — the spruce field, earned */
+.li-t__go{margin-top:11px;background:var(--fd);color:var(--gr);display:flex;align-items:center;gap:13px;padding:13px 20px 15px}
+.li-t__goI{flex:0 0 40px;width:40px;height:40px;border:2px solid var(--gr);display:grid;place-items:center}
+.li-t__goT{flex:1 1 auto;min-width:0}
+.li-t__goT b{display:block;font-family:var(--fc);font-weight:700;font-size:31px;line-height:.92;letter-spacing:-.02em;text-transform:uppercase}
+.li-t__goT i{display:block;margin-top:3px;font-style:normal;font-family:var(--fm);font-size:11px;letter-spacing:.07em;text-transform:uppercase;opacity:.82}
+.li-t__goA{flex:0 0 auto;opacity:.9}
+
+.li-t__fast{display:flex;align-items:center;gap:8px;padding:9px 20px 9px;border-bottom:1px solid rgba(20,20,15,.2);font-family:var(--fm);font-size:11px;line-height:1.2;letter-spacing:.045em;text-transform:uppercase;opacity:.68;white-space:nowrap}
+.li-t__fast svg{flex:0 0 14px;opacity:.9}
+.li-t__fast s{text-decoration:none;margin-left:auto;opacity:.8}
+
+.li-t__w{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:10px 20px 12px;border-top:2px solid var(--ink)}
+.li-t__wN{font-family:var(--fc);font-weight:700;font-size:37px;line-height:.88;letter-spacing:-.035em;white-space:nowrap}
+.li-t__wN sub{font-family:var(--fm);font-size:11px;letter-spacing:.09em;vertical-align:baseline;margin-left:5px;opacity:.6}
+.li-t__wR{flex:0 0 auto;text-align:right;font-family:var(--fm);font-size:11px;line-height:1.55;letter-spacing:.045em;text-transform:uppercase;opacity:.7;white-space:nowrap}
+
+/* ═══════════ 2 — MID-SET ═══════════ */
+.li .liS--2{background:var(--ink);--sys-fg:#EDE8DB}
+.li-hero{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;background:var(--ink)}
+.li-hero__drain{position:absolute;left:0;right:0;bottom:0;height:68.33%;background:var(--sg);overflow:hidden}
+.li-hero__f{position:absolute;left:0;width:300px;padding:12px 18px 11px 36px;display:flex;flex-direction:column}
+.li-hero__f--dark{top:0;bottom:0;color:var(--gr)}
+.li-hero__f--dark .li-hero__n{color:var(--sg)}
+.li-hero__f--lit{bottom:0;height:146.34%;color:var(--ink)}
+.li-hero__side{position:absolute;left:9px;top:15px;bottom:15px;width:16px;display:flex;align-items:flex-start;justify-content:center}
+.li-hero__side span{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--fm);font-size:11px;letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;opacity:.8}
+.li-hero__top{display:flex;justify-content:space-between;align-items:center;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.11em;text-transform:uppercase}
+.li-hero__top b{font-weight:400;display:flex;align-items:center;gap:6px}
+.li-hero__pips{margin-top:12px}
+.li-hero__n{font-family:var(--fc);font-weight:700;font-size:132px;line-height:.8;letter-spacing:-.055em;margin:74px 0 0 -5px}
+.li-hero__u{margin-top:11px;font-family:var(--fm);font-size:11px;letter-spacing:.15em;text-transform:uppercase;opacity:.86}
+.li-hero__foot{margin-top:auto}
+.li-hero__ex{font-family:var(--fc);font-weight:700;font-size:42px;line-height:.87;letter-spacing:-.035em;text-transform:uppercase;margin-left:-2px}
+.li-hero__cue{margin-top:8px;font-family:var(--fu);font-size:12.5px;line-height:1.35;letter-spacing:-.005em;opacity:.82}
+.li-hero__nx{margin-top:10px;padding-top:9px;border-top:2px solid currentColor;font-family:var(--fm);font-size:11px;letter-spacing:.06em;text-transform:uppercase;line-height:1.5}
+.li-hero__nx s{text-decoration:none;opacity:.7}
+.li-hero__ctl{display:flex;gap:9px;margin-top:12px}
+.li-hero__btn{width:52px;height:38px;display:grid;place-items:center;border:2px solid currentColor}
+.li-hero__btn--wide{flex:1 1 auto;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--fm);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+
+/* ═══════════ 3 — BUILD A ROUTINE ═══════════ */
+.li .liS--3{background:var(--gr);color:var(--ink);--sys-fg:#14140F}
+.li-b__lab{padding:0 20px;margin-top:10px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.13em;text-transform:uppercase;opacity:.58}
+.li-b__name{padding:0 20px 8px;margin-top:6px;display:flex;align-items:baseline;gap:3px;border-bottom:2px solid var(--ink)}
+.li-b__name b{font-family:var(--fc);font-weight:700;font-size:44px;line-height:.9;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap}
+.li-b__caret{width:3px;height:34px;background:var(--fd);align-self:center;margin-bottom:2px}
+
+.li-b__set{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid rgba(20,20,15,.26)}
+.li-b__set>div{padding:9px 8px 10px 11px;border-left:1px solid rgba(20,20,15,.26)}
+.li-b__set>div:first-child{border-left:0;padding-left:20px}
+.li-b__set i{display:block;font-style:normal;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.06em;text-transform:uppercase;opacity:.6}
+.li-b__set b{display:block;margin-top:5px;font-family:var(--fc);font-weight:700;font-size:34px;line-height:.92;letter-spacing:-.035em}
+.li-b__set b s{text-decoration:none;font-family:var(--fm);font-size:11px;letter-spacing:.06em;margin-left:3px;opacity:.55;vertical-align:baseline}
+.li-b__pm{display:flex;gap:5px;margin-top:7px}
+.li-b__pm span{width:24px;height:21px;border:1.4px solid rgba(20,20,15,.5);display:grid;place-items:center}
+
+.li-b__mh{display:flex;justify-content:space-between;padding:10px 20px 6px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase;opacity:.62}
+.li-b__m{display:grid;grid-template-columns:15px 22px 1fr 14px;align-items:center;gap:9px;padding:7px 20px;border-top:1px solid rgba(20,20,15,.2)}
+.li-b__m em{font-style:normal;font-family:var(--fm);font-size:11px;letter-spacing:.04em;opacity:.5}
+.li-b__m b{font-family:var(--fc);font-weight:600;font-size:16px;line-height:1.05;letter-spacing:.005em;text-transform:uppercase;white-space:nowrap}
+.li-b__m b u{display:block;text-decoration:none;font-family:var(--fu);font-weight:400;font-size:11px;line-height:1.2;letter-spacing:0;text-transform:none;opacity:.6;margin-top:2px;white-space:nowrap}
+.li-b__m i{font-style:normal;opacity:.42}
+.li-b__add{display:grid;grid-template-columns:15px 22px 1fr;align-items:center;gap:9px;padding:8px 20px;border-top:1px solid rgba(20,20,15,.2);border-bottom:2px solid var(--ink);color:var(--fd)}
+.li-b__add b{font-family:var(--fm);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+
+.li-b__tot{background:var(--fd);color:var(--gr);display:flex;align-items:center;gap:12px;padding:11px 20px 13px}
+.li-b__totN{font-family:var(--fc);font-weight:700;font-size:40px;line-height:.9;letter-spacing:-.04em}
+.li-b__totT{flex:1 1 auto;font-family:var(--fm);font-size:11px;line-height:1.45;letter-spacing:.05em;text-transform:uppercase;opacity:.86}
+.li-b__save{flex:0 0 auto;border:2px solid var(--gr);padding:7px 10px;font-family:var(--fm);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+
+.li-b__sh{display:flex;justify-content:space-between;padding:10px 20px 6px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase;opacity:.62}
+.li-b__s{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:8px 20px 9px;border-top:1px solid rgba(20,20,15,.2)}
+.li-b__s b{display:block;font-family:var(--fc);font-weight:600;font-size:16px;line-height:1.05;letter-spacing:.005em;text-transform:uppercase}
+.li-b__s u{display:block;text-decoration:none;margin-top:3px;font-family:var(--fm);font-size:11px;letter-spacing:.05em;text-transform:uppercase;opacity:.62}
+.li-b__play{width:34px;height:34px;border:1.6px solid rgba(20,20,15,.5);display:grid;place-items:center}
+
+/* ═══════════ 4 — PROGRESS ═══════════ */
+.li .liS--4{background:var(--gr);color:var(--ink);--sys-fg:#14140F}
+.li-p__hero{display:flex;align-items:flex-start;gap:12px;padding:6px 20px 0}
+.li-p__n{font-family:var(--fc);font-weight:700;font-size:112px;line-height:.78;letter-spacing:-.06em;margin-left:-6px}
+.li-p__hT{flex:1 1 auto;padding-top:9px}
+.li-p__hT b{display:block;font-family:var(--fc);font-weight:700;font-size:25px;line-height:.94;letter-spacing:-.02em;text-transform:uppercase}
+.li-p__hT i{display:block;margin-top:7px;font-style:normal;font-family:var(--fu);font-size:12px;line-height:1.4;opacity:.7}
+.li-p__grid{margin-top:10px}
+.li-p__ch{display:flex;justify-content:space-between;padding:12px 20px 5px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase}
+.li-p__ch b{font-weight:400}
+.li-p__ch span{opacity:.62}
+.li-p__chart{padding:0 20px}
+.li-p__note{display:flex;align-items:center;gap:8px;padding:8px 20px 9px;margin-top:2px;border-top:1px solid rgba(20,20,15,.2);font-family:var(--fm);font-size:11px;line-height:1.3;letter-spacing:.045em;text-transform:uppercase;opacity:.66;white-space:nowrap}
+.li-p__note svg{flex:0 0 14px}
+.li-p__wk{margin-top:auto;display:flex;align-items:center;gap:10px;padding:9px 20px 11px;border-top:2px solid var(--ink)}
+.li-p__wk b{font-family:var(--fm);font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;white-space:nowrap}
+.li-p__pips{display:flex;gap:4px;flex:1 1 auto;justify-content:flex-end}
+.li-p__pips i{display:block;width:16px;height:16px;border:1.4px solid rgba(20,20,15,.45)}
+.li-p__pips i.li-on{background:var(--fd);border-color:var(--fd)}
+
+/* chart inks */
+.li-cg{stroke:rgba(20,20,15,.2);stroke-width:1}
+.li-ct{font-family:var(--fm);font-size:11px;letter-spacing:.04em;fill:rgba(20,20,15,.6)}
+.li-ca{fill:rgba(14,59,52,.13)}
+.li-cl{fill:none;stroke:var(--fd);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.li-cp{fill:none;stroke:var(--fd);stroke-width:1.4;stroke-dasharray:4 3.4;stroke-linecap:round;opacity:.62}
+.li-cx{stroke:var(--ink);stroke-width:1.6}
+.li-cd{fill:var(--fd)}
+.li-ch{fill:var(--gr)}
+.li-cgo{stroke:var(--ink);stroke-width:1;stroke-dasharray:1 3}
+
+/* ═══════════ 5 — LOCK SCREEN ═══════════ */
+.li .liS--5{--sys-fg:#EDE8DB;color:var(--gr);
+  background:radial-gradient(122% 58% at 24% 3%,#1A3B34 0%,rgba(26,59,52,0) 62%),linear-gradient(172deg,#12211D 0%,#14140F 56%,#0B0B08 100%)}
+.li-l__date{text-align:center;margin-top:50px;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.2em;text-transform:uppercase;opacity:.78}
+.li-l__clock{text-align:center;font-family:var(--fc);font-weight:700;font-size:104px;line-height:.94;letter-spacing:-.05em;margin-top:6px}
+.li-l__w{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0 20px;margin-top:15px}
+.li-l__wc{border:1px solid rgba(237,232,219,.4);padding:8px 10px 9px}
+.li-l__wc em{display:flex;align-items:center;gap:6px;font-style:normal;font-family:var(--fm);font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.74}
+.li-l__wc b{display:block;margin-top:6px;font-family:var(--fc);font-weight:700;font-size:29px;line-height:1;letter-spacing:-.03em}
+.li-l__wc b s{text-decoration:none;font-family:var(--fm);font-size:11px;letter-spacing:.08em;margin-left:4px;opacity:.6}
+.li-l__sp{flex:1 1 auto;min-height:8px}
+
+.li-l__la{margin:0 14px;background:var(--sg);color:var(--ink);border-radius:22px;padding:13px 15px 14px}
+.li-l__laTop{display:flex;justify-content:space-between;align-items:center;font-family:var(--fm);font-size:11px;line-height:1;letter-spacing:.1em;text-transform:uppercase}
+.li-l__laTop b{font-weight:400;display:flex;align-items:center;gap:6px}
+.li-l__laLive{display:flex;align-items:center;gap:5px}
+.li-l__dot{width:7px;height:7px;background:var(--ink);border-radius:99px}
+.li-l__laMid{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:8px}
+.li-l__laN{font-family:var(--fc);font-weight:700;font-size:62px;line-height:.82;letter-spacing:-.05em;margin-left:-3px}
+.li-l__laEx{font-family:var(--fc);font-weight:700;font-size:21px;line-height:.98;letter-spacing:-.02em;text-transform:uppercase;text-align:right;padding-bottom:4px}
+.li-l__laBar{margin-top:11px;height:8px;border:2px solid var(--ink);display:flex}
+.li-l__laBar i{display:block;width:68.33%;background:var(--ink)}
+.li-l__laFoot{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--fm);font-size:11px;letter-spacing:.055em;text-transform:uppercase}
+.li-l__laFoot s{text-decoration:none;opacity:.72}
+.li-l__btns{display:flex;justify-content:space-between;padding:0 44px;margin:16px 0 6px}
+.li-l__btn{width:44px;height:44px;border-radius:99px;background:rgba(237,232,219,.16);display:grid;place-items:center}
+
+@media (prefers-reduced-motion:no-preference){
+  @keyframes li-blink{0%,100%{opacity:1}50%{opacity:.4}}
+  .li .li-l__dot,.li .li-live{animation:li-blink 1.7s steps(1,end) infinite}
+}
+@media (prefers-reduced-motion:reduce){.li .li-l__dot,.li .li-live{animation:none}}
+
+/* fit pass: reclaim vertical space on Today and stop horizontal spill */
+.li .liS--1 .li-t__q{padding:6px 16px}
+.li .liS--1 .li-t__go{margin-top:8px;padding:11px 18px 12px}
+.li .liS--1 .li-t__fast{padding:7px 16px;font-size:10.5px;letter-spacing:.03em}
+.li .liS--1 .li-t__w{padding:6px 16px 8px}
+.li .liS--1 .li-t__qh{padding-top:4px;padding-bottom:4px}
+.li .liS--1 .li-meta{padding-top:4px;padding-bottom:4px}
+/* fit pass 2 */
+.li .liS--1 .li-t__h{font-size:34px;margin-top:2px}
+.li .liS--1 .li-t__c{padding-top:6px;padding-bottom:6px}
+.li .liS--1 .li-t__qh{padding-top:3px;padding-bottom:3px}
+.li .liS--1 .li-t__q{padding:3px 16px}
+.li .liS--1 .li-t__w{padding:3px 16px 5px}
+.li .liS--1 .li-t__go{margin-top:5px;padding:9px 18px 10px}
+.li .liS--1 .li-t__fast{padding:5px 16px}
+.li .li-pane{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 16px),transparent 100%);mask-image:linear-gradient(180deg,#000 calc(100% - 16px),transparent 100%)}
+.li .liS--3 .li-b__name b{font-size:30px;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.li .liS--3 .li-b__name{min-width:0}
+</style>
+
+<div class="li">
+
+<!-- ══════════════════ 1 — TODAY ══════════════════ -->
+<figure class="shot">
+<div class="dev"><div class="dev__island"></div><div class="dev__screen liS liS--1">
+  <div class="sysbar"><span>7:04</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+  <div class="li-pane">
+    <div class="li-meta">
+      <b><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Marque</b>
+      <span>Day 12 / 84</span>
+    </div>
+    <div class="li-rule li-rule--hard"></div>
+
+    <p class="li-t__kick">Tue 26 Jul · block 02 · session 4 of 6</p>
+    <h1 class="li-t__h">Beam &amp;<br>rings</h1>
+    <p class="li-t__say">Twenty-four minutes, three moves you already know. Slow beats heavy today.</p>
+
+    <div class="li-grid li-t__grid">
+      <div><b>24</b><i>Minutes</i></div>
+      <div><b>8</b><i>Rounds</i></div>
+      <div><b>60/45</b><i>Work / rest</i></div>
+    </div>
+
+    <div class="li-t__qh"><span>The blocks — 3 moves</span><span>Equipment ready</span></div>
+
+    <div class="li-t__q">
+      <em>01</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 11h16.4"/><path d="M5.4 7.2v7.6"/><path d="M16.6 7.2v7.6"/><path d="M8.8 8.8v4.4"/><path d="M13.2 8.8v4.4"/></svg>
+      <b>Beam front squat<u>15 lb Bala Beam, front rack</u></b><span>60 s ×8</span>
+    </div>
+    <div class="li-t__q">
+      <em>02</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><circle cx="11" cy="11" r="3.1"/></svg>
+      <b>Ring halo<u>Bala rings, one each hand</u></b><span>60 s ×8</span>
+    </div>
+    <div class="li-t__q">
+      <em>03</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 16.4h16.8"/><path d="M6 16.4l2.4-8.4h8.4"/><path d="M16.8 8v8.4"/><path d="M4.4 19.2h12.4"/></svg>
+      <b>Walking pad<u>6 min at 3 %, easy pace</u></b><span>Finish</span>
+    </div>
+
+    <div class="li-t__go">
+      <div class="li-t__goI"><svg viewBox="0 0 22 22" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 4.4L17 11 6.6 17.6z"/></svg></div>
+      <div class="li-t__goT"><b>Start session</b><i>8 rounds · 24 min · ends 7:28</i></div>
+      <div class="li-t__goA"><svg viewBox="0 0 22 22" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 11h14.2"/><path d="M12.6 5.8L17.8 11l-5.2 5.2"/></svg></div>
+    </div>
+
+    <div class="li-t__fast">
+      <svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11.6" r="7.5"/><path d="M11 7.2v4.4l3 2"/><path d="M8.5 2.7h5"/></svg>
+      Fasting 16:8 · eat 12:30—20:30<s>10:34 in</s>
+    </div>
+
+    <div class="li-t__w">
+      <div class="li-t__wN">168.4<sub>LB</sub></div>
+      <div class="li-t__wR">−0.8 lb / 7 days<br>Goal 148.0 · 20.4 to go</div>
+    </div>
+  </div>
+
+  <nav class="li-tabs">
+    <div class="li-tab li-tab--on"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.4" width="16" height="14.6" rx="2.4"/><path d="M3 9.4h16"/><path d="M7.4 2.6v3.4"/><path d="M14.6 2.6v3.4"/></svg><span>Today</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="12.6" r="7"/><path d="M11 12.6V8.8"/><path d="M8.8 2.8h4.4"/><path d="M17.6 6.4l1.3-1.3"/></svg><span>Timer</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 3.4v15.2h15.2"/><path d="M6.4 14.6L10 10.2l3 2.4 4.4-6.2"/></svg><span>Progress</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.8l8 4.2-8 4.2-8-4.2z"/><path d="M3 11.4l8 4.2 8-4.2"/><path d="M3 15.6l8 4.2 8-4.2"/></svg><span>Plan</span></div>
+  </nav>
+
+  <div class="homebar"></div>
+</div></div>
+</figure>
+
+<!-- ══════════════════ 2 — MID-SET ══════════════════ -->
+<figure class="shot">
+<div class="dev"><div class="dev__island"></div><div class="dev__screen liS liS--2">
+  <div class="sysbar"><span>7:04</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+  <div class="li-hero">
+    <!-- layer A — ink ground, amber numeral -->
+    <div class="li-hero__f li-hero__f--dark">
+      <div class="li-hero__side"><span>Marque · beam &amp; rings · day 12 of 84</span></div>
+      <div class="li-hero__top">
+        <b class="li-live"><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Work</b>
+        <span>Round 03 / 08</span>
+      </div>
+      <svg class="li-hero__pips" viewBox="0 0 246 8" width="246" height="8" aria-hidden="true"><rect x="0" y="0" width="26" height="8" fill="currentColor"/><rect x="31.4" y="0" width="26" height="8" fill="currentColor"/><rect x="62.9" y="0" width="26" height="8" fill="currentColor"/><rect x="94.3" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="125.7" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="157.1" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="188.6" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="220" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+      <div class="li-hero__n">0:41</div>
+      <div class="li-hero__u">Remaining of 60 s work</div>
+      <div class="li-hero__foot">
+        <div class="li-hero__ex">Beam front<br>squat</div>
+        <p class="li-hero__cue">Three counts down, one to stand. Heels flat.</p>
+        <div class="li-hero__nx">Next — rest 0:45, then ring halo<s><br>15 lb Bala Beam · front rack</s></div>
+        <div class="li-hero__ctl">
+          <div class="li-hero__btn"><svg viewBox="0 0 22 22" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M8.4 5v12"/><path d="M13.6 5v12"/></svg></div>
+          <div class="li-hero__btn"><svg viewBox="0 0 22 22" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5.6l7.6 5.4L5 16.4z"/><path d="M16.4 5.2v11.6"/></svg></div>
+          <div class="li-hero__btn li-hero__btn--wide"><svg viewBox="0 0 22 22" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5.4" y="5.4" width="11.2" height="11.2"/></svg>End set</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- layer B — amber field draining, same setting knocked out in ink -->
+    <div class="li-hero__drain">
+      <div class="li-hero__f li-hero__f--lit" aria-hidden="true">
+        <div class="li-hero__side"><span>Marque · beam &amp; rings · day 12 of 84</span></div>
+        <div class="li-hero__top">
+          <b><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Work</b>
+          <span>Round 03 / 08</span>
+        </div>
+        <svg class="li-hero__pips" viewBox="0 0 246 8" width="246" height="8"><rect x="0" y="0" width="26" height="8" fill="currentColor"/><rect x="31.4" y="0" width="26" height="8" fill="currentColor"/><rect x="62.9" y="0" width="26" height="8" fill="currentColor"/><rect x="94.3" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="125.7" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="157.1" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="188.6" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="220" y="0" width="26" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        <div class="li-hero__n">0:41</div>
+        <div class="li-hero__u">Remaining of 60 s work</div>
+        <div class="li-hero__foot">
+          <div class="li-hero__ex">Beam front<br>squat</div>
+          <p class="li-hero__cue">Three counts down, one to stand. Heels flat.</p>
+          <div class="li-hero__nx">Next — rest 0:45, then ring halo<s><br>15 lb Bala Beam · front rack</s></div>
+          <div class="li-hero__ctl">
+            <div class="li-hero__btn"><svg viewBox="0 0 22 22" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8.4 5v12"/><path d="M13.6 5v12"/></svg></div>
+            <div class="li-hero__btn"><svg viewBox="0 0 22 22" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.6l7.6 5.4L5 16.4z"/><path d="M16.4 5.2v11.6"/></svg></div>
+            <div class="li-hero__btn li-hero__btn--wide"><svg viewBox="0 0 22 22" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5.4" y="5.4" width="11.2" height="11.2"/></svg>End set</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="homebar"></div>
+</div></div>
+</figure>
+
+<!-- ══════════════════ 3 — BUILD A ROUTINE ══════════════════ -->
+<figure class="shot">
+<div class="dev"><div class="dev__island"></div><div class="dev__screen liS liS--3">
+  <div class="sysbar"><span>7:04</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+  <div class="li-pane">
+    <div class="li-meta">
+      <b><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Build</b>
+      <span>Draft · not saved</span>
+    </div>
+    <div class="li-rule li-rule--hard"></div>
+
+    <p class="li-b__lab">Name it</p>
+    <div class="li-b__name"><b>Sunday easy 8</b><i class="li-b__caret"></i></div>
+
+    <div class="li-b__set">
+      <div>
+        <i>Work</i><b>60<s>sec</s></b>
+        <div class="li-b__pm">
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/></svg></span>
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/><path d="M11 4.6v12.8"/></svg></span>
+        </div>
+      </div>
+      <div>
+        <i>Rest</i><b>45<s>sec</s></b>
+        <div class="li-b__pm">
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/></svg></span>
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/><path d="M11 4.6v12.8"/></svg></span>
+        </div>
+      </div>
+      <div>
+        <i>Rounds</i><b>8</b>
+        <div class="li-b__pm">
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/></svg></span>
+          <span><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4.6 11h12.8"/><path d="M11 4.6v12.8"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="li-b__mh"><span>Moves — drag to reorder</span><span>Your kit only</span></div>
+
+    <div class="li-b__m">
+      <em>01</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><circle cx="11" cy="11" r="3.1"/></svg>
+      <b>Ring halo<u>Bala rings · one each hand</u></b>
+      <i><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.4 8.2h13.2"/><path d="M4.4 13.8h13.2"/></svg></i>
+    </div>
+    <div class="li-b__m">
+      <em>02</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 11h16.4"/><path d="M5.4 7.2v7.6"/><path d="M16.6 7.2v7.6"/><path d="M8.8 8.8v4.4"/><path d="M13.2 8.8v4.4"/></svg>
+      <b>Beam good morning<u>15 lb Bala Beam · hinge</u></b>
+      <i><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.4 8.2h13.2"/><path d="M4.4 13.8h13.2"/></svg></i>
+    </div>
+    <div class="li-b__m">
+      <em>03</em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 9.4v3.2"/><path d="M6.4 6.8v8.4"/><path d="M15.6 6.8v8.4"/><path d="M18.6 9.4v3.2"/><path d="M6.4 11h9.2"/></svg>
+      <b>Dumbbell press<u>Two 2 lb dumbbells · slow</u></b>
+      <i><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4.4 8.2h13.2"/><path d="M4.4 13.8h13.2"/></svg></i>
+    </div>
+    <div class="li-b__add">
+      <em></em>
+      <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.6"/><path d="M6.8 11h8.4"/><path d="M11 6.8v8.4"/></svg>
+      <b>Add a move — walking pad, rings, beam</b>
+    </div>
+
+    <div class="li-b__tot">
+      <div class="li-b__totN">13:15</div>
+      <div class="li-b__totT">Total, minus the last rest<br>8 × 60/45 · 3 moves cycling</div>
+      <div class="li-b__save">Save</div>
+    </div>
+
+    <div class="li-b__sh"><span>Saved — 4 routines</span><span>Sort: recent</span></div>
+    <div class="li-b__s">
+      <div><b>Beam &amp; rings, steady</b><u>8 × 60/45 · 3 moves · 13:15</u></div>
+      <div class="li-b__play"><svg viewBox="0 0 22 22" width="15" height="15" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M7 5.2L16.2 11 7 16.8z"/></svg></div>
+    </div>
+  </div>
+
+  <nav class="li-tabs">
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.4" width="16" height="14.6" rx="2.4"/><path d="M3 9.4h16"/><path d="M7.4 2.6v3.4"/><path d="M14.6 2.6v3.4"/></svg><span>Today</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="12.6" r="7"/><path d="M11 12.6V8.8"/><path d="M8.8 2.8h4.4"/><path d="M17.6 6.4l1.3-1.3"/></svg><span>Timer</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 3.4v15.2h15.2"/><path d="M6.4 14.6L10 10.2l3 2.4 4.4-6.2"/></svg><span>Progress</span></div>
+    <div class="li-tab li-tab--on"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.8l8 4.2-8 4.2-8-4.2z"/><path d="M3 11.4l8 4.2 8-4.2"/><path d="M3 15.6l8 4.2 8-4.2"/></svg><span>Plan</span></div>
+  </nav>
+
+  <div class="homebar"></div>
+</div></div>
+</figure>
+
+<!-- ══════════════════ 4 — PROGRESS ══════════════════ -->
+<figure class="shot">
+<div class="dev"><div class="dev__island"></div><div class="dev__screen liS liS--4">
+  <div class="sysbar"><span>21:36</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+  <div class="li-pane">
+    <div class="li-meta">
+      <b><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Progress</b>
+      <span>Block 02 · 26 Jul</span>
+    </div>
+    <div class="li-rule li-rule--hard"></div>
+
+    <div class="li-p__hero">
+      <div class="li-p__n">11</div>
+      <div class="li-p__hT">
+        <b>Days<br>unbroken</b>
+        <i>Longest yet. Two more and the block is half done.</i>
+      </div>
+    </div>
+
+    <div class="li-grid li-p__grid">
+      <div><b>11</b><i>Sessions</i></div>
+      <div><b>88</b><i>Rounds done</i></div>
+      <div><b>−2.6</b><i>Lb since 14 Jul</i></div>
+    </div>
+
+    <div class="li-p__ch"><b>Weight &amp; projection</b><span>Loftilla · 7-day mean</span></div>
+    <div class="li-p__chart">
+      <svg viewBox="0 0 260 152" width="260" height="152" role="img" aria-label="Weight down from 171.0 on 14 July to 168.4 today, projected to reach 148.0 pounds by 6 October">
+        <g class="li-cg">
+          <line x1="30" y1="16" x2="256" y2="16"/>
+          <line x1="30" y1="36" x2="256" y2="36"/>
+          <line x1="30" y1="56" x2="256" y2="56"/>
+          <line x1="30" y1="76" x2="256" y2="76"/>
+          <line x1="30" y1="96" x2="256" y2="96"/>
+        </g>
+        <g class="li-ct">
+          <text x="26" y="19.5" text-anchor="end">170</text>
+          <text x="26" y="39.5" text-anchor="end">165</text>
+          <text x="26" y="59.5" text-anchor="end">160</text>
+          <text x="26" y="79.5" text-anchor="end">155</text>
+          <text x="26" y="99.5" text-anchor="end">150</text>
+        </g>
+
+        <path class="li-ca" d="M30 12 L32.9 12.8 L35.9 14.4 L38.8 15.6 L41.7 16.8 L44.7 17.6 L47.6 18.4 L50.5 19.2 L53.5 20 L56.4 20.4 L59.3 21.6 L62.3 22.4 L62.3 112 L30 112 Z"/>
+        <path class="li-cp" d="M62.3 22.4 L256 104"/>
+        <path class="li-cl" d="M30 12 L32.9 12.8 L35.9 14.4 L38.8 15.6 L41.7 16.8 L44.7 17.6 L47.6 18.4 L50.5 19.2 L53.5 20 L56.4 20.4 L59.3 21.6 L62.3 22.4"/>
+
+        <line class="li-cgo" x1="30" y1="104" x2="256" y2="104"/>
+        <circle class="li-ch" cx="62.3" cy="22.4" r="5.2"/>
+        <circle class="li-cd" cx="62.3" cy="22.4" r="2.8"/>
+        <circle class="li-ch" cx="256" cy="104" r="5"/>
+        <circle class="li-cd" cx="256" cy="104" r="2.8"/>
+
+        <text class="li-ct" x="70" y="18" style="fill:#14140F">168.4 LB TODAY</text>
+        <text class="li-ct" x="256" y="96" text-anchor="end" style="fill:#0E3B34">GOAL 148.0</text>
+
+        <line class="li-cx" x1="30" y1="112" x2="256" y2="112"/>
+        <g class="li-cg">
+          <line x1="30" y1="112" x2="30" y2="117"/>
+          <line x1="105.3" y1="112" x2="105.3" y2="117"/>
+          <line x1="180.6" y1="112" x2="180.6" y2="117"/>
+          <line x1="256" y1="112" x2="256" y2="117"/>
+        </g>
+        <text class="li-ct" x="30" y="130">14 JUL</text>
+        <text class="li-ct" x="256" y="130" text-anchor="end">06 OCT</text>
+        <text class="li-ct" x="143" y="146" text-anchor="middle">PROJECTION AT −0.8 LB / WEEK · ±3.6 LB</text>
+      </svg>
+    </div>
+
+    <div class="li-p__note">
+      <svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11.6" r="7.5"/><path d="M11 7.2v4.4l3 2"/><path d="M8.5 2.7h5"/></svg>
+      Model input — 16:8 window held
+    </div>
+
+    <div class="li-p__wk">
+      <b>This week — 5 of 6</b>
+      <div class="li-p__pips">
+        <i class="li-on"></i><i class="li-on"></i><i class="li-on"></i><i class="li-on"></i><i class="li-on"></i><i></i>
+      </div>
+    </div>
+  </div>
+
+  <nav class="li-tabs">
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.4" width="16" height="14.6" rx="2.4"/><path d="M3 9.4h16"/><path d="M7.4 2.6v3.4"/><path d="M14.6 2.6v3.4"/></svg><span>Today</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="12.6" r="7"/><path d="M11 12.6V8.8"/><path d="M8.8 2.8h4.4"/><path d="M17.6 6.4l1.3-1.3"/></svg><span>Timer</span></div>
+    <div class="li-tab li-tab--on"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 3.4v15.2h15.2"/><path d="M6.4 14.6L10 10.2l3 2.4 4.4-6.2"/></svg><span>Progress</span></div>
+    <div class="li-tab"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.8l8 4.2-8 4.2-8-4.2z"/><path d="M3 11.4l8 4.2 8-4.2"/><path d="M3 15.6l8 4.2 8-4.2"/></svg><span>Plan</span></div>
+  </nav>
+
+  <div class="homebar"></div>
+</div></div>
+</figure>
+
+<!-- ══════════════════ 5 — LOCK SCREEN ══════════════════ -->
+<figure class="shot">
+<div class="dev"><div class="dev__island"></div><div class="dev__screen liS liS--5">
+  <div class="sysbar"><span>7:04</span><svg viewBox="0 0 68 12" width="68" height="12" aria-hidden="true" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/><path d="M26.5 4.2a9 9 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M29 7a5.4 5.4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="32" cy="10" r="1.4"/><rect x="46" y="2" width="18" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".5"/><rect x="47.5" y="3.5" width="11" height="6" rx="1.4"/><path d="M65.4 5.2v3.2a2.2 2.2 0 0 0 0-3.2z" opacity=".5"/></svg></div>
+
+  <div class="li-pane">
+    <p class="li-l__date">Tuesday 26 July</p>
+    <div class="li-l__clock">7:04</div>
+
+    <div class="li-l__w">
+      <div class="li-l__wc">
+        <em><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.8l8 4.2-8 4.2-8-4.2z"/><path d="M3 11.4l8 4.2 8-4.2"/></svg>Streak</em>
+        <b>11<s>days</s></b>
+      </div>
+      <div class="li-l__wc">
+        <em><svg viewBox="0 0 22 22" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 3.4v15.2h15.2"/><path d="M6.4 14.6L10 10.2l3 2.4 4.4-6.2"/></svg>Weight</em>
+        <b>168.4<s>lb</s></b>
+      </div>
+    </div>
+
+    <div class="li-l__sp"></div>
+
+    <div class="li-l__la">
+      <div class="li-l__laTop">
+        <b><svg viewBox="0 0 22 22" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18.2V5.6l8 5.6 8-5.6v12.6"/></svg>Marque — work</b>
+        <span class="li-l__laLive"><span class="li-l__dot"></span>Round 03/08</span>
+      </div>
+      <div class="li-l__laMid">
+        <div class="li-l__laN">0:41</div>
+        <div class="li-l__laEx">Beam<br>front squat</div>
+      </div>
+      <div class="li-l__laBar"><i></i></div>
+      <div class="li-l__laFoot"><span>Next — rest 0:45</span><s>Then ring halo</s></div>
+    </div>
+
+    <div class="li-l__btns">
+      <div class="li-l__btn"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 3.2h6.8v3.2l-1.6 2.4v9a1.8 1.8 0 0 1-3.6 0v-9L7.6 6.4z"/><path d="M7.6 6.4h6.8"/></svg></div>
+      <div class="li-l__btn"><svg viewBox="0 0 22 22" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.4a2.6 2.6 0 0 1 2.6-2.6h1.6l1.4-2.2h4.8l1.4 2.2h1.6A2.6 2.6 0 0 1 19 9.4v6.4a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 15.8z"/><circle cx="11" cy="12.4" r="3.4"/></svg></div>
+    </div>
+  </div>
+
+  <div class="homebar"></div>
+</div></div>
+</figure>
+
+</div>

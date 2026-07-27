@@ -4,8 +4,13 @@ An interval workout timer and fitness planner for one person's kit: two 2 lb
 dumbbells, a 15 lb Bala Beam, three Bala rings, and a walking pad. Work
 intervals are capped at sixty seconds.
 
-Design direction: **Almanac** — the approved lane from the design round. See
-`docs/design-lanes-round-three.md` for the pitch it came from.
+Design direction: **Almanac** — the approved lane. The mockups it was built
+from, and the two rounds of alternatives it beat, are in `docs/design/`.
+
+**Picking this up cold? Read [`docs/HANDOFF.md`](docs/HANDOFF.md) first.** It
+covers the decisions already settled with the user, the state of every area,
+the judgement calls that should not be quietly reversed, and the plan for the
+next milestone.
 
 ## The idea the design rests on
 
