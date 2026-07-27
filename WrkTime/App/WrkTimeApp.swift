@@ -51,8 +51,9 @@ struct RootView: View {
             moves: [MoveLibrary.all[0], MoveLibrary.all[4], MoveLibrary.all[6]]
         )
         let session = PlannedSession(scheduledFor: .now, title: routine.name, routine: routine)
-        block.sessions.append(session)
         context.insert(session)
+        // Set the inverse; SwiftData maintains the other side.
+        session.block = block
         context.insert(FastWindow())
     }
 }

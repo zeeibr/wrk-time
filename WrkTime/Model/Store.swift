@@ -9,7 +9,10 @@ final class Block {
     var lengthInDays: Int = 84
     var goalWeightPounds: Double = 0
     var startingWeightPounds: Double = 0
-    @Relationship(deleteRule: .cascade) var sessions: [PlannedSession] = []
+    /// CloudKit requires every relationship to declare its inverse, so this
+    /// pairs with `PlannedSession.block`.
+    @Relationship(deleteRule: .cascade, inverse: \PlannedSession.block)
+    var sessions: [PlannedSession]? = []
 
     init(startDate: Date = .now, goalWeightPounds: Double, startingWeightPounds: Double) {
         self.startDate = startDate
@@ -40,6 +43,7 @@ final class PlannedSession {
     var routineData: Data?
     var completedAt: Date?
     var perceivedEffort: Int?
+    var block: Block?
 
     init(scheduledFor: Date, title: String, routine: IntervalRoutine?) {
         self.scheduledFor = scheduledFor
@@ -128,31 +132,35 @@ enum Store {
         Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self, FastWindow.self
     ])
 
-    /// Local by default so the project builds and runs on a fresh checkout.
+    /// Local-first, synced through the user's own private CloudKit database.
+    /// No server of ours, and the watch app reads the same store.
     ///
-    /// CloudKit sync — which the watch app will need — requires a paid team, the
-    /// iCloud capability, and a container identifier. Turn it on by adding
-    /// `CLOUDKIT_SYNC` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS` once that is set
-    /// up; switching it on without the entitlement fails at launch, which is a
-    /// worse first run than no sync.
+    /// If the container fails to open we fall back to a local store rather than
+    /// crashing: a signed-out iCloud account or a provisioning problem should
+    /// cost you sync, not the ability to run a workout.
     @MainActor
     static func container(inMemory: Bool = false) -> ModelContainer {
-        #if CLOUDKIT_SYNC
-        let database: ModelConfiguration.CloudKitDatabase = inMemory ? .none : .automatic
-        #else
-        let database: ModelConfiguration.CloudKitDatabase = .none
-        #endif
-        let configuration = ModelConfiguration(
+        let synced = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: inMemory,
-            cloudKitDatabase: database
+            cloudKitDatabase: inMemory ? .none : .private(cloudKitContainerIdentifier)
         )
-        do {
-            return try ModelContainer(for: schema, configurations: configuration)
-        } catch {
-            // A store that cannot open is not recoverable at runtime; failing
-            // loudly in development beats shipping silent data loss.
-            fatalError("Could not open the store: \(error)")
+        if let container = try? ModelContainer(for: schema, configurations: synced) {
+            return container
         }
+
+        let local = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: inMemory,
+            cloudKitDatabase: .none
+        )
+        if let container = try? ModelContainer(for: schema, configurations: local) {
+            return container
+        }
+
+        // Neither store would open. There is no sensible way to continue.
+        fatalError("Could not open the store, synced or local.")
     }
+
+    static let cloudKitContainerIdentifier = "iCloud.com.wrktime.app"
 }

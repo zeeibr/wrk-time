@@ -9,10 +9,14 @@ import SwiftUI
 /// continuous form rather than two stacked halves.
 struct WorkoutTimerView: View {
     @State private var engine: IntervalEngine
+    @State private var liveActivity = LiveActivityController()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
 
+    private let routine: IntervalRoutine
+
     init(routine: IntervalRoutine) {
+        self.routine = routine
         _engine = State(initialValue: IntervalEngine(routine: routine))
     }
 
@@ -41,15 +45,27 @@ struct WorkoutTimerView: View {
         }
         .statusBarHidden(false)
         .preferredColorScheme(.light)
-        .onAppear { engine.start() }
-        .onDisappear { engine.pause() }
+        .onAppear {
+            Haptics.bind(to: engine)
+            engine.start()
+            liveActivity.start(routine: routine, engine: engine)
+        }
+        .onDisappear {
+            engine.pause()
+            liveActivity.end()
+        }
+        // One Live Activity update per phase, not per second — the widget
+        // renders its own countdown from the phase bounds.
+        .onChange(of: engine.currentPhase) { _, _ in
+            liveActivity.update(engine: engine)
+        }
         // Returning from the background recomputes from the clock rather than
         // resuming a stale count.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { engine.refresh() }
         }
         .onChange(of: engine.status) { _, status in
-            if status == .finished { Haptics.sessionComplete() }
+            if status == .finished { liveActivity.end() }
         }
     }
 

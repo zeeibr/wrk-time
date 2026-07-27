@@ -13,6 +13,7 @@ struct TodayView: View {
 
     @State private var runningRoutine: IntervalRoutine?
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         ScrollView {
@@ -60,7 +61,7 @@ struct TodayView: View {
                 IndexedSection(number: "03", label: "Signals") {
                     Rule(firm: true)
                     HStack(alignment: .top, spacing: 14) {
-                        StatCell(label: "Weight",
+                        StatCell(label: weeklyRateString ?? "Weight · 7-day mean",
                                  value: latestWeightString,
                                  unit: "lb")
                         StatCell(label: "Fasting",
@@ -82,6 +83,9 @@ struct TodayView: View {
         .background(Palette.oat.ignoresSafeArea())
         .fullScreenCover(item: $runningRoutine) { routine in
             WorkoutTimerView(routine: routine)
+        }
+        .task {
+            await HealthSync(health: HealthKitService(), context: context).importWeights()
         }
     }
 
@@ -162,9 +166,17 @@ struct TodayView: View {
         return "\(streak) sessions in.\nToday is a steady one."
     }
 
+    private var trend: WeightTrend { WeightTrend(entries: weights) }
+
+    /// The seven-day mean, because a single morning's reading is mostly water.
     private var latestWeightString: String {
-        guard let latest = weights.first else { return "—" }
-        return String(format: "%.1f", latest.pounds)
+        guard let mean = trend.sevenDayMean ?? weights.first?.pounds else { return "—" }
+        return String(format: "%.1f", mean)
+    }
+
+    private var weeklyRateString: String? {
+        guard let rate = trend.weeklyRate else { return nil }
+        return String(format: "%+.1f lb this week", rate)
     }
 
     private var fastingString: String {

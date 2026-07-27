@@ -33,10 +33,12 @@ surface is in. Views read it rather than hard-coding colours.
 | Routine builder — compose and save your own intervals | Built |
 | Workout timer screen — the register change | Built |
 | SwiftData models | Built |
+| HealthKit — weight, sleep, HRV, resting HR; workout write-back | Built |
+| Weight trend and goal projection | Built, tested |
+| Live Activity and Dynamic Island | Built |
+| CloudKit sync | On |
 | Season and Signals screens | Placeholder |
-| HealthKit reads — Loftilla weight, Whoop sleep/HRV | Not started |
 | Claude planner | Not started |
-| Live Activity and Dynamic Island | Not started |
 | Watch app | Not started |
 
 ## Running it
@@ -52,29 +54,48 @@ more — treat the first build as a code review with a compiler.
 The project uses Xcode 16 file-system synchronized groups, so new files added
 to `WrkTime/` are picked up without editing the project file.
 
-### Two things deliberately turned off
+### Before the first build
 
-- **CloudKit sync** is off. `Store.container()` defaults to a local store
-  because `.automatic` without the iCloud capability and a paid team fails at
-  launch, which is a worse first run than no sync. Turn it on by adding
-  `CLOUDKIT_SYNC` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS` once the capability
-  is set up. The watch app will need this.
-- **HealthKit** usage strings are in the build settings, but no entitlement is
-  configured and no reads are implemented yet. Both need a paid developer
-  account.
+Three things need your developer account, and Xcode cannot guess them:
+
+1. **Team.** Set `DEVELOPMENT_TEAM` on all three targets (or pick your team in
+   Signing & Capabilities once — Xcode will write it).
+2. **Bundle identifiers.** They default to `com.wrktime.app`,
+   `com.wrktime.app.widgets` and `com.wrktime.app.tests`. Change the prefix to
+   something you own.
+3. **Capabilities.** The entitlements files ask for HealthKit, iCloud/CloudKit
+   with container `iCloud.com.wrktime.app`, and app group
+   `group.com.wrktime.app`. Create the container and group under your account,
+   or rename them to match ones you already have — the container identifier
+   also appears in `Store.cloudKitContainerIdentifier`.
+
+If iCloud is unavailable at launch, `Store.container()` falls back to a local
+store rather than crashing. Losing sync should not cost you the ability to run
+a workout.
 
 ## Layout
 
 ```
+Shared/           compiled into both the app and the widget
+  Palette         the two registers, as one value
+  Typography      the three faces
+  WorkoutActivity Live Activity attributes — the app/widget contract
 WrkTime/
   App/            entry point, tab structure, first-run seed
-  DesignSystem/   Palette, Typography, Components — the lane, enforced in code
+  DesignSystem/   Components — rules, marginal index, stats, controls
+  Health/         HealthService protocol, HealthKit implementation, trend maths
   Model/          Equipment (the guardrail), SwiftData store
-  Timer/          IntervalRoutine, IntervalEngine, timer screen, routine builder
+  Timer/          routine, engine, timer screen, builder, Live Activity control
   Today/          Today screen and the generative growth form
   Support/        haptics
-WrkTimeTests/     interval engine and schedule tests
+WrkTimeWidgets/   lock screen and Dynamic Island presentation
+WrkTimeTests/     engine, schedule, weight trend and recovery tests
 ```
+
+Note on the shared group: `Shared/` is listed in both the app and the widget
+target. Xcode 16 synchronized groups handle this, but if the widget target
+comes up missing those files, add the folder to its membership once and it will
+stick.
 
 ## The engine
 
@@ -104,13 +125,33 @@ Time is injected, so tests drive it by hand and never sleep.
   button that isn't running.
 - Sage never carries body text — it doesn't clear 4.5:1 on oat.
 
+## The Live Activity
+
+The widget is handed the phase's start and end *dates*, not a countdown value,
+and renders its own live timer from them. That means one update per phase
+change rather than one per second — which is both what the system allows in the
+background and the only way the lock screen stays correct while the app is
+suspended.
+
+## Judgement calls worth knowing about
+
+- **The headline weight is a seven-day mean, not this morning's reading.**
+  Day-to-day weight is mostly water, and presenting the raw number as progress
+  is the most demoralising thing a weight tracker can do.
+- **A goal date is only projected when the trend is actually heading there.**
+  A projection drawn from a flat or rising trend is a lie told with arithmetic,
+  so `projectedDate(toGoal:)` returns nil instead.
+- **Recovery guidance is three coarse states, not a score.** A continuous
+  "recovery number" would imply a precision this data does not have. Two
+  signals must be down before the plan changes, and missing data holds the plan
+  rather than inventing a reason to alter it.
+- **Only *asleep* samples count as sleep.** Time in bed awake is not sleep, and
+  counting it would flatter the numbers.
+
 ## Next
 
-1. HealthKit reads for weight, sleep and HRV, behind a protocol so the planner
-   can be tested without Health.
-2. The Claude planner: equipment-aware program generation against a strict
-   schema, weekly re-planning from the weight trend, and a deterministic
-   offline fallback so the app is never dead without a network.
-3. Live Activity and Dynamic Island for the running interval.
-4. Season and Signals screens.
-5. The watch app, which needs CloudKit turned on first.
+1. The Claude planner: equipment-aware program generation against a strict
+   schema, weekly re-planning from the weight trend and recovery snapshot, and
+   a deterministic offline fallback so the app is never dead without a network.
+2. Season and Signals screens.
+3. The watch app — a standalone interval runner reading the same synced store.
