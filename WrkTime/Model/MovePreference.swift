@@ -133,12 +133,43 @@ enum MovePreferences {
     /// Sets a verdict directly, without a skip — used by the move rows on
     /// Today, so an opinion can be recorded without having to abandon a set to
     /// express it.
-    static func set(_ verdict: MoveVerdict, for name: String, in context: ModelContext) {
-        if let existing = all(in: context).first(where: { $0.key == MovePreference.key(name) }) {
-            existing.verdict = verdict
-            existing.updatedAt = .now
-        } else {
-            context.insert(MovePreference(moveName: name, verdict: verdict))
+    ///
+    /// Ruling a move out also repairs the plan already written. Recording the
+    /// opinion and leaving today's session asking for the move would be the app
+    /// agreeing with her and changing nothing.
+    @discardableResult
+    static func set(_ verdict: MoveVerdict, for name: String,
+                    in context: ModelContext) -> PlanRepair.Summary {
+        apply(verdict, to: [name], in: context)
+    }
+
+    /// The same, for any number of moves at once.
+    ///
+    /// One repair pass over the whole set rather than one per move, so a
+    /// substitution cannot pick a movement that is about to be ruled out by the
+    /// next name in the list.
+    @discardableResult
+    static func apply(_ verdict: MoveVerdict, to names: [String],
+                      in context: ModelContext) -> PlanRepair.Summary {
+        for name in names {
+            if let existing = all(in: context).first(where: { $0.key == MovePreference.key(name) }) {
+                existing.verdict = verdict
+                existing.updatedAt = .now
+            } else {
+                context.insert(MovePreference(moveName: name, verdict: verdict))
+            }
+        }
+        // Only a refusal rewrites the plan. "More of this" is an invitation for
+        // next week, not a reason to tear up today.
+        guard verdict == .avoided || verdict == .disliked else { return PlanRepair.Summary() }
+        return PlanRepair.replace(names, in: context)
+    }
+
+    /// Forgets an opinion about several moves at once.
+    static func clear(_ names: [String], in context: ModelContext) {
+        let keys = Set(names.map { MovePreference.key($0) })
+        for preference in all(in: context) where keys.contains(preference.key) {
+            context.delete(preference)
         }
     }
 
@@ -150,8 +181,10 @@ enum MovePreferences {
 
     /// Records what she said. Pain is sticky: once a move is avoided, a later
     /// "too hard" does not quietly promote it back into the rotation.
-    static func record(_ reason: SkipReason, for name: String, in context: ModelContext) {
-        guard let verdict = reason.verdict else { return }
+    @discardableResult
+    static func record(_ reason: SkipReason, for name: String,
+                       in context: ModelContext) -> PlanRepair.Summary {
+        guard let verdict = reason.verdict else { return PlanRepair.Summary() }
         let key = MovePreference.key(name)
 
         if let existing = all(in: context).first(where: { $0.key == key }) {
@@ -161,6 +194,11 @@ enum MovePreferences {
         } else {
             context.insert(MovePreference(moveName: name, verdict: verdict))
         }
+
+        // Saying a move hurt after a session should not leave it sitting in
+        // the rest of the week.
+        guard verdict == .avoided || verdict == .disliked else { return PlanRepair.Summary() }
+        return PlanRepair.replace([name], in: context)
     }
 
     /// Names the planner must not use, and names it should use sparingly.

@@ -3,6 +3,18 @@ import SwiftUI
 
 /// The document register, applied to the things you set once and forget.
 struct SettingsView: View {
+    @State private var showingLibrary = false
+    /// Mirrors of `Tuning`, so the steppers redraw. `Tuning` is the truth; these
+    /// exist because `UserDefaults` written from non-View code does not publish.
+    @State private var movesPerSession = Tuning.movesPerSession {
+        didSet { Tuning.movesPerSession = movesPerSession
+                 movesPerSession = Tuning.movesPerSession }
+    }
+    @State private var practiceMovements = Tuning.practiceMovements {
+        didSet { Tuning.practiceMovements = practiceMovements
+                 practiceMovements = Tuning.practiceMovements }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
@@ -23,6 +35,50 @@ struct SettingsView: View {
     @State private var importing = false
     @State private var archive: ArchiveDocument?
     @State private var note: String?
+
+    /// One adjustable figure. Modelled on the routine builder's stepper: a
+    /// small drawn circle for the control and a 44pt hit area around it, and a
+    /// single accessibility element rather than two anonymous buttons.
+    private func counter(title: String, value: Int, unit: String?, note: String,
+                         decrement: @escaping () -> Void,
+                         increment: @escaping () -> Void) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.almanacBody).foregroundStyle(Palette.ink)
+                Text(note).almanacLabel(Palette.mute, small: true)
+            }
+            Spacer(minLength: 8)
+            Figure(value: "\(value)", unit: unit, size: 22)
+            HStack(spacing: 6) {
+                stepButton("minus", action: decrement)
+                stepButton("plus", action: increment)
+            }
+            .padding(.leading, 8)
+        }
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(unit.map { "\(value) \($0)" } ?? "\(value)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: increment()
+            case .decrement: decrement()
+            @unknown default: break
+            }
+        }
+    }
+
+    private func stepButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Palette.moss)
+                .frame(width: 24, height: 24)
+                .overlay(Circle().strokeBorder(Palette.ruleFirm, lineWidth: 1))
+                .contentShape(Rectangle().inset(by: -10))
+        }
+        .buttonStyle(.plain)
+    }
 
     var body: some View {
         NavigationStack {
@@ -132,7 +188,55 @@ struct SettingsView: View {
                         .padding(.top, 14)
                     }
 
-                    IndexedSection(number: "04", label: "Week") {
+                    IndexedSection(number: "04", label: "Shape") {
+                        SectionHead(title: "How much", note: nil)
+                            .padding(.bottom, 10)
+
+                        Text("The planner decides which moves and how many rounds. These two are yours: how many movements a session cycles through, and how long the morning practice runs.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 12)
+
+                        counter(title: "Moves in a session",
+                                value: movesPerSession,
+                                unit: nil,
+                                note: "\(Tuning.movesPerSessionRange.lowerBound) – \(Tuning.movesPerSessionRange.upperBound) in the rotation",
+                                decrement: { movesPerSession -= 1 },
+                                increment: { movesPerSession += 1 })
+                        Rule()
+                        counter(title: "Morning practice",
+                                value: practiceMovements,
+                                unit: "moves",
+                                note: "\(Int(Practice.seconds))s each · \(Tuning.practiceDuration.durationString)",
+                                decrement: { practiceMovements -= 1 },
+                                increment: { practiceMovements += 1 })
+                        Rule()
+
+                        Text("The practice changes from tomorrow morning. A session's rotation changes the next time a week is written — rewrite this week below to see it sooner.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 12)
+
+                        Button {
+                            showingLibrary = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "list.bullet")
+                                Text("Every move, and what you think of it").font(.almanacBody)
+                                Spacer()
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 13, weight: .medium))
+                            }
+                            .foregroundStyle(Palette.moss)
+                            .padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    IndexedSection(number: "05", label: "Week") {
                         SectionHead(title: "Rewrite this week", note: planNote)
                             .padding(.bottom, 10)
 
@@ -167,6 +271,7 @@ struct SettingsView: View {
             }
         }
         .task { keyIsStored = KeychainStore.has(.claudeAPIKey) }
+        .sheet(isPresented: $showingLibrary) { MoveLibraryView() }
         .fileExporter(isPresented: $exporting,
                       document: archive,
                       contentType: .almanacArchive,

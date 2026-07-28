@@ -37,6 +37,14 @@ and every failure path in `ClaudePlanner` lands there. A week is never blocked
 on a network. `PlanValidator` sits between both and the store: a generated week
 that names a load the kit cannot be set to is rejected **whole**, never trimmed.
 
+## Two numbers she controls
+
+`Tuning` holds them: moves in a session's rotation (5 by default, 2–6) and
+movements in the morning practice (8 by default, capped by the flow library).
+Both are bounded rather than free — the response schema names a slot per move,
+and the practice cannot ask for more movements than exist. Everything else
+about a week is the planner's call.
+
 ## Hard constraints
 
 - **Equipment is a closed enum** (`WrkTime/Model/Equipment.swift`): two 2 lb
@@ -49,7 +57,8 @@ that names a load the kit cannot be set to is rejected **whole**, never trimmed.
   wrong-shape plates and the fallback glyphs all came from.
 - **Work intervals cap at 60 seconds**, clamped in `IntervalRoutine`, not in
   the UI.
-- **The morning practice happens every day.** Eight flow movements, 60 s each,
+- **The morning practice happens every day.** `Tuning.practiceMovements` flow
+  movements — eight by default — at 60 s each,
   always opening with the rebounding (`Practice` in
   `WrkTime/Model/MorningPractice.swift`). It is not tied to the plan — it
   appears on rest days — and it earns no mark, because a mark is a finished
@@ -92,6 +101,9 @@ These look like oversights and are not:
 - A routine with **zero rounds** is legal: that is the morning practice, all
   flow and no work. `RoutineSchedule` returns early rather than inventing an
   interval to satisfy `max(rounds, 1)`.
+- Ruling a move out **rewrites the sessions already written** (`PlanRepair`),
+  not just the next ones. Recording the opinion and leaving today's session
+  asking for the move is the app agreeing with her and changing nothing.
 - `MorningPractice` rows exist only for days she **finished**. There is no
   record of a day she missed — a table of absences is a ledger of failure.
 - `IntervalRoutine.warmUpMoves` and `Move.kindRaw` are Optional because the

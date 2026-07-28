@@ -92,7 +92,8 @@ struct ClaudePlanner: Sendable {
 
         for attempt in 0..<Self.attempts {
             let (draft, raw) = try await send(messages: messages, key: key,
-                                           sessionCount: context.pace.sessionsPerWeek)
+                                              sessionCount: context.pace.sessionsPerWeek,
+                                              moveCount: Tuning.movesPerSession)
 
             do {
                 _ = try PlanValidator.routines(from: draft)
@@ -111,7 +112,7 @@ struct ClaudePlanner: Sendable {
                 messages.append(["role": "user", "content": """
                 That week was rejected and not used. \(lastReason)
 
-                Write it again in full, with exactly \(context.pace.sessionsPerWeek) sessions.
+                Write it again in full, with exactly \(context.pace.sessionsPerWeek) sessions of \(Tuning.movesPerSession) moves each.
                 """])
             }
         }
@@ -125,7 +126,7 @@ struct ClaudePlanner: Sendable {
     // MARK: - Request
 
     private func send(messages: [[String: Any]], key: String,
-                      sessionCount: Int) async throws -> (PlanDraft, String) {
+                      sessionCount: Int, moveCount: Int) async throws -> (PlanDraft, String) {
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -149,7 +150,8 @@ struct ClaudePlanner: Sendable {
                 // week with one empty session, so the request was spent and
                 // the plan still came from the offline planner.
                 "effort": "high",
-                "format": ["type": "json_schema", "schema": Self.schema(sessions: sessionCount)]
+                "format": ["type": "json_schema",
+                           "schema": Self.schema(sessions: sessionCount, moves: moveCount)]
             ],
             "messages": messages
         ]
@@ -290,6 +292,9 @@ struct ClaudePlanner: Sendable {
 
     /// Ordinal slot names, so a fixed number of sessions can be *required*.
     static let slots = ["one", "two", "three", "four", "five"]
+    /// The same trick for the rotation. `minItems` is not supported, so "five
+    /// moves" has to be five required properties or it is not a requirement.
+    static let moveSlots = ["first", "second", "third", "fourth", "fifth", "sixth"]
 
     /// The schema for a week of exactly `sessions` sessions.
     ///
@@ -301,7 +306,7 @@ struct ClaudePlanner: Sendable {
     /// The move and session shapes live in `$defs` and are referenced. Inlining
     /// them instead put twelve copies of the move object in one grammar and the
     /// API rejected it outright: "The compiled grammar is too large."
-    static func schema(sessions: Int) -> [String: Any] {
+    static func schema(sessions: Int, moves: Int = Tuning.movesPerSession) -> [String: Any] {
         let names = Array(slots.prefix(max(sessions, 1)))
         var slotProperties: [String: Any] = [:]
         for name in names { slotProperties[name] = ["$ref": "#/$defs/session"] }
@@ -312,7 +317,7 @@ struct ClaudePlanner: Sendable {
             "required": ["explanation", "sessions", "walkMinutes"],
             "$defs": [
                 "move": moveSchema,
-                "session": sessionSchema
+                "session": sessionSchema(moves: moves)
             ],
             "properties": [
                 "explanation": [
@@ -334,7 +339,11 @@ struct ClaudePlanner: Sendable {
         ]
     }
 
-    private static var sessionSchema: [String: Any] {[
+    private static func sessionSchema(moves: Int) -> [String: Any] {
+        let names = Array(moveSlots.prefix(min(max(moves, 1), moveSlots.count)))
+        var slotProperties: [String: Any] = [:]
+        for name in names { slotProperties[name] = ["$ref": "#/$defs/move"] }
+        return [
         "type": "object",
         "additionalProperties": false,
         "required": ["dayOffset", "title", "work", "rest", "rounds", "moves"],
@@ -369,16 +378,13 @@ struct ClaudePlanner: Sendable {
             "moves": [
                 "type": "object",
                 "additionalProperties": false,
-                "description": "The three moves this session rotates through, in order.",
-                "required": ["first", "second", "third"],
-                "properties": [
-                    "first": ["$ref": "#/$defs/move"],
-                    "second": ["$ref": "#/$defs/move"],
-                    "third": ["$ref": "#/$defs/move"]
-                ]
+                "description": "The \(names.count) moves this session rotates through, in order.",
+                "required": names,
+                "properties": slotProperties
             ]
         ]
-    ]}
+    ]
+    }
 
     /// Lifted from `docs/PLANNER-BRIEF.md`, which was written to be pasted here.
     /// If the two ever disagree, the document is the source and this is stale.

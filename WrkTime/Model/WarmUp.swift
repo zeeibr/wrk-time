@@ -57,8 +57,10 @@ enum WarmUp {
     /// which is exactly a warm-up.
     static func afterPractice(on date: Date,
                               avoiding excluded: Set<String> = [],
-                              count: Int = target) -> [Move] {
-        let used = Set(Practice.moves(on: date, avoiding: excluded).map { MovePreference.key($0.name) })
+                              count: Int = target,
+                              practiceCount: Int? = nil) -> [Move] {
+        let used = Set(Practice.moves(on: date, avoiding: excluded, count: practiceCount)
+            .map { MovePreference.key($0.name) })
         let left = MoveLibrary.flow.filter { !used.contains(MovePreference.key($0.name)) }
         // If the practice took nearly everything, fall back to the whole
         // library rather than opening a session with one movement.

@@ -430,7 +430,7 @@ struct MovePreferenceTests {
         // And the week is still a valid, full week.
         let routines = try PlanValidator.routines(from: avoided)
         #expect(routines.count == Pace.building.sessionsPerWeek)
-        for session in avoided.sessions { #expect(session.moves.count == 3) }
+        for session in avoided.sessions { #expect(session.moves.count == Tuning.movesPerSession) }
     }
 
     @Test("Substitution keeps the equipment it replaced")
@@ -1226,8 +1226,8 @@ struct MorningPracticeTests {
     func shape() throws {
         for day in 0..<14 {
             let date = monday.addingTimeInterval(Double(day) * 86_400)
-            let moves = Practice.moves(on: date)
-            #expect(moves.count == Practice.count)
+            let moves = Practice.moves(on: date, count: 8)
+            #expect(moves.count == 8)
             #expect(moves.first?.name == Practice.opener,
                     "day \(day) opened with \(moves.first?.name ?? "nothing")")
             for move in moves { #expect(move.kind == .flow) }
@@ -1241,8 +1241,8 @@ struct MorningPracticeTests {
         let schedule = Practice.routine(on: monday).schedule
         #expect(schedule.phases.allSatisfy { $0.isFlow })
         #expect(schedule.workPhaseCount == 0)
-        #expect(schedule.flowPhaseCount == Practice.count)
-        #expect(schedule.total == Practice.seconds * Double(Practice.count))
+        #expect(schedule.flowPhaseCount == schedule.phases.count)
+        #expect(schedule.total == Practice.seconds * Double(schedule.phases.count))
     }
 
     @Test("The practice is never counted down at")
@@ -1265,8 +1265,7 @@ struct MorningPracticeTests {
     func namesItself() throws {
         let practice = Practice.routine(on: monday)
         let phase = try #require(practice.schedule.phases.first)
-        #expect(phase.position(rounds: practice.rounds, flowCount: Practice.count)
-                == "Movement 1 / 8")
+        #expect(phase.position(rounds: practice.rounds, flowCount: 8) == "Movement 1 / 8")
 
         // A session's opening flow is still a warm-up.
         let session = IntervalRoutine(name: "S", work: 40, rest: 30, rounds: 4,
@@ -1279,7 +1278,7 @@ struct MorningPracticeTests {
     @Test("Consecutive days differ, and the opener does not")
     func rotates() {
         let days = (0..<12).map {
-            Practice.moves(on: monday.addingTimeInterval(Double($0) * 86_400))
+            Practice.moves(on: monday.addingTimeInterval(Double($0) * 86_400), count: 8)
                 .map(\.name).joined(separator: "|")
         }
         for (a, b) in zip(days, days.dropFirst()) { #expect(a != b) }
@@ -1290,8 +1289,10 @@ struct MorningPracticeTests {
     func sessionDoesNotRepeatThePractice() {
         for day in 0..<10 {
             let date = monday.addingTimeInterval(Double(day) * 86_400)
-            let practice = Set(Practice.moves(on: date).map { MovePreference.key($0.name) })
-            let warmUp = WarmUp.afterPractice(on: date).map { MovePreference.key($0.name) }
+            let practice = Set(Practice.moves(on: date, count: 8)
+                .map { MovePreference.key($0.name) })
+            let warmUp = WarmUp.afterPractice(on: date, practiceCount: 8)
+                .map { MovePreference.key($0.name) }
             #expect(!warmUp.isEmpty)
             for move in warmUp {
                 #expect(!practice.contains(move),
@@ -1302,14 +1303,13 @@ struct MorningPracticeTests {
 
     @Test("Movements she has ruled out stay out, and the opener can go too")
     func honoursPreferences() {
-        let moves = Practice.moves(on: monday, avoiding: ["shaking", "standing twist"])
+        let moves = Practice.moves(on: monday, avoiding: ["standing twist"], count: 8)
         for move in moves {
-            #expect(MovePreference.key(move.name) != "shaking")
             #expect(MovePreference.key(move.name) != "standing twist")
         }
         // Pain outranks the ritual: if the rebounding itself hurts, the
         // practice opens with something else rather than insisting.
-        let withoutOpener = Practice.moves(on: monday, avoiding: ["lymphatic bounce"])
+        let withoutOpener = Practice.moves(on: monday, avoiding: ["lymphatic bounce"], count: 8)
         #expect(withoutOpener.first?.name != Practice.opener)
         #expect(!withoutOpener.isEmpty)
     }
@@ -1383,6 +1383,80 @@ struct ClosedLibraryTests {
                     }
                 }
             }
+        }
+    }
+}
+
+@Suite("Configurable shape", .serialized)
+struct TuningTests {
+
+    @Test("Both numbers are bounded, whatever is written to them")
+    func bounded() {
+        defer { Tuning.reset() }
+        Tuning.movesPerSession = 99
+        #expect(Tuning.movesPerSession == Tuning.movesPerSessionRange.upperBound)
+        Tuning.movesPerSession = 0
+        #expect(Tuning.movesPerSession == Tuning.movesPerSessionRange.lowerBound)
+
+        Tuning.practiceMovements = 99
+        #expect(Tuning.practiceMovements == Tuning.practiceRange.upperBound)
+        // The practice can never ask for more movements than the flow library
+        // actually holds.
+        #expect(Tuning.practiceMovements <= MoveLibrary.flow.count)
+    }
+
+    @Test("Five moves a session is the new default")
+    func defaults() {
+        Tuning.reset()
+        #expect(Tuning.movesPerSession == 5)
+        #expect(Tuning.practiceMovements == 8)
+    }
+
+    @Test("The schema requires exactly as many moves as the setting asks for")
+    func schemaFollows() throws {
+        defer { Tuning.reset() }
+        for count in Tuning.movesPerSessionRange {
+            Tuning.movesPerSession = count
+            let defs = try #require(ClaudePlanner.schema(sessions: 4)["$defs"] as? [String: Any])
+            let session = try #require(defs["session"] as? [String: Any])
+            let properties = try #require(session["properties"] as? [String: Any])
+            let moves = try #require(properties["moves"] as? [String: Any])
+            let required = try #require(moves["required"] as? [String])
+            // Named slots, because `minItems` is not supported — so the count
+            // has to be the number of required properties or it is not required.
+            #expect(required.count == count)
+            let slots = try #require(moves["properties"] as? [String: Any])
+            #expect(slots.count == count)
+        }
+    }
+
+    @Test("The offline planner fills the rotation without repeating a move")
+    func offlineFollows() {
+        defer { Tuning.reset() }
+        for count in Tuning.movesPerSessionRange {
+            Tuning.movesPerSession = count
+            for pace in Pace.allCases {
+                let draft = OfflinePlanner.week(1, pace: pace)
+                for session in draft.sessions {
+                    #expect(session.moves.count == count,
+                            "\(pace) wanted \(count), got \(session.moves.count)")
+                    #expect(Set(session.moves.map(\.name)).count == session.moves.count,
+                            "a move is repeated in the rotation")
+                }
+            }
+        }
+    }
+
+    @Test("A longer practice is still the rebounding first and no repeats")
+    func practiceFollows() {
+        defer { Tuning.reset() }
+        let monday = Date(timeIntervalSince1970: 1_700_000_000)
+        for count in [3, 5, 8, MoveLibrary.flow.count] {
+            Tuning.practiceMovements = count
+            let moves = Practice.moves(on: monday)
+            #expect(moves.count == Tuning.practiceMovements)
+            #expect(moves.first?.name == Practice.opener)
+            #expect(Set(moves.map(\.name)).count == moves.count)
         }
     }
 }

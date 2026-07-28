@@ -17,9 +17,10 @@ import SwiftData
 /// the form mean "I moved" rather than "I did the plan", and the daily thing
 /// would quietly swamp the weekly one. It keeps its own record instead.
 enum Practice {
-    /// Eight movements. Long enough to be a practice in its own right, short
-    /// enough to survive a morning.
-    static let count = 8
+    /// How many movements this morning asks for. Eight by default — long
+    /// enough to be a practice in its own right, short enough to survive a
+    /// morning — and hers to change in Settings.
+    static var count: Int { Tuning.practiceMovements }
     /// A minute each — eight minutes in total.
     ///
     /// Sixty seconds is also `IntervalRoutine.workCeiling`, and that is a
@@ -40,7 +41,9 @@ enum Practice {
     /// leaving it in the pool would occasionally place it fourth.
     static func moves(on date: Date,
                       avoiding excluded: Set<String> = [],
+                      count wanted: Int? = nil,
                       library: [Move] = MoveLibrary.flow) -> [Move] {
+        let count = wanted ?? Self.count
         let allowed = library.filter { move in
             !excluded.contains { !$0.isEmpty && MovePreference.key(move.name).contains($0) }
         }
@@ -50,9 +53,9 @@ enum Practice {
         let rest = allowed.filter { $0.name != lead?.name }
         guard !rest.isEmpty else { return lead.map { [$0] } ?? [] }
 
-        let wanted = (lead == nil ? count : count - 1)
-        let offset = WarmUp.dayIndex(date) * WarmUp.stride(taking: wanted, from: rest.count)
-        let rotated = (0..<min(wanted, rest.count)).map { step in
+        let following = (lead == nil ? count : count - 1)
+        let offset = WarmUp.dayIndex(date) * WarmUp.stride(taking: following, from: rest.count)
+        let rotated = (0..<min(following, rest.count)).map { step in
             rest[(offset + step) % rest.count]
         }
         return (lead.map { [$0] } ?? []) + rotated

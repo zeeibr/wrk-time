@@ -41,7 +41,10 @@ enum OfflinePlanner {
                                 work: work,
                                 rest: rest,
                                 rounds: rounds,
-                                moves: substituting(template.moves, avoiding: excluded))
+                                moves: substituting(
+                                    template.rotation(of: Tuning.movesPerSession,
+                                                      avoiding: excluded),
+                                    avoiding: excluded))
         }
 
         return PlanDraft(explanation: explanation(week: weekNumber, step: step,
@@ -125,6 +128,27 @@ enum OfflinePlanner {
     private struct Template {
         let title: String
         let moves: [DraftMove]
+
+        /// The first `count` moves, and if the template is shorter than that,
+        /// topped up from the rest of the library on the same kit. A rotation
+        /// is never padded with a repeat.
+        func rotation(of count: Int, avoiding excluded: Set<String> = []) -> [DraftMove] {
+            guard count > moves.count else { return Array(moves.prefix(count)) }
+            var out = moves
+            var used = Set(moves.map { $0.name.lowercased() })
+            for move in MoveLibrary.all where move.kind == .strength {
+                guard out.count < count else { break }
+                guard !used.contains(move.name.lowercased()) else { continue }
+                // A longer rotation must not reach past a refusal to fill
+                // itself — the top-up is where that would happen unnoticed.
+                guard !excluded.contains(where: { move.name.lowercased().contains($0) })
+                else { continue }
+                used.insert(move.name.lowercased())
+                out.append(DraftMove(name: move.name, equipment: move.equipment.rawValue,
+                                     cue: move.cue, loadPounds: move.loadPounds ?? 0))
+            }
+            return out
+        }
 
         static let rotation: [Template] = [
             Template(title: "Lower · beam", moves: [
