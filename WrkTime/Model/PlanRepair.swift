@@ -51,6 +51,54 @@ enum PlanRepair {
         }
     }
 
+    /// Resizes the rotation of every unfinished session to `count`.
+    ///
+    /// Changing how many moves a session cycles through used to apply only to
+    /// the next week the planner wrote, so she had to spend a Claude request to
+    /// see a number she had just set. Nothing about resizing needs a model:
+    /// growing takes the next moves from the library that the session does not
+    /// already hold and that she has not ruled out, and shrinking drops from
+    /// the end. A finished session is left alone, as always.
+    @discardableResult
+    static func resize(to count: Int, in context: ModelContext,
+                       from date: Date = .now) -> Summary {
+        let refused = MovePreferences.lists(in: context)
+        let barred = Set((refused.avoided + refused.disliked).map { MovePreference.key($0) })
+
+        var summary = Summary()
+        let today = Calendar.current.startOfDay(for: date)
+        let sessions = ((try? context.fetch(FetchDescriptor<PlannedSession>())) ?? [])
+            .filter { !$0.isComplete && $0.scheduledFor >= today }
+
+        for session in sessions {
+            guard var routine = session.routine, !routine.moves.isEmpty else { continue }
+            guard routine.moves.count != count else { continue }
+
+            if routine.moves.count > count {
+                routine.moves = Array(routine.moves.prefix(count))
+            } else {
+                var used = Set(routine.moves.map { MovePreference.key($0.name) })
+                // Prefer the kit the session already leans on, so a "beam" day
+                // does not fill up with dumbbells.
+                let preferred = Set(routine.moves.map(\.equipment))
+                let pool = MoveLibrary.all.filter { $0.kind == .strength }
+                    .sorted { preferred.contains($0.equipment) && !preferred.contains($1.equipment) }
+                for move in pool where routine.moves.count < count {
+                    let key = MovePreference.key(move.name)
+                    guard !used.contains(key), !barred.contains(key) else { continue }
+                    used.insert(key)
+                    routine.moves.append(move)
+                }
+            }
+
+            guard routine.moves.count != (session.routine?.moves.count ?? 0) else { continue }
+            session.routineData = try? JSONEncoder().encode(routine)
+            summary.sessionsChanged += 1
+            summary.slotsReplaced += abs(routine.moves.count - count)
+        }
+        return summary
+    }
+
     /// Rewrites every unfinished planned session that uses any of `names`.
     ///
     /// Substitutes from the same equipment, avoiding everything she has ruled

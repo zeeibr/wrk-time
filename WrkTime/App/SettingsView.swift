@@ -4,6 +4,7 @@ import SwiftUI
 /// The document register, applied to the things you set once and forget.
 struct SettingsView: View {
     @State private var showingLibrary = false
+    @State private var shapeNote: String?
     /// Mirrors of `Tuning`, so the steppers redraw. `Tuning` is the truth; these
     /// exist because `UserDefaults` written from non-View code does not publish.
     ///
@@ -19,6 +20,15 @@ struct SettingsView: View {
     private func storeMoves(_ value: Int) {
         Tuning.movesPerSession = value
         movesPerSession = Tuning.movesPerSession
+        // Applied to the sessions already written, immediately and for free.
+        // Resizing a rotation needs no model, and sending her to the paid
+        // re-plan for a number she just set was the app making its own
+        // plumbing her problem.
+        let summary = PlanRepair.resize(to: movesPerSession, in: context)
+        try? context.save()
+        shapeNote = summary.sessionsChanged == 0 ? nil
+            : summary.sessionsChanged == 1 ? "One session was resized."
+            : "\(summary.sessionsChanged) sessions were resized."
     }
 
     private func storePractice(_ value: Int) {
@@ -224,9 +234,9 @@ struct SettingsView: View {
                                 increment: { storePractice(practiceMovements + 1) })
                         Rule()
 
-                        Text("The practice changes from tomorrow morning. A session's rotation changes the next time a week is written — rewrite this week below to see it sooner.")
+                        Text(shapeNote ?? "The practice changes from tomorrow morning. A session's rotation applies to this week straight away — sessions you have already finished are left as they were.")
                             .font(.almanacBodySmall)
-                            .foregroundStyle(Palette.mute)
+                            .foregroundStyle(shapeNote == nil ? Palette.mute : Palette.saffronInk)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 12)
 

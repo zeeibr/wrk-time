@@ -1723,3 +1723,96 @@ struct PlanRepairTests {
         #expect(planned.routine?.moves.count == 1)
     }
 }
+
+@Suite("Resizing a rotation needs no model", .serialized)
+@MainActor
+struct RotationResizeTests {
+
+    private func store() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Store.schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    @discardableResult
+    private func session(_ moves: [Move], in context: ModelContext,
+                         done: Bool = false) -> PlannedSession {
+        let routine = IntervalRoutine(name: "Lower · beam", work: 40, rest: 45,
+                                      rounds: 8, moves: moves)
+        let session = PlannedSession(scheduledFor: .now, title: routine.name, routine: routine)
+        if done { session.completedAt = .now }
+        context.insert(session)
+        return session
+    }
+
+    private var beam: [Move] { MoveLibrary.moves(for: .beam) }
+
+    @Test("Growing the rotation fills it without a Claude request")
+    func grows() throws {
+        let context = try store()
+        let planned = session(Array(beam.prefix(3)), in: context)
+
+        let summary = PlanRepair.resize(to: 5, in: context)
+
+        #expect(summary.sessionsChanged == 1)
+        let moves = try #require(planned.routine?.moves)
+        #expect(moves.count == 5)
+        #expect(Set(moves.map(\.name)).count == 5, "a move was repeated")
+        // The first three are untouched: growing adds, it does not reshuffle.
+        #expect(moves.prefix(3).map(\.name) == beam.prefix(3).map(\.name))
+    }
+
+    @Test("It leans on the kit the session already uses")
+    func keepsTheKit() throws {
+        let context = try store()
+        let planned = session(Array(beam.prefix(2)), in: context)
+        PlanRepair.resize(to: 4, in: context)
+
+        let added = try #require(planned.routine?.moves.dropFirst(2))
+        #expect(added.allSatisfy { $0.equipment == .beam },
+                "a beam day filled up with something else: \(added.map(\.name))")
+    }
+
+    @Test("Shrinking drops from the end")
+    func shrinks() throws {
+        let context = try store()
+        let planned = session(beam, in: context)
+        PlanRepair.resize(to: 2, in: context)
+        #expect(planned.routine?.moves.map(\.name) == beam.prefix(2).map(\.name))
+    }
+
+    @Test("It never reaches past something she has ruled out")
+    func honoursRefusals() throws {
+        let context = try store()
+        let planned = session([beam[0]], in: context)
+        MovePreferences.apply(.avoided, to: [beam[1].name], in: context)
+
+        PlanRepair.resize(to: 5, in: context)
+        let names = try #require(planned.routine?.moves.map(\.name))
+        #expect(!names.contains(beam[1].name))
+    }
+
+    @Test("A finished session keeps the shape it was done in")
+    func leavesFinishedAlone() throws {
+        let context = try store()
+        let planned = session(Array(beam.prefix(2)), in: context, done: true)
+        let summary = PlanRepair.resize(to: 5, in: context)
+        #expect(summary.sessionsChanged == 0)
+        #expect(planned.routine?.moves.count == 2)
+    }
+
+    @Test("Resizing to the size it already is changes nothing")
+    func noOp() throws {
+        let context = try store()
+        session(Array(beam.prefix(3)), in: context)
+        #expect(PlanRepair.resize(to: 3, in: context).sessionsChanged == 0)
+    }
+
+    @Test("A timer-only session is left alone")
+    func skipsMovelessSessions() throws {
+        let context = try store()
+        let planned = session([], in: context)
+        #expect(PlanRepair.resize(to: 5, in: context).sessionsChanged == 0)
+        #expect(planned.routine?.moves.isEmpty == true)
+    }
+}
