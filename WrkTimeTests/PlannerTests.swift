@@ -1976,3 +1976,32 @@ struct PlanSchedulerTests {
                 "Info.plist permits \(permitted ?? []), code registers \(PlanScheduler.taskIdentifier)")
     }
 }
+
+@Suite("How long a drawing stays up", .serialized)
+@MainActor
+struct PlateTuningTests {
+
+    @Test("Ten seconds unless she says otherwise")
+    func defaultsToTen() {
+        Tuning.reset()
+        #expect(Tuning.plateSeconds == 10)
+    }
+
+    @Test("Bounded at both ends rather than free")
+    func clamps() {
+        Tuning.reset()
+        Tuning.plateSeconds = 99
+        #expect(Tuning.plateSeconds == Tuning.plateRange.upperBound)
+        Tuning.plateSeconds = 0
+        #expect(Tuning.plateSeconds == Tuning.plateRange.lowerBound)
+        Tuning.reset()
+    }
+
+    @Test("Reset puts it back to the default, not to zero")
+    func resets() {
+        Tuning.plateSeconds = 17
+        #expect(Tuning.plateSeconds == 17)
+        Tuning.reset()
+        #expect(Tuning.plateSeconds == Tuning.defaultPlateSeconds)
+    }
+}

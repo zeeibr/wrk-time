@@ -602,21 +602,18 @@ struct WorkoutTimerView: View {
 
     // MARK: - Copy
 
-    /// How long a plate stays up at the start of a phase.
-    static let plateSeconds: TimeInterval = 5
-
     /// The plate is a reminder of the shape, not something to watch.
     ///
-    /// It retires after five seconds, for two reasons. By then she has looked
-    /// at it and is moving, and — the reason she raised it — the field's
-    /// boundary sweeping down through a stick figure for the rest of the
-    /// interval made the dissolve look wrong. During rest it stays: the whole
-    /// point of rest is knowing what to set up next, and the field holds still
-    /// there so there is no boundary to fight.
+    /// It retires partway through the interval for the reason she raised: the
+    /// field's boundary sweeping down through a stick figure for the rest of
+    /// the interval made the dissolve look wrong. How long it stays is hers
+    /// now — `Tuning.plateSeconds`, ten by default. During rest it stays
+    /// regardless: the whole point of rest is knowing what to set up next, and
+    /// the field holds still there so there is no boundary to fight.
     private var showsPlate: Bool {
         guard let phase = engine.currentPhase else { return false }
         guard !phase.isRest else { return true }
-        return engine.elapsed - phase.start < Self.plateSeconds
+        return engine.elapsed - phase.start < Double(Tuning.plateSeconds)
     }
 
     /// The lead-in counts in whole seconds; the session counts in its own clock.

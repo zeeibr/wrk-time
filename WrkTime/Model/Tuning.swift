@@ -43,11 +43,33 @@ enum Tuning {
         Practice.seconds * Double(practiceMovements)
     }
 
+    // MARK: How long a drawing stays up
+
+    /// Ten, where it used to be a hard-coded five.
+    ///
+    /// The plate is a reminder of the shape rather than something to watch, so
+    /// it retires partway through a work interval — the field's boundary
+    /// sweeping down through a stick figure for the rest of the interval is
+    /// what made the dissolve look wrong, and that is why it retires at all.
+    /// Five turned out to be short for a move she had not done before, which
+    /// is exactly the case the drawing exists for. Bounded at the top rather
+    /// than free for the same reason: past twenty seconds it is back to
+    /// fighting the boundary it was moved out of the way of.
+    static let defaultPlateSeconds = 10
+    static let plateRange = 3...20
+
+    static var plateSeconds: Int {
+        get { clamped(read(Key.plateSeconds) ?? defaultPlateSeconds, to: plateRange) }
+        set { UserDefaults.standard.set(clamped(newValue, to: plateRange),
+                                        forKey: Key.plateSeconds) }
+    }
+
     // MARK: -
 
     private enum Key {
         static let movesPerSession = "movesPerSession"
         static let practiceMovements = "practiceMovements"
+        static let plateSeconds = "plateSeconds"
     }
 
     /// Nil rather than zero when nothing has been set, so a default is a
@@ -64,5 +86,6 @@ enum Tuning {
     static func reset() {
         UserDefaults.standard.removeObject(forKey: Key.movesPerSession)
         UserDefaults.standard.removeObject(forKey: Key.practiceMovements)
+        UserDefaults.standard.removeObject(forKey: Key.plateSeconds)
     }
 }

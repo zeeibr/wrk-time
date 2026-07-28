@@ -14,6 +14,7 @@ struct SettingsView: View {
     /// first tap on a stepper recursed until the stack ran out.
     @State private var movesPerSession = Tuning.movesPerSession
     @State private var practiceMovements = Tuning.practiceMovements
+    @State private var plateSeconds = Tuning.plateSeconds
 
     /// Writes the setting, then reads back what it actually took, so a value
     /// that hits a bound shows the bound rather than what was asked for.
@@ -53,6 +54,15 @@ struct SettingsView: View {
     private func storePractice(_ value: Int) {
         Tuning.practiceMovements = value
         practiceMovements = Tuning.practiceMovements
+    }
+
+    /// Written through `Tuning` and read straight back, like the other two, so
+    /// the clamp is what the screen shows rather than the raw tap. Never a
+    /// `didSet` on the `@State` — on a property wrapper that re-enters the
+    /// observer and overflows the stack, which is what the first stepper did.
+    private func storePlate(_ value: Int) {
+        Tuning.plateSeconds = value
+        plateSeconds = Tuning.plateSeconds
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -232,7 +242,7 @@ struct SettingsView: View {
                         SectionHead(title: "How much", note: nil)
                             .padding(.bottom, 10)
 
-                        Text("The planner decides which moves and how many rounds. These two are yours: how many movements a session cycles through, and how long the morning practice runs.")
+                        Text("The planner decides which moves and how many rounds. These are yours: how many movements a session cycles through, how long the morning practice runs, and how long a move's drawing stays on the timer.")
                             .font(.almanacBodySmall)
                             .foregroundStyle(Palette.mute)
                             .fixedSize(horizontal: false, vertical: true)
@@ -251,6 +261,13 @@ struct SettingsView: View {
                                 note: "\(Int(Practice.seconds))s each · \((Practice.seconds * Double(practiceMovements)).durationString)",
                                 decrement: { storePractice(practiceMovements - 1) },
                                 increment: { storePractice(practiceMovements + 1) })
+                        Rule()
+                        counter(title: "Drawing stays up",
+                                value: plateSeconds,
+                                unit: "s",
+                                note: "At the start of each work interval · always through rest",
+                                decrement: { storePlate(plateSeconds - 1) },
+                                increment: { storePlate(plateSeconds + 1) })
                         Rule()
 
                         Text(shapeNote ?? "The practice changes from tomorrow morning. A session's rotation applies to this week straight away — sessions you have already finished are left as they were.")
