@@ -1644,3 +1644,82 @@ struct IntervalSequenceTests {
         #expect(decoded.totalDuration == routine.totalDuration)
     }
 }
+
+@Suite("Ruling a move out repairs today", .serialized)
+@MainActor
+struct PlanRepairTests {
+
+    private func store() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Store.schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    /// A session scheduled for today, holding the given moves.
+    private func session(_ moves: [Move], in context: ModelContext) -> PlannedSession {
+        let routine = IntervalRoutine(name: "Push · dumbbells", work: 40, rest: 45,
+                                      rounds: 8, moves: moves)
+        let session = PlannedSession(scheduledFor: .now, title: routine.name, routine: routine)
+        context.insert(session)
+        return session
+    }
+
+    private func move(_ name: String, _ equipment: Equipment) -> Move {
+        MoveLibrary.all.first { $0.name == name }
+            ?? Move(name: name, equipment: equipment, cue: "")
+    }
+
+    @Test("Saying a move hurts takes it out of today's session")
+    func replacesInToday() throws {
+        let context = try store()
+        let planned = session([move("Incline push-up", .bodyweight),
+                               move("Dead bug", .bodyweight)], in: context)
+
+        let summary = MovePreferences.set(.avoided, for: "Incline push-up", in: context)
+
+        #expect(summary.sessionsChanged == 1)
+        let names = try #require(planned.routine?.moves.map(\.name))
+        #expect(!names.contains("Incline push-up"), "it is still there: \(names)")
+        #expect(names.count == 2, "the rotation was trimmed rather than repaired")
+    }
+
+    /// Her actual case: the planner invented "Knee push-up" before the library
+    /// closed, so the move in the session is not one the library holds.
+    @Test("A move the library never had is still replaced")
+    func replacesAnInventedName() throws {
+        let context = try store()
+        let invented = Move(name: "Knee push-up", equipment: .bodyweight,
+                            cue: "Knees down, hands under the shoulders.")
+        let planned = session([move("Lateral raise", .dumbbells), invented], in: context)
+
+        let summary = MovePreferences.set(.avoided, for: "Knee push-up", in: context)
+
+        #expect(summary.sessionsChanged == 1, "nothing was rewritten")
+        let names = try #require(planned.routine?.moves.map(\.name))
+        #expect(!names.contains("Knee push-up"), "it is still there: \(names)")
+    }
+
+    @Test("A finished session is never rewritten")
+    func leavesFinishedAlone() throws {
+        let context = try store()
+        let planned = session([move("Dead bug", .bodyweight)], in: context)
+        planned.completedAt = .now
+
+        _ = MovePreferences.set(.avoided, for: "Dead bug", in: context)
+        #expect(planned.routine?.moves.first?.name == "Dead bug",
+                "a record of what happened was rewritten")
+    }
+
+    @Test("With nothing free on that kit, the move stays rather than the slot emptying")
+    func staysWhenNothingIsFree() throws {
+        let context = try store()
+        let all = MoveLibrary.moves(for: .bodyweight)
+        let planned = session([all[0]], in: context)
+        // Rule out every other bodyweight move first.
+        MovePreferences.apply(.avoided, to: all.dropFirst().map(\.name), in: context)
+
+        let summary = MovePreferences.set(.avoided, for: all[0].name, in: context)
+        #expect(summary.slotsLeft == 1)
+        #expect(planned.routine?.moves.count == 1)
+    }
+}

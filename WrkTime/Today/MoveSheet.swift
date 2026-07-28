@@ -12,8 +12,17 @@ struct MoveSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
+    /// Observed, so the sheet redraws the moment an opinion is recorded rather
+    /// than reading a value it fetched once.
+    @Query private var preferences: [MovePreference]
+    /// What the last change did to the plan, so the consequence is visible
+    /// instead of being taken on trust.
+    @State private var repairNote: String?
+
     private var verdict: MoveVerdict? {
-        MovePreferences.verdict(for: move.name, in: context)
+        let matches = preferences.filter { $0.covers(move.name) }
+        if matches.contains(where: { $0.verdict == .avoided }) { return .avoided }
+        return matches.first?.verdict
     }
 
     var body: some View {
@@ -63,6 +72,13 @@ struct MoveSheet: View {
                             .almanacLabel(Palette.mute, small: true)
                             .padding(.top, 14)
                     }
+                    if let repairNote {
+                        Text(repairNote)
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.saffronInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 8)
+                    }
 
                     Rule().padding(.top, 18)
 
@@ -72,7 +88,9 @@ struct MoveSheet: View {
                     if verdict != nil {
                         Button("Forget what I said") {
                             MovePreferences.clear(move.name, in: context)
-                            dismiss()
+                            try? context.save()
+                            repairNote = nil
+                            Haptics.transport()
                         }
                         .font(.almanacBody)
                         .foregroundStyle(Palette.mute)
@@ -94,8 +112,10 @@ struct MoveSheet: View {
     private func opinion(_ title: String, _ verdict: MoveVerdict,
                          destructive: Bool = false) -> some View {
         Button(title) {
-            MovePreferences.set(verdict, for: move.name, in: context)
-            dismiss()
+            let summary = MovePreferences.set(verdict, for: move.name, in: context)
+            try? context.save()
+            repairNote = summary.note
+            Haptics.transport()
         }
         .font(.almanacBody)
         .foregroundStyle(destructive ? Palette.ink : Palette.moss)

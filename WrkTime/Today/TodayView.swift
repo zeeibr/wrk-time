@@ -122,28 +122,16 @@ struct TodayView: View {
                                 equipment: move.equipmentLabel,
                                 measure: "\(Int(routine.clampedWork))s ×\(routine.rounds / max(routine.moves.count, 1))"
                             )
-                            // Tap to see the shape, long-press to say what you
-                            // think of it.
+                            // Tap the move to see it and to say what you think
+                            // of it.
+                            //
+                            // This used to carry a context menu with the same
+                            // four options alongside the tap. Two gestures on
+                            // one row is one too many — the tap could swallow
+                            // the menu's action, so "never program it" recorded
+                            // nothing and the session went on asking for the
+                            // move. One way in, and it reports what it did.
                             .onTapGesture { inspecting = move }
-                            // An opinion should not cost a set. Long-press a
-                            // move to say what you think of it without having
-                            // to skip it mid-session to be heard.
-                            .contextMenu {
-                                Button("See less of this") {
-                                    MovePreferences.set(.disliked, for: move.name, in: context)
-                                }
-                                Button("This hurts — never program it", role: .destructive) {
-                                    MovePreferences.set(.avoided, for: move.name, in: context)
-                                }
-                                Button("More of this") {
-                                    MovePreferences.set(.liked, for: move.name, in: context)
-                                }
-                                if MovePreferences.verdict(for: move.name, in: context) != nil {
-                                    Button("Forget what I said") {
-                                        MovePreferences.clear(move.name, in: context)
-                                    }
-                                }
-                            }
                         }
                         Rule()
 
