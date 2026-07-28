@@ -46,8 +46,28 @@ final class IntervalEngine {
 
     /// Fires once per phase boundary, for haptics and audio cues.
     var onPhaseChange: ((Phase?) -> Void)?
-    /// Fires once when the session stops, saying why.
+    /// Fires once when the session stops, saying why. Belongs to the cue layer.
     var onFinish: ((EndReason) -> Void)?
+
+    /// Fires once when the session stops, for whatever must be **recorded**.
+    ///
+    /// A second callback rather than sharing `onFinish`, and it is worth being
+    /// exact about why, because the alternative cost a fortnight of vanished
+    /// sessions.
+    ///
+    /// The view used to learn about the ending from
+    /// `.onChange(of: engine.status)`. That modifier hung on the *field* — the
+    /// running screen — and finishing swaps the field out for the completion
+    /// screen in the very same update. SwiftUI does not run a change handler
+    /// on a view it is removing, so the one ending that mattered was the one
+    /// nothing heard: a session run to the end wrote no mark, while one
+    /// abandoned early reported fine, because abandoning leaves the field on
+    /// screen.
+    ///
+    /// So recording an ending must not depend on a view still being mounted.
+    /// This fires from inside the engine, synchronously, at the moment the
+    /// session stops — before any view hierarchy has had a chance to change.
+    var onEnded: ((EndReason) -> Void)?
     /// Fires on each of the last three seconds of a work phase, so the coming
     /// change can be felt with the phone face-down on the floor.
     var onCountdownTick: (() -> Void)?
@@ -215,6 +235,7 @@ final class IntervalEngine {
         elapsed = schedule.total
         endReason = reason
         onFinish?(reason)
+        onEnded?(reason)
     }
 
     // MARK: - Ticking
@@ -265,6 +286,7 @@ final class IntervalEngine {
                 status = .finished
                 endReason = .completed
                 onFinish?(.completed)
+                onEnded?(.completed)
             }
             return
         }

@@ -281,3 +281,93 @@ struct FormattingTests {
         #expect(TimeInterval(840).durationString == "14:00")
     }
 }
+
+@Suite("An ending is always heard")
+@MainActor
+struct EndingReportTests {
+
+    /// The one a session run to the end depends on, and the one that was
+    /// silently missing. It used to be reported from a view modifier hanging
+    /// on the running screen — and finishing swaps that screen out in the same
+    /// update, so SwiftUI never ran the handler. Sessions completed properly
+    /// wrote nothing; sessions abandoned early reported fine, because the
+    /// screen stayed. Nothing in the app noticed for a fortnight.
+    @Test("Running to the end reports completed")
+    func naturalEndReports() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        var heard: [IntervalEngine.EndReason] = []
+        engine.onEnded = { heard.append($0) }
+
+        engine.start()
+        clock.advance(engine.schedule.total + 1)
+        engine.refresh()
+
+        #expect(heard == [.completed])
+        #expect(engine.endReason == .completed)
+    }
+
+    @Test("Ending early reports abandoned")
+    func earlyEndReports() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        var heard: [IntervalEngine.EndReason] = []
+        engine.onEnded = { heard.append($0) }
+
+        engine.start()
+        clock.advance(30)
+        engine.end()
+
+        #expect(heard == [.abandoned])
+    }
+
+    @Test("Skipping to the end is finishing, not abandoning")
+    func skippingToTheEndCompletes() {
+        // How a short practice actually gets finished when she is ahead of the
+        // clock, and the exact path that reproduced the lost session.
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        var heard: [IntervalEngine.EndReason] = []
+        engine.onEnded = { heard.append($0) }
+
+        engine.start()
+        while engine.status != .finished { engine.skip() }
+
+        #expect(heard == [.completed])
+    }
+
+    @Test("An ending is reported once, however it arrives")
+    func reportedOnce() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        var heard: [IntervalEngine.EndReason] = []
+        engine.onEnded = { heard.append($0) }
+
+        engine.start()
+        clock.advance(engine.schedule.total + 1)
+        engine.refresh()
+        engine.refresh()
+        engine.end()
+
+        #expect(heard.count == 1)
+    }
+
+    @Test("The cue layer and the recorder both hear it")
+    func bothCallbacksFire() {
+        // They are separate on purpose: `onFinish` belongs to the haptics and
+        // audio, and a recorder that shared it would silently replace them.
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        var cued = false
+        var recorded = false
+        engine.onFinish = { _ in cued = true }
+        engine.onEnded = { _ in recorded = true }
+
+        engine.start()
+        clock.advance(engine.schedule.total + 1)
+        engine.refresh()
+
+        #expect(cued)
+        #expect(recorded)
+    }
+}

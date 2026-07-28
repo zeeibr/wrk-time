@@ -45,6 +45,8 @@ struct WorkoutTimerView: View {
     /// than restarting — so what is written back to Health is when she actually
     /// started, not when the app came back.
     @State private var sessionStart: Date?
+    /// One ending per session, however many places notice it.
+    @State private var reported = false
 
     init(routine: IntervalRoutine,
          resuming: ActiveSession? = nil,
@@ -197,6 +199,11 @@ struct WorkoutTimerView: View {
             // this the display locks during the first round and takes the
             // field register, the count and the cues with it.
             UIApplication.shared.isIdleTimerDisabled = true
+            // Set before anything can start, and read from the engine rather
+            // than from a view modifier: finishing removes this view in the
+            // same update that ends the session, so a handler living on it
+            // never runs. See `IntervalEngine.onEnded`.
+            engine.onEnded = { _ in report() }
             guard stage == .arriving else { return }
             Task { await beginSession() }
         }
@@ -236,15 +243,14 @@ struct WorkoutTimerView: View {
         .onChange(of: engine.status) { _, status in
             // A paused session must not hold the screen awake indefinitely.
             UIApplication.shared.isIdleTimerDisabled = (status == .running)
-            if status == .finished {
-                liveActivity.end()
-                report()
-            } else {
-                persist()
-                // Pausing and resuming are phase-silent, so the lock screen
-                // would otherwise keep counting down a stopped workout.
-                liveActivity.update(engine: engine)
-            }
+            // Deliberately no longer the place the ending is reported from.
+            // This handler only runs while the field is on screen, which a
+            // finished session is not — `engine.onEnded` carries the ending.
+            guard status != .finished else { return }
+            persist()
+            // Pausing and resuming are phase-silent, so the lock screen would
+            // otherwise keep counting down a stopped workout.
+            liveActivity.update(engine: engine)
         }
     }
 
@@ -266,9 +272,14 @@ struct WorkoutTimerView: View {
     /// Report the ending exactly once, with its real bounds. Only a session
     /// run to the end has bounds worth writing back.
     private func report() {
+        // Called from the engine, which can only end once — but a guard costs
+        // nothing and a double mark would be a lie about the day.
+        guard !reported else { return }
+        reported = true
         // Either way the session is over, so the stored copy goes — it exists
         // only to survive a crash, never to outlive an ending.
         ActiveSessionStore.clear()
+        liveActivity.end()
         guard engine.endReason == .completed, let start = sessionStart ?? engine.startDate else {
             onEnd(.abandoned(skipped: engine.skippedMoves))
             return
@@ -404,7 +415,12 @@ struct WorkoutTimerView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
 
-            Text("One mark on the season.")
+            // A mark is a finished *session*. The practice keeps its own record
+            // and deliberately earns none, so claiming one here would be the
+            // screen contradicting the season it points at.
+            Text(engine.routine.roundCount > 0
+                 ? "One mark on the season."
+                 : "Kept in the practice's own record.")
                 .font(.almanacBody)
                 .foregroundStyle(Palette.mute)
                 .padding(.top, 8)
