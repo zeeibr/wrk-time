@@ -51,7 +51,7 @@ enum Practice {
         guard !rest.isEmpty else { return lead.map { [$0] } ?? [] }
 
         let wanted = (lead == nil ? count : count - 1)
-        let offset = WarmUp.dayIndex(date) * (wanted + 1)
+        let offset = WarmUp.dayIndex(date) * WarmUp.stride(taking: wanted, from: rest.count)
         let rotated = (0..<min(wanted, rest.count)).map { step in
             rest[(offset + step) % rest.count]
         }

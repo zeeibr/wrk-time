@@ -10,8 +10,14 @@ private func draft(_ moves: [DraftMove],
                                       work: work, rest: rest, rounds: rounds, moves: moves)])
 }
 
+/// A draft move for the given kit and load, named after a real library move.
+///
+/// It used to be called "Move". The library is closed now — a name outside it
+/// is rejected before any other check — so a placeholder name would make every
+/// one of these tests fail for the wrong reason.
 private func move(_ equipment: Equipment, _ pounds: Double) -> DraftMove {
-    DraftMove(name: "Move", equipment: equipment.rawValue, cue: "Cue", loadPounds: pounds)
+    let name = MoveLibrary.all.first { $0.equipment == equipment }?.name ?? "Dead bug"
+    return DraftMove(name: name, equipment: equipment.rawValue, cue: "Cue", loadPounds: pounds)
 }
 
 @Suite("Plan validation")
@@ -957,35 +963,27 @@ struct TimerOnlyTests {
 @Suite("Move plates")
 struct MovePlateTests {
 
-    /// Movements with no honest drawing. Kept as a named list rather than a
-    /// silent gap: a shake has no shape, so any two arm angles would be an
-    /// arbitrary picture, and an arbitrary drawing is worse than none — the
-    /// same rule that makes an unknown move draw nothing at all.
-    static let undrawable = ["Shaking"]
-
-    @Test("Every move has a strip, or is on the list of ones that cannot be drawn")
+    // The point of closing the library: no exception list, no fallback, no
+    // matching. Every move the app can be asked to draw has a drawing.
+    @Test("Every move in the library has a strip")
     func libraryIsCovered() {
-        for move in MoveLibrary.all where !Self.undrawable.contains(move.name) {
+        for move in MoveLibrary.all {
             #expect(MovePlates.strip(for: move) != nil, "no strip for \(move.name)")
         }
-        for name in Self.undrawable {
-            #expect(MoveLibrary.all.contains { $0.name == name },
-                    "\(name) is listed as undrawable but is no longer in the library")
-            #expect(MovePlates.strip(for: name) == nil,
-                    "\(name) is listed as undrawable but has a strip")
+    }
+
+    @Test("A move outside the library has none, and is never guessed at")
+    func outsideTheLibrary() {
+        // These are names the planner used to invent. The old matcher resolved
+        // the first to a hinge; now nothing outside the library resolves at all.
+        for name in ["Ring goblet squat", "Beam reverse lunge", "Side plank",
+                     "Turkish get-up", "Shaking", ""] {
+            #expect(MovePlates.strip(for: name) == nil, "\(name) resolved to a plate")
         }
     }
 
     @Test("A plate never draws kit the move does not use")
     func equipmentMatches() throws {
-        // The bug: the planner wrote "Beam goblet squat", the only key it
-        // contained was the bare `squat`, and the app drew a woman squatting
-        // empty-handed under a label reading 15 LB BALA BEAM.
-        let invented = Move(name: "Beam goblet squat", equipment: .beam,
-                            cue: "Beam at the chest.", loadPounds: 15)
-        let strip = try #require(MovePlates.strip(for: invented))
-        #expect(strip.equipment == .beam)
-
         // Every strip a real move resolves to either holds that move's kit or
         // holds nothing at all — and holding nothing is only allowed when the
         // move itself carries nothing.
@@ -999,33 +997,6 @@ struct MovePlateTests {
                         "\(move.name) uses \(move.equipment) but draws a bare pattern")
             }
         }
-    }
-
-    @Test("Sharing the name of a piece of kit is not sharing a movement")
-    func kitWordsDoNotMatch() {
-        // Every ring strip contains the word "ring", so an unfiltered word
-        // overlap matched all of them: a goblet squat and a front raise both
-        // resolved to the ring deadlift and drew a hinge.
-        func plate(_ name: String, _ kit: Equipment) -> String? {
-            MovePlates.strip(for: Move(name: name, equipment: kit, cue: ""))?.key
-        }
-        #expect(plate("Ring goblet squat", .rings) == nil)
-        #expect(plate("Ring front raise", .rings) == nil)
-        #expect(plate("Beam overhead press", .beam) == nil)
-
-        // A shared *movement* word still finds its family.
-        #expect(plate("Beam goblet squat", .beam) == "front squat")
-        #expect(plate("Ring halo press", .rings) == "halo")
-        #expect(plate("Tempo squat", .bodyweight) == "squat")
-    }
-
-    @Test("A loaded move with no plate for its kit draws nothing at all")
-    func noBarePatternForLoadedMoves() {
-        // A shape that is right with the hands empty is still the wrong
-        // picture when the label underneath names fifteen pounds.
-        let invented = Move(name: "Dumbbell wall sit", equipment: .dumbbells,
-                            cue: "Hold them.", loadPounds: 2)
-        #expect(MovePlates.strip(for: invented) == nil)
     }
 
     @Test("The more specific strip wins")
@@ -1046,7 +1017,6 @@ struct MovePlateTests {
 
     @Test("A move nobody has drawn gets no strip rather than the wrong one")
     func unknownIsNil() {
-        #expect(MovePlates.strip(for: "Turkish get-up") == nil)
         #expect(MovePlates.strip(for: "") == nil)
     }
 
@@ -1342,5 +1312,77 @@ struct MorningPracticeTests {
         let withoutOpener = Practice.moves(on: monday, avoiding: ["lymphatic bounce"])
         #expect(withoutOpener.first?.name != Practice.opener)
         #expect(!withoutOpener.isEmpty)
+    }
+}
+
+@Suite("A closed move library")
+struct ClosedLibraryTests {
+
+    @Test("The schema offers the library and nothing else")
+    func schemaEnumeratesMoves() throws {
+        let defs = try #require(ClaudePlanner.schema(sessions: 4)["$defs"] as? [String: Any])
+        let move = try #require(defs["move"] as? [String: Any])
+        let properties = try #require(move["properties"] as? [String: Any])
+        let name = try #require(properties["name"] as? [String: Any])
+        let offered = try #require(name["enum"] as? [String])
+
+        #expect(Set(offered) == Set(MoveLibrary.names))
+        #expect(!offered.isEmpty)
+        // The failure this closes: the planner inventing a name the app then
+        // had to guess the shape of.
+        #expect(!offered.contains("Beam goblet squat"))
+    }
+
+    @Test("A week naming a move that does not exist is rejected whole")
+    func validatorRejectsInventedMoves() {
+        let draft = PlanDraft(
+            explanation: "Week one.",
+            sessions: [DraftSession(dayOffset: 0, title: "Lower", work: 40, rest: 45, rounds: 8,
+                                    moves: [DraftMove(name: "Beam goblet squat",
+                                                      equipment: "beam",
+                                                      cue: "Beam at the chest.",
+                                                      loadPounds: 15)])],
+            walkMinutes: 90)
+        #expect(throws: PlanValidator.Failure.unknownMove("Beam goblet squat")) {
+            _ = try PlanValidator.routines(from: draft)
+        }
+    }
+
+    @Test("A real move keeps the library's own name, kind and equipment")
+    func validatorNormalises() throws {
+        let known = try #require(MoveLibrary.all.first { $0.equipment == .beam })
+        let draft = DraftMove(name: known.name.lowercased(), equipment: "beam",
+                              cue: "Whatever the planner wrote.", loadPounds: 15)
+        let move = try PlanValidator.move(from: draft)
+        // The name comes back in the library's spelling, so the plate lookup
+        // cannot miss on capitalisation.
+        #expect(move.name == known.name)
+        #expect(move.kind == known.kind)
+        #expect(MovePlates.strip(for: move) != nil)
+    }
+
+    @Test("A move claiming the wrong kit is rejected")
+    func validatorChecksEquipment() {
+        let draft = DraftMove(name: "Beam deadlift", equipment: "dumbbells",
+                              cue: "No.", loadPounds: 2)
+        #expect(throws: PlanValidator.Failure.unknownEquipment("dumbbells")) {
+            _ = try PlanValidator.move(from: draft)
+        }
+    }
+
+    @Test("Every week the offline planner writes still passes")
+    func offlineWeeksSurvive() throws {
+        for pace in Pace.allCases {
+            for week in 1...12 {
+                let draft = OfflinePlanner.week(week, pace: pace)
+                let routines = try PlanValidator.routines(from: draft)
+                for entry in routines {
+                    for move in entry.routine.moves {
+                        #expect(MovePlates.strip(for: move) != nil,
+                                "\(move.name) has no plate")
+                    }
+                }
+            }
+        }
     }
 }

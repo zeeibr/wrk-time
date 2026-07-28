@@ -13,6 +13,7 @@ enum PlanValidator {
         case dayOutOfWeek(Int)
         case emptyRotation(String)
         case unknownEquipment(String)
+        case unknownMove(String)
         case impossibleLoad(move: String, equipment: Equipment, pounds: Double)
         case workOverCeiling(seconds: Int)
         case nonsenseTiming(String)
@@ -25,6 +26,7 @@ enum PlanValidator {
             case .dayOutOfWeek(let day): "A session was scheduled on day \(day)."
             case .emptyRotation(let title): "\"\(title)\" has no moves."
             case .unknownEquipment(let raw): "\"\(raw)\" is not equipment that exists."
+            case .unknownMove(let raw): "\"\(raw)\" is not a move in the library."
             case .impossibleLoad(let move, let equipment, let pounds):
                 "\"\(move)\" asks for \(Int(pounds)) lb, and the \(equipment.shortLabel.lowercased()) cannot be set to that."
             case .workOverCeiling(let seconds):
@@ -112,6 +114,17 @@ enum PlanValidator {
         guard let equipment = Equipment(rawValue: draft.equipment) else {
             throw Failure.unknownEquipment(draft.equipment)
         }
+        // The library is closed, so a name outside it is a week that would draw
+        // the wrong shape or none at all. Rejected here rather than papered
+        // over by a matcher further down.
+        guard let known = MoveLibrary.all.first(where: {
+            MovePreference.key($0.name) == MovePreference.key(draft.name)
+        }) else {
+            throw Failure.unknownMove(draft.name)
+        }
+        guard known.equipment == equipment else {
+            throw Failure.unknownEquipment(draft.equipment)
+        }
 
         let available = equipment.availableLoadsPounds
         if available.isEmpty {
@@ -120,14 +133,14 @@ enum PlanValidator {
             guard draft.loadPounds == 0 else {
                 throw Failure.impossibleLoad(move: draft.name, equipment: equipment, pounds: draft.loadPounds)
             }
-            return Move(name: draft.name, equipment: equipment, kind: kind(of: draft.name),
+            return Move(name: known.name, equipment: equipment, kind: known.kind,
                         cue: draft.cue, loadPounds: nil)
         }
 
         guard available.contains(draft.loadPounds) else {
             throw Failure.impossibleLoad(move: draft.name, equipment: equipment, pounds: draft.loadPounds)
         }
-        return Move(name: draft.name, equipment: equipment, kind: kind(of: draft.name),
+        return Move(name: known.name, equipment: equipment, kind: known.kind,
                     cue: draft.cue, loadPounds: draft.loadPounds)
     }
 

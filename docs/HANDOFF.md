@@ -325,9 +325,12 @@ Five things worth not undoing:
   tall and cannot share a portrait frame at one scale.
 - **The knee is solved, not placed.** Two-bar IK, and an unreachable foot is
   pulled in before solving rather than the bone being stretched to meet it.
-- **`MovePlates.strip(for:)` matches on equipment as well as name.** The planner
-  writes "Beam goblet squat", the only key it contains is the bare `squat`, and
-  matching on the name drew empty hands under a label reading 15 LB BALA BEAM.
+- **`MovePlates.strip(for:)` is a dictionary lookup**, because the library is
+  closed. It was three passes of fuzzy matching, and every one of them existed
+  to guess what an invented name meant. They guessed wrong: "Beam goblet squat"
+  drew empty hands under a label reading 15 LB BALA BEAM, and "Ring goblet
+  squat" drew a hinge because it shares the word *ring* with the ring deadlift.
+  Closing the library deleted the guessing instead of adding a fourth rule.
 
 Four tests stand in for the eye: no joint outside its panel, segment lengths
 preserved, a landmark moving at least one head diameter between consecutive
@@ -356,9 +359,9 @@ down" — tailbone moves first, head last, which is the roll *up*, so it opens
 folded. This was flipped once on a misreading and flipped back; the order is
 correct as written and should not be changed again without re-reading the cue.
 
-**Shaking has no plate.** A shake has no shape, so any two arm angles would be
-arbitrary, and an arbitrary drawing is worse than none. It is named in
-`MovePlateTests.undrawable` rather than left as a silent gap.
+**Shaking is gone from the library.** A shake has no shape — any two arm angles
+would be an arbitrary picture — and a closed library has no room for a move
+without a drawing. It was dropped rather than drawn badly.
 
 They show shape and order, not clinical form. The cue carries the detail and the
 move sheet says so out loud rather than letting the drawing imply more precision

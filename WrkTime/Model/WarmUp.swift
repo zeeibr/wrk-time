@@ -42,12 +42,7 @@ enum WarmUp {
         // with whatever is left rather than reaching past her to fill the slots.
         guard !allowed.isEmpty else { return [] }
 
-        // The window advances by one more than its own width each day. Stepping
-        // by exactly the width would make the cycle `library / width` long — 12
-        // flow movements taken 4 at a time gives only three distinct practices,
-        // so every Thursday would open exactly like every Monday. The extra one
-        // walks the window instead, and twelve days pass before a repeat.
-        let offset = dayIndex(date) * (wanted + 1)
+        let offset = dayIndex(date) * stride(taking: wanted, from: allowed.count)
         return (0..<min(wanted, allowed.count)).map { step in
             allowed[(offset + step) % allowed.count]
         }
@@ -71,6 +66,31 @@ enum WarmUp {
             return moves(on: date, avoiding: excluded, count: count)
         }
         return moves(on: date, avoiding: excluded, count: count, library: left)
+    }
+
+    /// How far the window moves each day.
+    ///
+    /// It has to be coprime with the pool, or the rotation closes early: a
+    /// window of four stepping by four through twelve movements gives three
+    /// distinct practices, so every Thursday opens like every Monday. A fixed
+    /// `width + 1` fixed that for twelve and broke again at ten — dropping one
+    /// movement from the library was enough. Chosen against the actual pool
+    /// instead, so it cannot rot when the library changes size.
+    static func stride(taking width: Int, from pool: Int) -> Int {
+        guard pool > 1 else { return 1 }
+        let preferred = max(width + 1, 2)
+        // Walk outward from the preferred step to the first one that shares no
+        // factor with the pool.
+        for delta in 0..<pool {
+            for candidate in [preferred + delta, preferred - delta] where candidate > 0 {
+                if gcd(candidate % pool == 0 ? pool : candidate, pool) == 1 { return candidate }
+            }
+        }
+        return 1
+    }
+
+    private static func gcd(_ a: Int, _ b: Int) -> Int {
+        b == 0 ? abs(a) : gcd(b, a % b)
     }
 
     /// Days since the reference date, non-negative and stable across time zones

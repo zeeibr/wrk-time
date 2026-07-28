@@ -192,8 +192,6 @@ enum MoveLibrary {
              cue: "On all fours. Arch on the breath in, round on the breath out."),
         Move(name: "Lymphatic tapping", equipment: .bodyweight, kind: .flow,
              cue: "Light cupped taps: collarbones, under the arms, then down the inside of the legs."),
-        Move(name: "Shaking", equipment: .bodyweight, kind: .flow,
-             cue: "Shake the hands, then the arms, then everything. Thirty seconds is plenty."),
         Move(name: "Standing twist", equipment: .bodyweight, kind: .flow,
              cue: "Feet planted, turn from the middle. The arms follow rather than lead."),
         Move(name: "Ankle and wrist circles", equipment: .bodyweight, kind: .flow,
@@ -205,6 +203,10 @@ enum MoveLibrary {
         Move(name: "Incline walk", equipment: .walkingPad,
              cue: "Raise the incline before you raise the speed.")
     ]
+
+    /// Every move by name, for the places that need the whole closed set:
+    /// the planner's schema, the validator, and the plate lookup.
+    static let names: [String] = all.map(\.name)
 
     static func moves(for equipment: Equipment) -> [Move] {
         all.filter { $0.equipment == equipment && $0.kind == .strength }

@@ -418,59 +418,42 @@ struct Strip: Sendable {
 }
 
 enum MovePlates {
-    /// The strip for a move, or nil when there is nothing honest to draw.
+    /// The strip for a move.
     ///
-    /// Nil is a real answer. The planner invents move names freely, and a
-    /// diagram of the wrong movement is worse than no diagram.
+    /// A plain lookup, because the library is closed: `MoveLibrary.names` is an
+    /// enum in the planner's response schema, so a move that reaches this app
+    /// is one of the thirty-seven and has a drawing.
     ///
-    /// Three passes, in order, because name alone is not enough. The planner
-    /// writes "Beam goblet squat" and the only key that contains is `squat` —
-    /// a bare bodyweight pattern — so matching on the name drew empty hands
-    /// under a label naming the beam.
-    static func strip(for move: Move) -> Strip? {
-        let name = MovePreference.key(move.name)
-        guard !name.isEmpty else { return nil }
-
-        // 1. A keyed match holding the right kit. Longest key first, so
-        //    "split squat" beats "squat".
-        if let exact = sorted.first(where: { name.contains($0.key) && $0.equipment == move.equipment }) {
-            return exact
-        }
-
-        // 2. Failing that, a strip for the right kit whose key shares a
-        //    *movement* word with the name — how an invented "beam goblet
-        //    squat" finds the beam front squat rather than the bare one.
-        //
-        //    Equipment words are struck out first. Left in, every ring strip
-        //    shares the word "ring" with every ring move, so "ring goblet
-        //    squat" and "ring front raise" both matched the ring deadlift and
-        //    drew a hinge for a squat and a hinge for a raise.
-        let words = Set(name.split(separator: " ").map(String.init))
-            .subtracting(Self.kitWords)
-        if let related = sorted.first(where: { strip in
-            strip.equipment == move.equipment
-                && !Set(strip.key.split(separator: " ").map(String.init)).isDisjoint(with: words)
-        }) {
-            return related
-        }
-
-        // 3. A bare pattern, but only for a move that carries nothing. Handing
-        //    one to a loaded move is exactly the bug above.
-        guard move.equipment == .bodyweight else { return nil }
-        return sorted.first { name.contains($0.key) && $0.equipment == nil }
-    }
+    /// This used to be three passes of fuzzy matching — the longest key
+    /// contained in the name, then a shared word within the same equipment,
+    /// then a bare pattern for bodyweight moves — and all of it existed to
+    /// guess what an invented name meant. It guessed wrong: "Ring goblet squat"
+    /// shares the word "ring" with the ring deadlift and was drawn as a hinge.
+    /// Closing the library deleted the guessing rather than adding a fourth
+    /// rule to it.
+    ///
+    /// Still Optional. A hand-built routine, or a session stored before the
+    /// library closed, can name something that is no longer there — and a
+    /// missing drawing is a gap in a row, not a crash.
+    static func strip(for move: Move) -> Strip? { byName[MovePreference.key(move.name)] }
 
     /// By name alone, for callers with no `Move` to hand.
-    static func strip(for name: String) -> Strip? {
-        strip(for: Move(name: name, equipment: .bodyweight, cue: ""))
-    }
+    static func strip(for name: String) -> Strip? { byName[MovePreference.key(name)] }
 
-    /// Words that name the kit rather than the movement. A shared one of these
-    /// says nothing about whether two moves are the same shape.
-    private static let kitWords: Set<String> = [
-        "beam", "ring", "rings", "bala", "dumbbell", "dumbbells", "peloton",
-        "walking", "pad", "bodyweight", "lb", "single-arm", "single", "arm"
-    ]
+    /// Every library move to its drawing, resolved once at launch. The library
+    /// is fixed, so the longest-key-wins rule that makes "split squat" beat
+    /// "squat" runs here rather than on every lookup.
+    private static let byName: [String: Strip] = {
+        var table: [String: Strip] = [:]
+        for move in MoveLibrary.all {
+            let key = MovePreference.key(move.name)
+            if let strip = sorted.first(where: { key.contains($0.key) }) {
+                table[key] = strip
+            }
+        }
+        return table
+    }()
+
 
     private static let sorted: [Strip] = all.sorted { $0.key.count > $1.key.count }
 

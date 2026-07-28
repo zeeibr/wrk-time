@@ -42,6 +42,11 @@ that names a load the kit cannot be set to is rejected **whole**, never trimmed.
 - **Equipment is a closed enum** (`WrkTime/Model/Equipment.swift`): two 2 lb
   dumbbells, a 15 lb Bala Beam, three Bala rings, a walking pad. Nothing may
   offer or generate anything else.
+- **The move library is closed too.** `MoveLibrary.names` is an enum in the
+  planner's response schema and `PlanValidator` rejects anything outside it, so
+  every move in every plan has a drawing by construction. Do not reopen it to
+  let the planner invent a name — that is where the fuzzy matching, the
+  wrong-shape plates and the fallback glyphs all came from.
 - **Work intervals cap at 60 seconds**, clamped in `IntervalRoutine`, not in
   the UI.
 - **The morning practice happens every day.** Eight flow movements, 60 s each,
@@ -102,8 +107,9 @@ These look like oversights and are not:
 - `Pose.supine` draws at `Anatomy.recumbent`. It is the one scale exception and
   it is deliberate: a body on the floor has no height to trade against a tall
   panel.
-- `MovePlates.strip(for:)` returns nil for an unknown move. A diagram of the
-  wrong movement is worse than none.
+- `MovePlates.strip(for:)` is a lookup, not a matcher. It returns nil only for
+  a name outside the library — a stored routine from before it closed. A
+  diagram of the wrong movement is worse than none.
 - The engine derives state from elapsed wall-clock time against a precomputed
   schedule. It must never accumulate per-tick decrements.
 - The Live Activity is handed phase start/end **dates**, not a countdown, so the

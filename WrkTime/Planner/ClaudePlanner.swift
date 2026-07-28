@@ -263,7 +263,18 @@ struct ClaudePlanner: Sendable {
         "additionalProperties": false,
         "required": ["name", "equipment", "cue", "loadPounds"],
         "properties": [
-            "name": ["type": "string"],
+            // The library, closed. Move names were the last free-text field in
+            // this schema and every fuzzy-matching problem downstream came from
+            // that: the planner would invent "Beam goblet squat", the app would
+            // try to guess which of thirty-seven drawings it meant, and
+            // sometimes guess wrong. Enumerated, every move in every plan has a
+            // plate by construction rather than by resemblance.
+            //
+            // Nothing is lost. Progression here comes from tempo, range,
+            // density and volume — the kit tops out at 15 lb — so the planner's
+            // job is which moves and in what order, not inventing a
+            // thirty-eighth for a drawer with four things in it.
+            "name": ["type": "string", "enum": MoveLibrary.names],
             "equipment": [
                 "type": "string",
                 "enum": Equipment.allCases.map(\.rawValue)
