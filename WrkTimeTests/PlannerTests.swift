@@ -1463,3 +1463,79 @@ struct TuningTests {
         }
     }
 }
+
+@Suite("A rest day is not a locked door")
+struct RestDayOfferTests {
+
+    /// Mirrors `TodayView.offeredSession`: the most recent unfinished session
+    /// earlier this week, else the next one coming up.
+    private func offer(from sessions: [(day: Int, done: Bool)],
+                       today: Int, weekStart: Int = 0) -> (day: Int, missed: Bool)? {
+        let missed = sessions.filter { !$0.done && $0.day < today && $0.day >= weekStart }
+            .max(by: { $0.day < $1.day })
+        if let missed { return (missed.day, true) }
+        let next = sessions.filter { !$0.done && $0.day > today }.min(by: { $0.day < $1.day })
+        return next.map { ($0.day, false) }
+    }
+
+    @Test("Yesterday's undone session is what a rest day offers first")
+    func missedComesFirst() throws {
+        // Monday and Tuesday scheduled, Monday done, Tuesday not. Wednesday is
+        // a rest day.
+        let week = [(day: 0, done: true), (day: 1, done: false), (day: 4, done: false)]
+        let result = try #require(offer(from: week, today: 2))
+        #expect(result.day == 1)
+        #expect(result.missed)
+    }
+
+    @Test("With nothing missed, the next one is offered early instead")
+    func nextWhenNothingMissed() throws {
+        let week = [(day: 0, done: true), (day: 1, done: true), (day: 4, done: false)]
+        let result = try #require(offer(from: week, today: 2))
+        #expect(result.day == 4)
+        #expect(!result.missed)
+    }
+
+    @Test("A missed session outranks an upcoming one")
+    func missedOutranksUpcoming() throws {
+        // Both exist. Offering tomorrow's would leave the skipped one sitting
+        // there and quietly shorten the week.
+        let week = [(day: 1, done: false), (day: 4, done: false)]
+        let result = try #require(offer(from: week, today: 2))
+        #expect(result.day == 1)
+    }
+
+    @Test("Last week's misses are not dragged into this one")
+    func staysWithinTheWeek() throws {
+        // Day -3 is last week. A rest day should not offer a session from a
+        // week that has closed.
+        let sessions = [(day: -3, done: false), (day: 5, done: false)]
+        let result = try #require(offer(from: sessions, today: 2, weekStart: 0))
+        #expect(result.day == 5)
+        #expect(!result.missed)
+    }
+
+    @Test("Nothing left to offer is a real answer")
+    func nothingToOffer() {
+        #expect(offer(from: [(day: 0, done: true), (day: 1, done: true)], today: 2) == nil)
+        #expect(offer(from: [], today: 2) == nil)
+    }
+
+    @Test("A mark counts for the week it was finished, not the week it was planned")
+    func markFollowsTheDoing() {
+        // Doing Tuesday's session on Wednesday should mark Wednesday's week.
+        // Today bins by `completedAt`, which is what makes picking up a missed
+        // session honest rather than back-dated.
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
+        let planned = calendar.date(byAdding: .day, value: 5, to: start)!
+        let finished = calendar.date(byAdding: .day, value: 8, to: start)!
+
+        func week(of date: Date) -> Int {
+            (calendar.dateComponents([.day], from: start,
+                                     to: calendar.startOfDay(for: date)).day ?? 0) / 7
+        }
+        #expect(week(of: planned) == 0)
+        #expect(week(of: finished) == 1)
+    }
+}

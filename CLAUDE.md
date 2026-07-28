@@ -67,6 +67,9 @@ about a week is the planner's call.
   additive: never a round removed, never a work interval shortened. It draws
   from the movements the morning practice did not use that day, so nothing is
   repeated within a day.
+- **A rest day is not a locked door.** It states the plan's intent and then
+  offers whatever is still available: a session missed earlier this week first,
+  otherwise the next one early. Offered, never urged.
 - **A routine may have no moves.** That is a plain interval timer, not an
   unfinished routine.
 - **Fasting is an input, not a feature.** Stats stay visible; it never gets a

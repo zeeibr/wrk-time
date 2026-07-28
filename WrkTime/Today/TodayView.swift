@@ -17,6 +17,10 @@ struct TodayView: View {
     @AppStorage(PlannerService.Memo.failure) private var planFailure = ""
 
     @State private var runningRoutine: IntervalRoutine?
+    /// Which session is on the timer. Not always today's: a rest day can offer
+    /// one that went undone earlier in the week, and finishing that has to mark
+    /// *that* session rather than looking today up and finding nothing.
+    @State private var runningSession: PlannedSession?
     /// The morning practice, when it is the thing being run. Kept apart from
     /// `runningRoutine` because finishing it records a different thing — a day
     /// done, not a session.
@@ -117,6 +121,7 @@ struct TodayView: View {
 
                         PrimaryButton(title: "Begin session",
                                       subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
+                            runningSession = session
                             runningRoutine = routine
                         }
                         .padding(.top, 14)
@@ -215,12 +220,14 @@ struct TodayView: View {
             WorkoutTimerView(routine: routine, resuming: resuming) { outcome in
                 switch outcome {
                 case .completed(let start, let end, let skipped):
-                    if let session = todaysSession {
+                    if let session = runningSession ?? todaysSession {
                         let sync = HealthSync(health: HealthKitService(), context: context)
                         Task { await sync.record(session: session, start: start, end: end) }
                     }
+                    runningSession = nil
                     skippedToReview = skipped
                 case .abandoned(let skipped):
+                    runningSession = nil
                     skippedToReview = skipped
                 }
             }
@@ -442,15 +449,82 @@ struct TodayView: View {
         return Set((lists.avoided + lists.disliked).map { MovePreference.key($0) })
     }
 
+    /// A rest day, and what is still available on it.
+    ///
+    /// The plan's intent comes first and is never softened — a rest day is part
+    /// of the programming, not a gap. But it is not a locked door: a session
+    /// that went undone earlier in the week is still there to be picked up, and
+    /// if nothing was missed the next one can be pulled forward. Both are
+    /// offered, neither is urged.
+    @ViewBuilder
     private var restDayNote: some View {
-        IndexedSection(number: "01", label: "Session") {
+        IndexedSection(number: "02", label: "Session") {
             SectionHead(title: "Nothing scheduled", note: "Rest")
                 .padding(.bottom, 10)
             Text("A rest day is part of the plan, not a gap in it. If you want to move anyway, a walk on the pad is free.")
                 .font(.almanacBody)
                 .foregroundStyle(Palette.mute)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let offer = offeredSession, let routine = offer.session.routine {
+                Rule().padding(.top, 14)
+                Text(offer.note)
+                    .font(.almanacBody)
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 14)
+
+                ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
+                    BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
+                             equipment: move.equipmentLabel,
+                             measure: "\(Int(routine.clampedWork))s")
+                        .onTapGesture { inspecting = move }
+                }
+                Rule()
+
+                PrimaryButton(title: offer.action,
+                              subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
+                    runningSession = offer.session
+                    runningRoutine = routine
+                }
+                .padding(.top, 14)
+            }
         }
+    }
+
+    private struct Offer { let session: PlannedSession; let note: String; let action: String }
+
+    /// What a rest day can still offer: something missed earlier this week
+    /// first, then the next one early.
+    ///
+    /// Missed comes first deliberately. Pulling tomorrow's forward on a day she
+    /// already skipped one would leave the skipped session sitting there and
+    /// quietly shorten the week.
+    private var offeredSession: Offer? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        guard let block = blocks.first else { return nil }
+        let weekStart = PlannerService.weekStart(block.currentWeek, of: block)
+
+        // Most recent first, so "the day before" is what gets offered.
+        if let missed = sessions
+            .filter({ !$0.isComplete && $0.scheduledFor < today && $0.scheduledFor >= weekStart })
+            .max(by: { $0.scheduledFor < $1.scheduledFor }) {
+            let day = missed.scheduledFor.formatted(.dateTime.weekday(.wide))
+            return Offer(session: missed,
+                         note: "\(day)'s session is still here if you want it.",
+                         action: "Do \(day)'s session")
+        }
+
+        if let next = sessions
+            .filter({ !$0.isComplete && $0.scheduledFor > today })
+            .min(by: { $0.scheduledFor < $1.scheduledFor }) {
+            let day = next.scheduledFor.formatted(.dateTime.weekday(.wide))
+            return Offer(session: next,
+                         note: "\(day)'s session is written already, if you would rather move today.",
+                         action: "Do it early")
+        }
+        return nil
     }
 
     // MARK: - Derived copy
