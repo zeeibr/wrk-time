@@ -12,6 +12,10 @@ import SwiftUI
 /// gets a row reading "—", and nothing anywhere apologises for it or nudges
 /// about it. A season document that cannot show a gap is not a document.
 struct SeasonView: View {
+    @Environment(\.modelContext) private var context
+    /// Observed so the fortnight redraws the moment a practice is recorded.
+    @Query private var practices: [MorningPractice]
+
     @Query(sort: \Block.startDate, order: .reverse) private var blocks: [Block]
     @Query(sort: \PlannedSession.scheduledFor) private var sessions: [PlannedSession]
 
@@ -24,6 +28,7 @@ struct SeasonView: View {
                 if let block {
                     form(for: block)
                     weekByWeek(for: block)
+                    practiceRecord
                     details(for: block)
                 } else {
                     Text("No block yet. The season starts when you begin one.")
@@ -95,10 +100,62 @@ struct SeasonView: View {
         else { .ahead }
     }
 
+    // MARK: - The morning practice
+
+    /// The practice's own record, kept apart from the growth form.
+    ///
+    /// It is deliberately not a mark and deliberately not on the form: one mark
+    /// is one finished planned session, and a daily thing drawn there would
+    /// swamp the weekly one and change what the form means. But "every day" is
+    /// the whole point of the practice, so it needs somewhere its own history
+    /// is visible — this is that place.
+    ///
+    /// A fortnight of days, filled where it was done and open where it was not.
+    /// Reading the gaps is possible and that is fine; what the app does not do
+    /// is keep a row for a day she missed, or call it a failure.
+    private var practiceRecord: some View {
+        IndexedSection(number: "03", label: "Morning") {
+            SectionHead(title: "The practice", note: practiceNote)
+                .padding(.bottom, 12)
+
+            HStack(spacing: 5) {
+                ForEach(fortnight, id: \.day) { entry in
+                    Rectangle()
+                        .fill(entry.done ? Palette.moss : Color.clear)
+                        .frame(height: 22)
+                        .overlay(Rectangle().strokeBorder(Palette.ruleFirm, lineWidth: 1))
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Morning practice, last fourteen days")
+            .accessibilityValue("\(fortnight.filter(\.done).count) of 14 done")
+
+            Text("The last fortnight, most recent on the right.")
+                .almanacLabel(Palette.mute, small: true)
+                .padding(.top, 8)
+        }
+    }
+
+    private var practiceNote: String {
+        let run = MorningPractices.run(in: context)
+        guard run > 0 else { return "\(Practice.count) movements · \(Int(Practice.seconds))s each" }
+        return run == 1 ? "1 day" : "\(run) days in a row"
+    }
+
+    private var fortnight: [(day: Date, done: Bool)] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let done = Set(MorningPractices.all(in: context).map { calendar.startOfDay(for: $0.day) })
+        return (0..<14).reversed().compactMap { back in
+            guard let day = calendar.date(byAdding: .day, value: -back, to: today) else { return nil }
+            return (day, done.contains(day))
+        }
+    }
+
     // MARK: - The block itself
 
     private func details(for block: Block) -> some View {
-        IndexedSection(number: "03", label: "Block") {
+        IndexedSection(number: "04", label: "Block") {
             SectionHead(title: "This block", note: "\(block.currentWeek) of \(block.weekCount)")
                 .padding(.bottom, 4)
 

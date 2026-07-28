@@ -16,15 +16,43 @@ struct TodayView: View {
     @AppStorage(PlannerService.Memo.explanation) private var planExplanation = ""
     @AppStorage(PlannerService.Memo.failure) private var planFailure = ""
 
-    @State private var runningRoutine: IntervalRoutine?
-    /// Which session is on the timer. Not always today's: a rest day can offer
-    /// one that went undone earlier in the week, and finishing that has to mark
-    /// *that* session rather than looking today up and finding nothing.
-    @State private var runningSession: PlannedSession?
-    /// The morning practice, when it is the thing being run. Kept apart from
-    /// `runningRoutine` because finishing it records a different thing — a day
-    /// done, not a session.
-    @State private var runningPractice: IntervalRoutine?
+    /// What is on the timer, if anything.
+    ///
+    /// One value and one presentation. This was three separate `@State`
+    /// optionals behind two `fullScreenCover` modifiers and a `sheet` on the
+    /// same view — and the session's completion callback was not firing, so a
+    /// finished session never got its `completedAt` and never became a mark.
+    /// Stacking presentations on one view is a known way to lose exactly that.
+    @State private var running: RunningWorkout?
+
+    enum RunningWorkout: Identifiable, Equatable {
+        static func == (a: Self, b: Self) -> Bool { a.id == b.id }
+
+        /// A planned session, carrying the session so finishing it marks the
+        /// right one — a rest day can offer a session from earlier in the week.
+        case session(PlannedSession, IntervalRoutine)
+        case practice(IntervalRoutine)
+        /// One the process died under, picked up where it stopped.
+        case resumed(ActiveSession)
+
+        var id: String {
+            switch self {
+            case .session(let s, _): "session-\(s.id)"
+            case .practice: "practice"
+            case .resumed: "resumed"
+            }
+        }
+
+        var isResumed: Bool { if case .resumed = self { return true }; return false }
+
+        var routine: IntervalRoutine {
+            switch self {
+            case .session(_, let r): r
+            case .practice(let r): r
+            case .resumed(let a): a.routine
+            }
+        }
+    }
     @Query private var practices: [MorningPractice]
     /// A session the process died under, offered back rather than lost.
     @State private var resumable: ActiveSession?
@@ -121,11 +149,12 @@ struct TodayView: View {
 
                         PrimaryButton(title: "Begin session",
                                       subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
-                            runningSession = session
-                            runningRoutine = routine
+                            running = .session(session, routine)
                         }
                         .padding(.top, 14)
                     }
+                } else if let done = finishedToday {
+                    finishedNote(done)
                 } else {
                     restDayNote
                 }
@@ -213,36 +242,17 @@ struct TodayView: View {
             .padding(.bottom, 28)
         }
         .background(Palette.oat.ignoresSafeArea())
-        .fullScreenCover(item: $runningRoutine) { routine in
-            // A session only becomes a mark by being finished. `record` is what
-            // sets `completedAt`, so without this the growth form could never
-            // grow and Today would read "Day one" forever.
-            WorkoutTimerView(routine: routine, resuming: resuming) { outcome in
-                switch outcome {
-                case .completed(let start, let end, let skipped):
-                    if let session = runningSession ?? todaysSession {
-                        let sync = HealthSync(health: HealthKitService(), context: context)
-                        Task { await sync.record(session: session, start: start, end: end) }
-                    }
-                    runningSession = nil
-                    skippedToReview = skipped
-                case .abandoned(let skipped):
-                    runningSession = nil
-                    skippedToReview = skipped
-                }
+        // One cover for everything the timer runs. What finished is decided by
+        // the value that opened it, so a session marks itself and a practice
+        // records a day — and neither depends on looking today up afterwards.
+        .fullScreenCover(item: $running) { workout in
+            WorkoutTimerView(routine: workout.routine,
+                             resuming: workout.isResumed ? resuming : nil) { outcome in
+                finish(workout, outcome)
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(item: $inspecting) { MoveSheet(move: $0) }
-        .fullScreenCover(item: $runningPractice) { routine in
-            WorkoutTimerView(routine: routine) { outcome in
-                // Only a practice run to the end counts as the day being done.
-                // Half of it is not the practice.
-                guard case .completed = outcome else { return }
-                MorningPractices.record(routine.warmUp, in: context)
-                try? context.save()
-            }
-        }
         .sheet(isPresented: $loggingSet) { LogSetView() }
         // Asked after the field register has closed, never inside it.
         .sheet(isPresented: Binding(get: { !skippedToReview.isEmpty },
@@ -255,8 +265,8 @@ struct TodayView: View {
         }
         // Cleared once the cover closes, so a second run does not silently
         // resume the session that was just finished or abandoned.
-        .onChange(of: runningRoutine) { _, routine in
-            if routine == nil { resuming = nil }
+        .onChange(of: running) { _, value in
+            if value == nil { resuming = nil }
         }
     }
 
@@ -328,7 +338,7 @@ struct TodayView: View {
 
             PrimaryButton(title: "Pick it back up", subtitle: nil) {
                 resuming = session
-                runningRoutine = session.routine
+                running = .resumed(session)
                 resumable = nil
             }
             .padding(.top, 14)
@@ -421,7 +431,7 @@ struct TodayView: View {
             if !done {
                 PrimaryButton(title: "Begin the practice",
                               subtitle: "\(routine.warmUp.count) movements · \(routine.totalDuration.durationString)") {
-                    runningPractice = routine
+                    running = .practice(routine)
                 }
                 .padding(.top, 14)
             }
@@ -447,6 +457,46 @@ struct TodayView: View {
     private var refusedFlow: Set<String> {
         let lists = MovePreferences.lists(in: context)
         return Set((lists.avoided + lists.disliked).map { MovePreference.key($0) })
+    }
+
+    /// Today's session, once it is done.
+    ///
+    /// Without this the section simply disappeared when a session was finished
+    /// and the rest-day copy took its place — so the reward for completing a
+    /// session was the app saying "nothing scheduled". It states what happened
+    /// and stops: the mark on the season is the reward and it is already earned.
+    private func finishedNote(_ session: PlannedSession) -> some View {
+        IndexedSection(number: "02", label: "Session") {
+            SectionHead(title: session.title, note: "Done")
+                .padding(.bottom, 10)
+            Text(finishedLine(session))
+                .font(.almanacBody)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let routine = session.routine {
+                ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
+                    BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
+                             equipment: move.equipmentLabel,
+                             measure: "\(Int(routine.clampedWork))s")
+                        .onTapGesture { inspecting = move }
+                }
+                Rule()
+            }
+        }
+    }
+
+    private func finishedLine(_ session: PlannedSession) -> String {
+        guard let at = session.completedAt else { return "Finished." }
+        let time = at.formatted(date: .omitted, time: .shortened)
+        return marksThisWeek == 1
+            ? "Finished at \(time). One mark on the season this week."
+            : "Finished at \(time). \(marksThisWeek) marks on the season this week."
+    }
+
+    /// A session scheduled for today that has been finished.
+    private var finishedToday: PlannedSession? {
+        sessions.first { Calendar.current.isDateInToday($0.scheduledFor) && $0.isComplete }
     }
 
     /// A rest day, and what is still available on it.
@@ -484,12 +534,52 @@ struct TodayView: View {
 
                 PrimaryButton(title: offer.action,
                               subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
-                    runningSession = offer.session
-                    runningRoutine = routine
+                    running = .session(offer.session, routine)
                 }
                 .padding(.top, 14)
             }
         }
+    }
+
+    /// Records what just finished.
+    ///
+    /// Written here, synchronously, rather than inside a `Task` that races the
+    /// sheet's dismissal: the mark is the whole point of finishing and it must
+    /// land before anything else can go wrong. Health is a nicety and can be
+    /// awaited afterwards.
+    private func finish(_ workout: RunningWorkout, _ outcome: WorkoutTimerView.Outcome) {
+        guard case .completed(let start, let end, let skipped) = outcome else {
+            // Walked away from: no mark, but it has just as much to say about
+            // which move drove her out.
+            if case .abandoned(let skipped) = outcome { skippedToReview = skipped }
+            return
+        }
+
+        switch workout {
+        case .session(let session, _):
+            mark(session, start: start, end: end)
+        case .resumed:
+            // A resumed session carries its routine, not its row, so today's is
+            // the only one it can be.
+            if let session = todaysSession { mark(session, start: start, end: end) }
+        case .practice(let routine):
+            MorningPractices.record(routine.warmUp, in: context)
+            try? context.save()
+        }
+        skippedToReview = skipped
+    }
+
+    /// Writes the mark, then tells Health.
+    ///
+    /// Synchronously, and before anything is awaited. This used to happen
+    /// inside a `Task` that raced the cover's dismissal, and a finished session
+    /// could end up with no `completedAt` at all — the work simply vanished.
+    /// The mark is the point of finishing; Health is a nicety.
+    private func mark(_ session: PlannedSession, start: Date, end: Date) {
+        session.completedAt = end
+        try? context.save()
+        let sync = HealthSync(health: HealthKitService(), context: context)
+        Task { await sync.record(session: session, start: start, end: end) }
     }
 
     private struct Offer { let session: PlannedSession; let note: String; let action: String }

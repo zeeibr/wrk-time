@@ -210,6 +210,7 @@ struct WorkoutTimerView: View {
         }
         // One Live Activity update per phase, not per second — the widget
         // renders its own countdown from the phase bounds.
+        .animation(.easeInOut(duration: 0.35), value: showsPlate)
         .onChange(of: engine.currentPhase) { _, phase in
             liveActivity.update(engine: engine)
             announce(phase)
@@ -481,12 +482,13 @@ struct WorkoutTimerView: View {
                 Text(eyebrow).almanacLabel(secondary)
             }
 
-            if MoveStrip.exists(for: move) {
+            if MoveStrip.exists(for: move), showsPlate {
                 MoveStrip(move: move, style: .strip,
                           line: foreground, rule: secondary.opacity(0.45),
                           label: secondary)
                     .frame(height: 124)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -583,6 +585,23 @@ struct WorkoutTimerView: View {
     }
 
     // MARK: - Copy
+
+    /// How long a plate stays up at the start of a phase.
+    static let plateSeconds: TimeInterval = 5
+
+    /// The plate is a reminder of the shape, not something to watch.
+    ///
+    /// It retires after five seconds, for two reasons. By then she has looked
+    /// at it and is moving, and — the reason she raised it — the field's
+    /// boundary sweeping down through a stick figure for the rest of the
+    /// interval made the dissolve look wrong. During rest it stays: the whole
+    /// point of rest is knowing what to set up next, and the field holds still
+    /// there so there is no boundary to fight.
+    private var showsPlate: Bool {
+        guard let phase = engine.currentPhase else { return false }
+        guard !phase.isRest else { return true }
+        return engine.elapsed - phase.start < Self.plateSeconds
+    }
 
     /// The lead-in counts in whole seconds; the session counts in its own clock.
     private var countString: String {
