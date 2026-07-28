@@ -12,6 +12,11 @@
 	  receives the silent pushes that signal a change on another device, and
 	  sync quietly degrades to pull-on-launch.
 
+	  processing is what lets the week be written before she is awake to want
+	  it — see PlanScheduler. Without the mode, submitting the task throws and
+	  the plan simply waits for her to open the app, which is what it did
+	  before.
+
 	  Do not add "audio" here until the audio cue system actually exists. The
 	  mode only keeps the process alive while a session is genuinely playing,
 	  and declaring it without one is a review risk for no benefit.
@@ -19,6 +24,18 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
+
+	<!--
+	  Every identifier the app may register must be listed here or the
+	  registration call traps at launch rather than failing — this is one of
+	  the few Info.plist keys whose absence is a crash and not a degradation.
+	  It must match PlanScheduler.taskIdentifier exactly.
+	-->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.zee.wrktime.plan</string>
 	</array>
 
 	<!--

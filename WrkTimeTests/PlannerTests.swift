@@ -1918,3 +1918,61 @@ struct PlanTriggerTests {
         #expect(asks.count <= 5, "a clean block asked \(asks.count) times")
     }
 }
+
+@Suite("Six in the morning")
+@MainActor
+struct PlanSchedulerTests {
+
+    /// A fixed zone so the test says the same thing wherever it runs.
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return calendar
+    }
+
+    private func date(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: month, day: day,
+                                           hour: hour, minute: minute))!
+    }
+
+    @Test("A night owl still wakes to a plan")
+    func laterTonight() {
+        // Half past one in the morning: six is still ahead, today.
+        let next = PlanScheduler.nextMorning(after: date(7, 28, 1, 30), calendar: calendar)
+        #expect(next == date(7, 28, 6))
+    }
+
+    @Test("Past six means tomorrow, not this instant")
+    func alreadyPast() {
+        // The trap this guards is `nextDate` matching the time that just went
+        // by, which would make the request eligible immediately and burn the
+        // morning slot at nine at night.
+        let next = PlanScheduler.nextMorning(after: date(7, 28, 21, 0), calendar: calendar)
+        #expect(next == date(7, 29, 6))
+    }
+
+    @Test("Six o'clock exactly means the next one")
+    func onTheHour() {
+        #expect(PlanScheduler.nextMorning(after: date(7, 28, 6), calendar: calendar)
+                == date(7, 29, 6))
+    }
+
+    @Test("It is always ahead, whatever hour it is asked at")
+    func alwaysFuture() {
+        for hour in 0..<24 {
+            let now = date(7, 28, hour, 17)
+            #expect(PlanScheduler.nextMorning(after: now, calendar: calendar) > now)
+        }
+    }
+
+    @Test("The plist permits the identifier the code registers")
+    func identifierIsDeclared() throws {
+        // These two live in different files and nothing but this test connects
+        // them. A mismatch is not a misbehaviour — `register` traps, and the
+        // app dies at launch.
+        let permitted = Bundle.main
+            .object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String]
+        #expect(permitted?.contains(PlanScheduler.taskIdentifier) == true,
+                "Info.plist permits \(permitted ?? []), code registers \(PlanScheduler.taskIdentifier)")
+    }
+}

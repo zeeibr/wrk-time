@@ -21,8 +21,14 @@ enum PlannerError: LocalizedError {
             "That API key was not accepted. This week was drawn from the plan's own rules."
         case .http(let code, _) where code == 429:
             "Claude is rate limiting the key just now. This week was drawn from the plan's own rules."
-        case .http:
-            "Claude could not be reached. This week was drawn from the plan's own rules."
+        // The code and Claude's own sentence, not a shrug. "Could not be
+        // reached" on its own is unfalsifiable: it reads the same whether the
+        // service is down, the request is malformed, or the key is out of
+        // credit, and there is no log on a phone to go and check. A 400 is a
+        // bug in this app; a 529 is Claude being busy. She should be able to
+        // tell those apart, and so should anyone fixing it.
+        case .http(let code, let detail):
+            "Claude answered \(code)\(detail.isEmpty ? "" : ": \(detail)"). This week was drawn from the plan's own rules."
         case .truncated, .malformed:
             "Claude's answer came back unusable. This week was drawn from the plan's own rules."
         case .rejected(let why):
@@ -142,14 +148,17 @@ struct ClaudePlanner: Sendable {
             // and text together, so this is sized for both rather than for the
             // few hundred tokens of JSON that come out the far end.
             //
-            // Down from 16k. Thinking is what this call actually spends, and
-            // the schema now does most of the work it used to be spent on:
-            // names, loads, rounds, work, rest and days are all closed sets, so
-            // there is far less to deliberate over. A week is comfortably under
-            // this; if one ever is not, `stop_reason` says `max_tokens` and the
-            // offline planner writes the week rather than a truncated one being
-            // trusted.
-            "max_tokens": 8_000,
+            // Back to 16k after briefly being 8k as a saving, which it was not.
+            // **`max_tokens` is a ceiling, not a spend** — output is billed as
+            // it is generated, so lowering a cap the response never reached
+            // saved nothing. What it did do was leave no room above an adaptive
+            // thinking budget at `high` effort, and the only two ways that
+            // shows up are an HTTP 400 or a `max_tokens` stop, both of which
+            // spend the request and hand the week to the offline planner.
+            //
+            // Generous on purpose, then. The real economy is upstream, in
+            // `PlanTrigger` deciding not to ask at all.
+            "max_tokens": 16_000,
             "system": Self.systemPrompt,
             "thinking": ["type": "adaptive"],
             "output_config": [
@@ -175,16 +184,29 @@ struct ClaudePlanner: Sendable {
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            // The body can echo request fields, so it is inspected for the
-            // beta retry above and otherwise never surfaced or logged — a
-            // request body carries the key's own headers' worth of context.
-            throw PlannerError.http(status, String(decoding: data, as: UTF8.self))
+            throw PlannerError.http(status, Self.reason(from: data))
         }
 
         return try Self.decode(data)
     }
 
     // MARK: - Response
+
+    /// One sentence out of an error body, and nothing else out of it.
+    ///
+    /// An error response is `{"error": {"type": ..., "message": ...}}`, and only
+    /// `message` is taken. The rest of a failed request's body can echo fields
+    /// that were sent, which is not something to put on a screen or into a
+    /// screenshot — the key itself is a header rather than a field, so it is
+    /// never in here, but that is a reason not to be casual rather than a
+    /// reason to relax. Trimmed, because some of these run long.
+    static func reason(from data: Data) -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = object["error"] as? [String: Any],
+              let message = error["message"] as? String, !message.isEmpty
+        else { return "" }
+        return message.count > 160 ? String(message.prefix(160)) + "…" : message
+    }
 
     /// What a request actually cost, from the response rather than from a
     /// guess. Thinking bills as output, which is where nearly all of it goes.

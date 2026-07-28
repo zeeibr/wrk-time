@@ -28,6 +28,14 @@ struct SettingsView: View {
         return "\(calls) · \(cost)"
     }
 
+    /// Whether the overnight write has ever actually happened. "Not yet" is
+    /// the honest reading on a fresh install and stays honest if iOS never
+    /// schedules it — better than a line implying it runs when it has not.
+    private var morningNote: String {
+        guard let last = PlanScheduler.lastRan else { return "Not yet" }
+        return last.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+
     private func storeMoves(_ value: Int) {
         Tuning.movesPerSession = value
         movesPerSession = Tuning.movesPerSession
@@ -272,6 +280,14 @@ struct SettingsView: View {
                         SectionHead(title: "Requests so far", note: usageNote)
                             .padding(.bottom, 10)
                         Text("Claude is asked when there is something to adapt to — a session missed, an opinion recorded, or a check-in every \(PlanTrigger.everyNWeeks) weeks. A clean week steps on from the last one for nothing, because the progression is arithmetic the app already does. Rewriting below always asks.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 18)
+
+                        SectionHead(title: "Written overnight", note: morningNote)
+                            .padding(.bottom, 10)
+                        Text("A new week is written around six in the morning, so it is there when you wake up rather than while you stand waiting for it. iOS decides when background work actually runs and may skip a night; opening the app into an unwritten week still writes it, as it always did.")
                             .font(.almanacBodySmall)
                             .foregroundStyle(Palette.mute)
                             .fixedSize(horizontal: false, vertical: true)

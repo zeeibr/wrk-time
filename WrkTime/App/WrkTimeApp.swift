@@ -3,11 +3,25 @@ import SwiftData
 
 @main
 struct WrkTimeApp: App {
+    /// Held rather than called twice. `Store.container()` opens a store each
+    /// time it is asked, so handing one to the scene and another to the
+    /// background task would give the two of them different views of the same
+    /// database — the six a.m. plan would be written where nothing reads it.
+    private let container: ModelContainer
+
+    init() {
+        let container = Store.container()
+        self.container = container
+        // Registration has to happen before launch finishes, which rules out
+        // `.task` and every other view lifecycle hook.
+        PlanScheduler.register(container: container)
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
         }
-        .modelContainer(Store.container())
+        .modelContainer(container)
     }
 }
 
@@ -62,6 +76,11 @@ struct RootView: View {
         // week. A phone left running for a fortnight would otherwise sit on a
         // block that stopped a week ago.
         .onChange(of: scenePhase) { _, phase in
+            // Asked for on the way out rather than at launch: a submitted task
+            // only becomes eligible once the app is in the background, and
+            // re-submitting the same identifier replaces the pending request
+            // rather than stacking another one behind it.
+            if phase == .background { PlanScheduler.schedule() }
             guard phase == .active else { return }
             Task { await planCurrentWeekIfNeeded() }
         }
