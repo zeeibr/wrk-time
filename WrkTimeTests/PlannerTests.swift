@@ -1228,3 +1228,101 @@ struct ResponseSchemaTests {
         }
     }
 }
+
+@Suite("Morning practice")
+struct MorningPracticeTests {
+
+    private let monday = Date(timeIntervalSince1970: 1_700_000_000)
+
+    @Test("Eight movements, a minute each, and the rebounding always leads")
+    func shape() throws {
+        for day in 0..<14 {
+            let date = monday.addingTimeInterval(Double(day) * 86_400)
+            let moves = Practice.moves(on: date)
+            #expect(moves.count == Practice.count)
+            #expect(moves.first?.name == Practice.opener,
+                    "day \(day) opened with \(moves.first?.name ?? "nothing")")
+            for move in moves { #expect(move.kind == .flow) }
+            // Eight minutes of practice, not eight minutes of one movement.
+            #expect(Set(moves.map(\.name)).count == moves.count)
+        }
+    }
+
+    @Test("It is a routine of pure flow — no rounds, no work, no rest")
+    func routineIsAllPractice() {
+        let schedule = Practice.routine(on: monday).schedule
+        #expect(schedule.phases.allSatisfy { $0.isFlow })
+        #expect(schedule.workPhaseCount == 0)
+        #expect(schedule.flowPhaseCount == Practice.count)
+        #expect(schedule.total == Practice.seconds * Double(Practice.count))
+    }
+
+    @Test("The practice is never counted down at")
+    @MainActor
+    func noCountdown() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: Practice.routine(on: monday),
+                                    now: clock.provider, autoTick: false)
+        var ticks = 0
+        engine.onCountdownTick = { ticks += 1 }
+        engine.start()
+        for _ in 0..<Int(Practice.seconds * 2) {
+            clock.advance(1)
+            engine.refresh()
+        }
+        #expect(ticks == 0)
+    }
+
+    @Test("Its phases are movements, not warm-up for work that is not coming")
+    func namesItself() throws {
+        let practice = Practice.routine(on: monday)
+        let phase = try #require(practice.schedule.phases.first)
+        #expect(phase.position(rounds: practice.rounds, flowCount: Practice.count)
+                == "Movement 1 / 8")
+
+        // A session's opening flow is still a warm-up.
+        let session = IntervalRoutine(name: "S", work: 40, rest: 30, rounds: 4,
+                                      moves: [MoveLibrary.all[0]])
+            .warmingUp(with: Array(MoveLibrary.flow.prefix(4)))
+        let opening = try #require(session.schedule.phases.first)
+        #expect(opening.position(rounds: 4, flowCount: 4) == "Warm-up 1 / 4")
+    }
+
+    @Test("Consecutive days differ, and the opener does not")
+    func rotates() {
+        let days = (0..<12).map {
+            Practice.moves(on: monday.addingTimeInterval(Double($0) * 86_400))
+                .map(\.name).joined(separator: "|")
+        }
+        for (a, b) in zip(days, days.dropFirst()) { #expect(a != b) }
+        #expect(Set(days).count >= 8)
+    }
+
+    @Test("A session never repeats a movement the morning already used")
+    func sessionDoesNotRepeatThePractice() {
+        for day in 0..<10 {
+            let date = monday.addingTimeInterval(Double(day) * 86_400)
+            let practice = Set(Practice.moves(on: date).map { MovePreference.key($0.name) })
+            let warmUp = WarmUp.afterPractice(on: date).map { MovePreference.key($0.name) }
+            #expect(!warmUp.isEmpty)
+            for move in warmUp {
+                #expect(!practice.contains(move),
+                        "day \(day): \(move) is in both the practice and the warm-up")
+            }
+        }
+    }
+
+    @Test("Movements she has ruled out stay out, and the opener can go too")
+    func honoursPreferences() {
+        let moves = Practice.moves(on: monday, avoiding: ["shaking", "standing twist"])
+        for move in moves {
+            #expect(MovePreference.key(move.name) != "shaking")
+            #expect(MovePreference.key(move.name) != "standing twist")
+        }
+        // Pain outranks the ritual: if the rebounding itself hurts, the
+        // practice opens with something else rather than insisting.
+        let withoutOpener = Practice.moves(on: monday, avoiding: ["lymphatic bounce"])
+        #expect(withoutOpener.first?.name != Practice.opener)
+        #expect(!withoutOpener.isEmpty)
+    }
+}

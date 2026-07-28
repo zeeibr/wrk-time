@@ -120,6 +120,7 @@ a physical iPhone, and driven against the live Claude API for the first time.
 | Move preferences and skip reasons | Built, tested | `WrkTime/Model/MovePreference.swift`, `WrkTime/Today/SkipReviewView.swift` |
 | Backup and restore | Built | `WrkTime/Model/Archive.swift` |
 | Flow work — qi gong and lymphatic | Built | `MoveLibrary.flow` in `WrkTime/Model/Equipment.swift` |
+| Morning practice — daily, 8 movements | Built, tested | `WrkTime/Model/MorningPractice.swift` |
 | Flow warm-up on every session | Built, tested | `WrkTime/Model/WarmUp.swift` |
 | Timer-only routines — no moves | Built, tested | `WrkTime/Timer/RoutineBuilderView.swift` |
 | Move diagrams — drawn stick figures | Built, tested | `WrkTime/DesignSystem/MoveDiagram.swift`, `WrkTime/Today/MoveSheet.swift` |
@@ -257,6 +258,30 @@ from wall-clock time: there is no accumulated per-tick state to rebuild.
 
 A session the clock outran while the app was closed is **discarded, not
 counted**. The app must not decide on her behalf that she finished.
+
+### The morning practice
+
+Eight flow movements, a minute each, every day, always opening with the
+rebounding. Asked for in as many words: *"one of those every morning separate to
+the workout sessions but mandatory … it's important we do these every day."*
+
+Three properties follow from *every day* and the code protects each:
+
+- **It is not tied to the plan.** It appears on a rest day, in any week, and on
+  a day the planner never wrote. Nothing about it is conditional on a
+  `PlannedSession`.
+- **It earns no mark.** Rule three stands — one mark is one finished planned
+  session. A daily practice drawing on the growth form would make the form mean
+  "I moved" rather than "I did the plan", and would swamp the weekly thing it
+  exists to record. It keeps its own row instead.
+- **Only finished days are stored.** There is no row for a day she missed. A
+  run of days is reported when there is one and a gap is simply not mentioned;
+  the app does not keep a ledger of absences.
+
+It runs on the same engine as everything else — a routine of pure flow, zero
+rounds — which is why `RoutineSchedule` accepts a routine with no rounds at all.
+Pain still outranks the ritual: if the rebounding itself is ruled out, the
+practice opens with something else rather than insisting.
 
 ### The warm-up
 

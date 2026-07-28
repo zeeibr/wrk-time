@@ -44,9 +44,15 @@ that names a load the kit cannot be set to is rejected **whole**, never trimmed.
   offer or generate anything else.
 - **Work intervals cap at 60 seconds**, clamped in `IntervalRoutine`, not in
   the UI.
-- **Every session opens with 3–5 flow movements**, built by `WarmUp` rather
-  than by either planner. It is additive: never a round removed, never a work
-  interval shortened.
+- **The morning practice happens every day.** Eight flow movements, 60 s each,
+  always opening with the rebounding (`Practice` in
+  `WrkTime/Model/MorningPractice.swift`). It is not tied to the plan — it
+  appears on rest days — and it earns no mark, because a mark is a finished
+  session. It keeps its own record.
+- **Every session also opens with 3–5 flow movements**, built by `WarmUp`. It is
+  additive: never a round removed, never a work interval shortened. It draws
+  from the movements the morning practice did not use that day, so nothing is
+  repeated within a day.
 - **A routine may have no moves.** That is a plain interval timer, not an
   unfinished routine.
 - **Fasting is an input, not a feature.** Stats stay visible; it never gets a
@@ -78,6 +84,11 @@ These look like oversights and are not:
   tests assert exact values without sleeping. Keep them.
 - `Phase.Kind` has three cases, not two. `flow` holds the field still, gets no
   countdown tick, and is not a round.
+- A routine with **zero rounds** is legal: that is the morning practice, all
+  flow and no work. `RoutineSchedule` returns early rather than inventing an
+  interval to satisfy `max(rounds, 1)`.
+- `MorningPractice` rows exist only for days she **finished**. There is no
+  record of a day she missed — a table of absences is a ledger of failure.
 - `IntervalRoutine.warmUpMoves` and `Move.kindRaw` are Optional because the
   synthesized decoder *throws* on a missing key rather than using a default.
   Anything new added to a stored routine must be Optional too.

@@ -213,7 +213,7 @@ enum PlannerService {
         for entry in routines {
             guard let day = calendar.date(byAdding: .day, value: entry.dayOffset, to: start) else { continue }
             let routine = entry.routine.warmingUp(
-                with: WarmUp.moves(on: day, avoiding: excluded))
+                with: WarmUp.afterPractice(on: day, avoiding: excluded))
             let session = PlannedSession(scheduledFor: day,
                                          title: entry.routine.name,
                                          routine: routine)

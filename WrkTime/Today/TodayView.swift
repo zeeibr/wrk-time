@@ -17,6 +17,11 @@ struct TodayView: View {
     @AppStorage(PlannerService.Memo.failure) private var planFailure = ""
 
     @State private var runningRoutine: IntervalRoutine?
+    /// The morning practice, when it is the thing being run. Kept apart from
+    /// `runningRoutine` because finishing it records a different thing — a day
+    /// done, not a session.
+    @State private var runningPractice: IntervalRoutine?
+    @Query private var practices: [MorningPractice]
     /// A session the process died under, offered back rather than lost.
     @State private var resumable: ActiveSession?
     @State private var resuming: ActiveSession?
@@ -40,8 +45,10 @@ struct TodayView: View {
 
                 if let resumable { resumeNote(resumable) }
 
+                practiceSection
+
                 if let session = todaysSession, let routine = session.routine {
-                    IndexedSection(number: "01", label: "Session") {
+                    IndexedSection(number: "02", label: "Session") {
                         SectionHead(title: session.title,
                                     note: routine.totalDuration.durationString)
                             .padding(.bottom, 10)
@@ -118,7 +125,7 @@ struct TodayView: View {
                     restDayNote
                 }
 
-                IndexedSection(number: "02", label: "Kept") {
+                IndexedSection(number: "03", label: "Kept") {
                     SectionHead(title: "Loose work", note: keptNote)
                         .padding(.bottom, keptToday.isEmpty ? 10 : 4)
 
@@ -156,7 +163,7 @@ struct TodayView: View {
                     Rule()
                 }
 
-                IndexedSection(number: "03", label: "Season") {
+                IndexedSection(number: "04", label: "Season") {
                     SectionHead(title: "The season so far", note: seasonNote)
                         .padding(.bottom, 12)
                     // The mockup's composition: a thumbnail beside the figures,
@@ -220,6 +227,15 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(item: $inspecting) { MoveSheet(move: $0) }
+        .fullScreenCover(item: $runningPractice) { routine in
+            WorkoutTimerView(routine: routine) { outcome in
+                // Only a practice run to the end counts as the day being done.
+                // Half of it is not the practice.
+                guard case .completed = outcome else { return }
+                MorningPractices.record(routine.warmUp, in: context)
+                try? context.save()
+            }
+        }
         .sheet(isPresented: $loggingSet) { LogSetView() }
         // Asked after the field register has closed, never inside it.
         .sheet(isPresented: Binding(get: { !skippedToReview.isEmpty },
@@ -364,6 +380,66 @@ struct TodayView: View {
             }
             .padding(.bottom, 14)
         }
+    }
+
+    /// The morning practice, above everything the plan asks for.
+    ///
+    /// It sits first because it happens first and because it happens every day —
+    /// a rest day still has one. Section 01 is the only section on this screen
+    /// that is never absent.
+    @ViewBuilder
+    private var practiceSection: some View {
+        let done = MorningPractices.done(in: context)
+        let routine = Practice.routine(on: .now, avoiding: refusedFlow)
+
+        IndexedSection(number: "01", label: "Morning") {
+            SectionHead(title: "The practice",
+                        note: done ? "Done" : routine.totalDuration.durationString)
+                .padding(.bottom, 10)
+
+            Text(practiceNote(done: done))
+                .font(.almanacBody)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 12)
+
+            ForEach(Array(routine.warmUp.enumerated()), id: \.element.id) { index, move in
+                BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
+                         equipment: move.equipmentLabel,
+                         measure: "\(Int(Practice.seconds))s")
+                    .onTapGesture { inspecting = move }
+            }
+            Rule()
+
+            if !done {
+                PrimaryButton(title: "Begin the practice",
+                              subtitle: "\(routine.warmUp.count) movements · \(routine.totalDuration.durationString)") {
+                    runningPractice = routine
+                }
+                .padding(.top, 14)
+            }
+        }
+    }
+
+    /// Says where the practice stands. Never scolds: a run of days is stated as
+    /// a fact when there is one, and a day that was missed is simply not
+    /// mentioned — the app does not keep a ledger of absences.
+    private func practiceNote(done: Bool) -> String {
+        let run = MorningPractices.run(in: context)
+        if done {
+            return run > 1
+                ? "Done today. That is \(run) days in a row."
+                : "Done today."
+        }
+        return run > 0
+            ? "Eight movements, eight minutes, starting with the rebounding. \(run) days behind it."
+            : "Eight movements, eight minutes, starting with the rebounding. This one happens every day."
+    }
+
+    /// Flow movements she has asked not to see, in the form the practice wants.
+    private var refusedFlow: Set<String> {
+        let lists = MovePreferences.lists(in: context)
+        return Set((lists.avoided + lists.disliked).map { MovePreference.key($0) })
     }
 
     private var restDayNote: some View {

@@ -53,9 +53,29 @@ enum WarmUp {
         }
     }
 
+    /// The movements this day's session should open with, given what the
+    /// morning practice already used.
+    ///
+    /// She does the practice and the session on the same day, so repeating a
+    /// movement between them would be the app failing to notice it had already
+    /// asked for it. Twelve flow movements, eight in the morning, four left —
+    /// which is exactly a warm-up.
+    static func afterPractice(on date: Date,
+                              avoiding excluded: Set<String> = [],
+                              count: Int = target) -> [Move] {
+        let used = Set(Practice.moves(on: date, avoiding: excluded).map { MovePreference.key($0.name) })
+        let left = MoveLibrary.flow.filter { !used.contains(MovePreference.key($0.name)) }
+        // If the practice took nearly everything, fall back to the whole
+        // library rather than opening a session with one movement.
+        guard left.count >= minimum else {
+            return moves(on: date, avoiding: excluded, count: count)
+        }
+        return moves(on: date, avoiding: excluded, count: count, library: left)
+    }
+
     /// Days since the reference date, non-negative and stable across time zones
     /// because it counts calendar days rather than dividing seconds.
-    private static func dayIndex(_ date: Date, calendar: Calendar = .current) -> Int {
+    static func dayIndex(_ date: Date, calendar: Calendar = .current) -> Int {
         let days = calendar.dateComponents([.day],
                                            from: Date(timeIntervalSinceReferenceDate: 0),
                                            to: calendar.startOfDay(for: date)).day ?? 0

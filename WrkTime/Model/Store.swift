@@ -282,7 +282,7 @@ final class FastWindow {
 enum Store {
     static let schema = Schema([
         Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self,
-        FastWindow.self, LoggedSet.self, MovePreference.self
+        FastWindow.self, LoggedSet.self, MovePreference.self, MorningPractice.self
     ])
 
     /// Local-first, synced through the user's own private CloudKit database.

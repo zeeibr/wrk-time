@@ -145,8 +145,12 @@ struct Phase: Equatable {
     /// lock screen must never be able to disagree about where the session is —
     /// they are the same session read in two places.
     func position(rounds: Int, flowCount: Int) -> String {
-        isFlow ? "Warm-up \(round) / \(max(flowCount, round))"
-               : "Round \(round) / \(rounds)"
+        guard isFlow else { return "Round \(round) / \(rounds)" }
+        // A routine with no rounds is the morning practice, not a warm-up for
+        // something else. Calling it a warm-up would name it after work that is
+        // not coming.
+        let label = rounds > 0 ? "Warm-up" : "Movement"
+        return "\(label) \(round) / \(max(flowCount, round))"
     }
 }
 
@@ -176,7 +180,16 @@ struct RoutineSchedule: Equatable {
             cursor += flowLength
         }
 
-        for round in 1...max(routine.rounds, 1) {
+        // A routine may be nothing but its practice — that is the morning
+        // ritual, eight flow movements and no rounds at all. Without this the
+        // schedule would invent a work interval to satisfy `max(rounds, 1)`.
+        guard routine.rounds > 0 else {
+            phases = built
+            total = cursor
+            return
+        }
+
+        for round in 1...routine.rounds {
             let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
 
             built.append(Phase(kind: .work, round: round, move: move,

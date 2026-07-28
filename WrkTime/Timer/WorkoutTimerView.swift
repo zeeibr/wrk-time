@@ -364,10 +364,11 @@ struct WorkoutTimerView: View {
             // line at the very bottom. It gets the same billing as the current
             // move instead.
             if let phase = engine.currentPhase, let move = phase.move {
-                moveBlock(move, eyebrow: phase.isFlow ? "Warm-up" : nil,
+                moveBlock(move, eyebrow: phase.isFlow ? phaseWord : nil,
                           foreground: foreground, secondary: secondary)
             } else if let next = engine.nextPhase, let move = next.move {
-                moveBlock(move, eyebrow: next.isFlow ? "Warm-up next" : "Next up",
+                moveBlock(move, eyebrow: next.isFlow && engine.routine.rounds > 0
+                                          ? "Warm-up next" : "Next up",
                           foreground: foreground, secondary: secondary)
             }
 
@@ -598,7 +599,8 @@ struct WorkoutTimerView: View {
         // Never "left of forty seconds". The practice is timed so the session
         // moves along, not so she races it, and the caption is the one place
         // the screen can say which of those it means.
-        case .flow: return "warm-up — take your time"
+        case .flow: return engine.routine.rounds > 0 ? "warm-up — take your time"
+                                                     : "the practice — take your time"
         case .rest: return "rest — walk it off"
         case .work: return "left of \(Int(phase.duration.rounded())) seconds"
         }
@@ -614,7 +616,7 @@ struct WorkoutTimerView: View {
 
     private var phaseWord: String {
         switch engine.currentPhase?.kind {
-        case .flow: "Warm-up"
+        case .flow: engine.routine.rounds > 0 ? "Warm-up" : "Movement"
         case .rest: "Rest"
         case .work, nil: "Work"
         }
