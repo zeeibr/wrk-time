@@ -88,7 +88,10 @@ enum PlanScheduler {
         let context = ModelContext(container)
 
         let planning = Task { () -> Bool in
-            let blocks = (try? context.fetch(FetchDescriptor<Block>())) ?? []
+            var descriptor = FetchDescriptor<Block>(
+                sortBy: [SortDescriptor(\.startDate, order: .reverse)])
+            descriptor.fetchLimit = 1
+            let blocks = (try? context.fetch(descriptor)) ?? []
             guard let block = blocks.first, !block.hasEnded else { return false }
             let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
             return outcome != nil

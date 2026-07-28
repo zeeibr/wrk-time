@@ -27,7 +27,11 @@ struct WrkTimeApp: App {
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
-    @Query private var blocks: [Block]
+    /// Sorted, like every other screen's query. This one was unordered and
+    /// then read `.first`, so "the current block" here could be a different
+    /// block from the one Today, Season and Settings were all showing — and
+    /// this is the query that decides which block gets *planned*.
+    @Query(sort: \Block.startDate, order: .reverse) private var blocks: [Block]
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
 
     @Environment(\.scenePhase) private var scenePhase
