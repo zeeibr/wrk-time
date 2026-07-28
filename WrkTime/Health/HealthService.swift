@@ -20,6 +20,16 @@ protocol HealthService: Sendable {
     /// Resting heart rate (bpm), newest first.
     func restingHeartRate(since: Date) async -> [DatedValue]
 
+    /// Walks recorded by something else — Whoop, the Watch, the iPhone.
+    ///
+    /// Context for the planner, not marks on the growth form: a mark is a
+    /// finished *planned session*, and a walk Whoop logged is not one. It tells
+    /// the plan you moved, which is a different fact and a useful one.
+    ///
+    /// Excludes anything this app wrote, or the app's own sessions would come
+    /// back as evidence of extra activity it already knows about.
+    func walks(since: Date) async -> [RecordedWalk]
+
     /// Record a finished session so it counts toward the Activity rings.
     func saveWorkout(start: Date, end: Date, activeEnergyKilocalories: Double?) async throws
 }
@@ -32,6 +42,14 @@ struct WeightReading: Equatable, Sendable {
 struct DatedValue: Equatable, Sendable {
     let date: Date
     let value: Double
+}
+
+/// A walk somebody else logged.
+struct RecordedWalk: Equatable, Sendable {
+    let date: Date
+    let minutes: Double
+    /// What wrote it — "Whoop", "Apple Watch". Shown, never guessed at.
+    let source: String
 }
 
 // MARK: - Recovery
@@ -100,6 +118,12 @@ struct StubHealthService: HealthService {
 
     func sleepDurations(since: Date) async -> [DatedValue] {
         Self.series(from: since, base: 7.2, spread: 0.8)
+    }
+
+    func walks(since: Date) async -> [RecordedWalk] {
+        Self.series(from: since, base: 32, spread: 12)
+            .prefix(4)
+            .map { RecordedWalk(date: $0.date, minutes: $0.value, source: "Whoop") }
     }
 
     func heartRateVariability(since: Date) async -> [DatedValue] {

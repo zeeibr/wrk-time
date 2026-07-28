@@ -14,6 +14,21 @@ struct WrkTimeApp: App {
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query private var blocks: [Block]
+    @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var needsSetup = false
+    @State private var checkedForBlock = false
+    /// Planning is a network call; two of them racing would write the week
+    /// twice and delete each other's sessions on the way past.
+    @State private var planning = false
+    @State private var activity = PlannerActivity()
+    /// One-time, because she said so in as many words: "deweight things like
+    /// pushups i dont like those". Recorded as a preference rather than
+    /// hard-coded into the library, so it shows up in the same place as every
+    /// other opinion and can be undone from the same menu.
+    @AppStorage("seededStatedPreferences") private var seededPreferences = false
 
     var body: some View {
         TabView {
@@ -24,37 +39,72 @@ struct RootView: View {
                 RoutineListView()
             }
             Tab("Season", systemImage: "circle.hexagongrid") {
-                PlaceholderView(title: "Season",
-                                note: "The growth form at full size, week by week, with the block's history beneath it.")
+                SeasonView()
             }
             Tab("Signals", systemImage: "waveform.path.ecg") {
-                PlaceholderView(title: "Signals",
-                                note: "Weight against projection, sleep and HRV from Whoop, and the eating window as a stated input.")
+                SignalsView()
             }
         }
         .tint(Palette.ink)
-        .task { seedIfEmpty() }
+        .environment(activity)
+        .task {
+            guard !checkedForBlock else { return }
+            checkedForBlock = true
+            needsSetup = blocks.isEmpty
+            seedStatedPreferences()
+            await planCurrentWeekIfNeeded()
+        }
+        // Opening the app on the first day of a new week is what writes that
+        // week. A phone left running for a fortnight would otherwise sit on a
+        // block that stopped a week ago.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await planCurrentWeekIfNeeded() }
+        }
+        .fullScreenCover(isPresented: $needsSetup) {
+            // The first run asks rather than assumes. This screen replaced a
+            // seed that opened the app with a starting weight and a goal
+            // already filled in — numbers nobody had entered, presented as
+            // hers. An almanac records what happened; it does not invent the
+            // first two entries.
+            BlockSetupView(knownWeight: weights.first?.pounds) { block in
+                if fastWindowIsMissing { context.insert(FastWindow()) }
+                Task { await plan(week: 1, of: block) }
+            }
+            .interactiveDismissDisabled()
+        }
     }
 
-    /// First run puts a real block and a real session on screen rather than an
-    /// empty state, because an interval app with nothing in it teaches nothing.
-    private func seedIfEmpty() {
-        guard blocks.isEmpty else { return }
-        let block = Block(goalWeightPounds: 148, startingWeightPounds: 168.4)
-        context.insert(block)
+    private func seedStatedPreferences() {
+        guard !seededPreferences else { return }
+        seededPreferences = true
+        // Matching is by containment, so this one entry also covers the incline
+        // and knee variants the planner likes to reach for.
+        MovePreferences.set(.disliked, for: "push-up", in: context)
+    }
 
-        let routine = IntervalRoutine(
-            name: "Beam & rings, steady",
-            work: 60,
-            rest: 45,
-            rounds: 8,
-            moves: [MoveLibrary.all[0], MoveLibrary.all[4], MoveLibrary.all[6]]
-        )
-        let session = PlannedSession(scheduledFor: .now, title: routine.name, routine: routine)
-        context.insert(session)
-        // Set the inverse; SwiftData maintains the other side.
-        session.block = block
-        context.insert(FastWindow())
+    private var fastWindowIsMissing: Bool {
+        ((try? context.fetch(FetchDescriptor<FastWindow>()))?.isEmpty ?? true)
+    }
+
+    private func plan(week: Int, of block: Block) async {
+        guard !planning else { return }
+        planning = true
+        activity.begin(week: week)
+        defer { planning = false; activity.finish() }
+        _ = await PlannerService.planWeek(week, of: block, in: context)
+    }
+
+    /// Writes the week the block is in, if it is still empty. Runs at launch
+    /// and on every return to the foreground, which is what carries a block
+    /// past week one.
+    private func planCurrentWeekIfNeeded() async {
+        guard let block = blocks.first, !planning else { return }
+        guard !block.hasEnded, !PlannerService.isPlanned(block.currentWeek, of: block) else { return }
+        planning = true
+        activity.begin(week: block.currentWeek)
+        defer { planning = false; activity.finish() }
+        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
     }
 }
 
@@ -65,8 +115,11 @@ struct PlaceholderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.almanacTitle).foregroundStyle(Palette.ink)
-            Rule(firm: true)
+            Masthead(context: title)
+            Text(title)
+                .font(.almanacTitle)
+                .foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
             Text(note)
                 .font(.almanacBody)
                 .foregroundStyle(Palette.mute)

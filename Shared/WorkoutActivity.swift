@@ -14,13 +14,26 @@ struct WorkoutActivityAttributes: ActivityAttributes {
 
     struct ContentState: Codable, Hashable {
         enum Phase: String, Codable, Hashable {
-            case work, rest
+            case flow, work, rest
 
-            var label: String { self == .work ? "Work" : "Rest" }
+            var label: String {
+                switch self {
+                case .flow: "Warm-up"
+                case .work: "Work"
+                case .rest: "Rest"
+                }
+            }
         }
 
         var phase: Phase
         var round: Int
+        /// "Round 3 / 8" or "Warm-up 2 / 4", formatted app-side.
+        ///
+        /// Pushed rather than rebuilt here so the widget cannot drift from the
+        /// screen: during the opening practice the round number is a position
+        /// in the flow, and a lock screen counting it against the session's
+        /// rounds would be quietly wrong for the first three minutes.
+        var position: String = ""
         var moveName: String
         /// When the current phase ends. The widget renders a live timer from
         /// this rather than from a number we push.
@@ -29,14 +42,13 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         /// without another update.
         var phaseBegan: Date
         var nextUp: String
+        /// Set while the session is paused. Without it the lock screen keeps
+        /// counting down to zero on a workout that has stopped.
+        var isPaused: Bool = false
+        /// What was left when the pause began, since the dates can no longer
+        /// tell the truth once the clock is held.
+        var pausedRemaining: TimeInterval?
 
         var duration: TimeInterval { phaseEnds.timeIntervalSince(phaseBegan) }
-
-        /// How much of the phase is left, at the moment this is evaluated.
-        var remainingFraction: Double {
-            guard duration > 0 else { return 0 }
-            let left = phaseEnds.timeIntervalSinceNow
-            return min(1, max(0, left / duration))
-        }
     }
 }

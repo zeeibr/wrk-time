@@ -78,7 +78,9 @@ struct RoutineScheduleTests {
 
 // MARK: - Engine
 
+/// Main-actor isolated to match the engine, which drives the timer view.
 @Suite("Interval engine")
+@MainActor
 struct IntervalEngineTests {
 
     @Test("Counts down from the clock, not by accumulating ticks")
@@ -163,7 +165,7 @@ struct IntervalEngineTests {
         let clock = TestClock()
         let engine = IntervalEngine(routine: routine(rounds: 1), now: clock.provider, autoTick: false)
         var finishes = 0
-        engine.onFinish = { finishes += 1 }
+        engine.onFinish = { _ in finishes += 1 }
         engine.start()
 
         clock.advance(75); engine.refresh()
@@ -172,6 +174,67 @@ struct IntervalEngineTests {
 
         engine.refresh()
         #expect(finishes == 1, "finish must not fire again on later refreshes")
+    }
+
+    @Test("Running to the end completes; ending early does not")
+    func endReason() {
+        let clock = TestClock()
+        let run = IntervalEngine(routine: routine(rounds: 1), now: clock.provider, autoTick: false)
+        var reasons: [IntervalEngine.EndReason] = []
+        run.onFinish = { reasons.append($0) }
+        run.start()
+        clock.advance(75); run.refresh()
+        #expect(reasons == [.completed])
+        #expect(run.endReason == .completed)
+
+        let quit = IntervalEngine(routine: routine(rounds: 3), now: clock.provider, autoTick: false)
+        var quitReasons: [IntervalEngine.EndReason] = []
+        quit.onFinish = { quitReasons.append($0) }
+        quit.start()
+        clock.advance(20); quit.refresh()
+        quit.end()
+        #expect(quitReasons == [.abandoned], "walking away is not a completed session")
+        #expect(quit.endReason == .abandoned)
+
+        // A second end must not report again — the session is already over.
+        quit.end()
+        #expect(quitReasons.count == 1)
+    }
+
+    @Test("The last three seconds of work tick once each")
+    func countdownCues() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(rounds: 2, work: 60, rest: 45),
+                                    now: clock.provider, autoTick: false)
+        var ticks = 0
+        engine.onCountdownTick = { ticks += 1 }
+        engine.start()
+
+        // Quarter-second steps through the first work phase only.
+        for _ in 0..<240 {
+            clock.advance(0.25)
+            engine.refresh()
+        }
+        #expect(ticks == 3, "exactly one tick at three, two and one seconds left")
+    }
+
+    @Test("Rest does not tick — only work announces its ending")
+    func restDoesNotTick() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(rounds: 1, work: 10, rest: 10,
+                                                     dropsFinalRest: false),
+                                    now: clock.provider, autoTick: false)
+        var tickTimes: [TimeInterval] = []
+        engine.onCountdownTick = { tickTimes.append(engine.elapsed) }
+        engine.start()
+
+        for _ in 0..<100 {
+            clock.advance(0.25)
+            engine.refresh()
+        }
+        // Work is 0–10s, rest is 10–20s. Every tick must fall inside work.
+        #expect(tickTimes.allSatisfy { $0 < 10 }, "got ticks at \(tickTimes)")
+        #expect(tickTimes.count == 3)
     }
 
     @Test("Phase changes are announced exactly once each")

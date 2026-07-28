@@ -16,6 +16,9 @@ final class HealthKitService: HealthService, @unchecked Sendable {
         if let resting = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) { types.insert(resting) }
         if let heartRate = HKQuantityType.quantityType(forIdentifier: .heartRate) { types.insert(heartRate) }
         types.insert(HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!)
+        // Walks logged by Whoop, the Watch, or the phone. Read so the plan
+        // knows you moved; they never become marks.
+        types.insert(HKWorkoutType.workoutType())
         return types
     }
 
@@ -97,6 +100,40 @@ final class HealthKitService: HealthService, @unchecked Sendable {
         return byNight
             .map { DatedValue(date: $0.key, value: $0.value / 3600) }
             .sorted { $0.date > $1.date }
+    }
+
+    /// Walking and hiking workouts written by anything other than this app.
+    ///
+    /// The source filter matters: this app writes its own finished sessions
+    /// back to Health, so without it every session would return as though it
+    /// were also an independent walk.
+    func walks(since: Date) async -> [RecordedWalk] {
+        let mine = HKSource.default()
+        let walking = HKQuery.predicateForWorkouts(with: .walking)
+        let hiking = HKQuery.predicateForWorkouts(with: .hiking)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForSamples(withStart: since, end: nil),
+            NSCompoundPredicate(orPredicateWithSubpredicates: [walking, hiking]),
+            NSCompoundPredicate(notPredicateWithSubpredicate:
+                HKQuery.predicateForObjects(from: mine))
+        ])
+
+        let workouts: [HKWorkout] = await withCheckedContinuation { continuation in
+            let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            let query = HKSampleQuery(sampleType: HKWorkoutType.workoutType(),
+                                      predicate: predicate,
+                                      limit: HKObjectQueryNoLimit,
+                                      sortDescriptors: sort) { _, results, _ in
+                continuation.resume(returning: (results as? [HKWorkout]) ?? [])
+            }
+            store.execute(query)
+        }
+
+        return workouts.map {
+            RecordedWalk(date: $0.startDate,
+                         minutes: $0.duration / 60,
+                         source: $0.sourceRevision.source.name)
+        }
     }
 
     private func quantitySamples(type: HKQuantityType, since: Date) async -> [HKQuantitySample] {

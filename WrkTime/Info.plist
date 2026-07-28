@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Everything else is generated from INFOPLIST_KEY_* build settings. This
+	  file exists only for keys that mechanism cannot express: UIBackgroundModes
+	  is not in its supported set, and setting INFOPLIST_KEY_UIBackgroundModes
+	  silently does nothing.
+
+	  remote-notification is required by CloudKit — without it the store never
+	  receives the silent pushes that signal a change on another device, and
+	  sync quietly degrades to pull-on-launch.
+
+	  Do not add "audio" here until the audio cue system actually exists. The
+	  mode only keeps the process alive while a session is genuinely playing,
+	  and declaring it without one is a review risk for no benefit.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+
+	<!--
+	  The launch screen is oat, not the generated white.
+
+	  Opening the SwiftData store — now CloudKit-backed — happens before the
+	  first frame, so the launch screen is genuinely on screen for a moment on a
+	  cold start. Generated white against an oat app reads as a flash of the
+	  wrong app. Painting it the app's own ground makes the gap invisible, which
+	  is the right answer rather than a splash screen: a splash adds perceived
+	  delay instead of hiding it, and Apple discourages them.
+	-->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+
+	<!--
+	  The backup file's own type. Declared so a restore can only be handed an
+	  Almanac archive rather than any JSON on the device, and so the file has a
+	  recognisable identity in Files and iCloud Drive. `UTType(exportedAs:)`
+	  does not resolve without this declaration.
+	-->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.zee.almanac.archive</string>
+			<key>UTTypeDescription</key>
+			<string>Almanac Backup</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>almanac</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

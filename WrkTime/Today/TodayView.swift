@@ -10,15 +10,35 @@ struct TodayView: View {
     @Query(sort: \PlannedSession.scheduledFor) private var sessions: [PlannedSession]
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     @Query private var fastWindows: [FastWindow]
+    @Query(sort: \LoggedSet.date, order: .reverse) private var loggedSets: [LoggedSet]
+    @Query(sort: \Block.startDate, order: .reverse) private var blocks: [Block]
+
+    @AppStorage(PlannerService.Memo.explanation) private var planExplanation = ""
+    @AppStorage(PlannerService.Memo.failure) private var planFailure = ""
 
     @State private var runningRoutine: IntervalRoutine?
+    /// A session the process died under, offered back rather than lost.
+    @State private var resumable: ActiveSession?
+    @State private var resuming: ActiveSession?
+    /// Moves skipped in the session that just ended, awaiting a reason.
+    @State private var skippedToReview: [String] = []
+    @State private var showingSettings = false
+    /// The move whose plate is open. Tapping a row shows the shape; the
+    /// long-press menu is still there for an opinion.
+    @State private var inspecting: Move?
+    @State private var loggingSet = false
     @Environment(\.displayScale) private var displayScale
     @Environment(\.modelContext) private var context
+    @Environment(PlannerActivity.self) private var plannerActivity
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 masthead
+
+                if let note = plannerActivity.note { planningNote(note) }
+
+                if let resumable { resumeNote(resumable) }
 
                 if let session = todaysSession, let routine = session.routine {
                     IndexedSection(number: "01", label: "Session") {
@@ -26,8 +46,34 @@ struct TodayView: View {
                                     note: routine.totalDuration.durationString)
                             .padding(.bottom, 10)
 
+                        planNote
+
                         counters(for: routine)
                             .padding(.bottom, 12)
+
+                        // The practice that opens the session, listed before
+                        // the rotation because that is the order she does it
+                        // in. It is additive: it never replaces a round.
+                        if !routine.warmUp.isEmpty {
+                            Text("Warm-up · \(Int(routine.warmUpSeconds))s each")
+                                .almanacLabel(Palette.mute, small: true)
+                                .padding(.bottom, 2)
+                            ForEach(Array(routine.warmUp.enumerated()), id: \.element.id) { index, move in
+                                BlockRow(
+                                    index: index + 1,
+                                    symbol: move.symbol,
+                                    name: move.name,
+                                    equipment: move.equipmentLabel,
+                                    measure: "\(Int(routine.warmUpSeconds))s"
+                                )
+                                .onTapGesture { inspecting = move }
+                            }
+                            Rule()
+                            Text("In rotation")
+                                .almanacLabel(Palette.mute, small: true)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+                        }
 
                         ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
                             BlockRow(
@@ -37,6 +83,28 @@ struct TodayView: View {
                                 equipment: move.equipmentLabel,
                                 measure: "\(Int(routine.clampedWork))s ×\(routine.rounds / max(routine.moves.count, 1))"
                             )
+                            // Tap to see the shape, long-press to say what you
+                            // think of it.
+                            .onTapGesture { inspecting = move }
+                            // An opinion should not cost a set. Long-press a
+                            // move to say what you think of it without having
+                            // to skip it mid-session to be heard.
+                            .contextMenu {
+                                Button("See less of this") {
+                                    MovePreferences.set(.disliked, for: move.name, in: context)
+                                }
+                                Button("This hurts — never program it", role: .destructive) {
+                                    MovePreferences.set(.avoided, for: move.name, in: context)
+                                }
+                                Button("More of this") {
+                                    MovePreferences.set(.liked, for: move.name, in: context)
+                                }
+                                if MovePreferences.verdict(for: move.name, in: context) != nil {
+                                    Button("Forget what I said") {
+                                        MovePreferences.clear(move.name, in: context)
+                                    }
+                                }
+                            }
                         }
                         Rule()
 
@@ -50,15 +118,67 @@ struct TodayView: View {
                     restDayNote
                 }
 
-                IndexedSection(number: "02", label: "Season") {
-                    SectionHead(title: "The season so far", note: seasonNote)
-                        .padding(.bottom, 12)
-                    GrowthForm(marks: completedCount, weeks: 12, currentWeek: currentWeek)
-                        .frame(height: 128)
-                        .frame(maxWidth: .infinity)
+                IndexedSection(number: "02", label: "Kept") {
+                    SectionHead(title: "Loose work", note: keptNote)
+                        .padding(.bottom, keptToday.isEmpty ? 10 : 4)
+
+                    ForEach(keptToday) { set in
+                        VStack(spacing: 0) {
+                            Rule()
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(set.summary)
+                                    .font(.almanacBody)
+                                    .foregroundStyle(Palette.ink)
+                                Spacer(minLength: 8)
+                                Text(set.date.formatted(date: .omitted, time: .shortened))
+                                    .almanacLabel(Palette.mute, small: true)
+                                    .tabular()
+                            }
+                            .padding(.vertical, 9)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+
+                    Button { loggingSet = true } label: {
+                        HStack {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Keep a set")
+                                .font(.almanacBody)
+                            Spacer()
+                        }
+                        .foregroundStyle(Palette.moss)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Records reps you did off the plan")
+                    Rule()
                 }
 
-                IndexedSection(number: "03", label: "Signals") {
+                IndexedSection(number: "03", label: "Season") {
+                    SectionHead(title: "The season so far", note: seasonNote)
+                        .padding(.bottom, 12)
+                    // The mockup's composition: a thumbnail beside the figures,
+                    // not a hero. As a full-width hero it ate the fold to say
+                    // nothing, and on day one it was a large empty circle where
+                    // three short lines would have told you where you stand.
+                    HStack(alignment: .top, spacing: 16) {
+                        GrowthForm(marksByWeek: marksByWeek, weeks: weekCount,
+                                   currentWeek: currentWeek,
+                                   sessionsPerWeek: marksPerWeek,
+                                   blockSeed: blocks.first?.formSeed ?? 0)
+                            .frame(width: 84, height: 84)
+                        VStack(alignment: .leading, spacing: 7) {
+                            seasonLine("Marks earned", "\(completedCount) / \(marksInBlock)")
+                            seasonLine("This week", "\(marksThisWeek) / \(marksPerWeek)")
+                            seasonLine("Week", "\(currentWeek) of \(weekCount)")
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
+
+                IndexedSection(number: "04", label: "Signals") {
                     Rule(firm: true)
                     HStack(alignment: .top, spacing: 14) {
                         StatCell(label: weeklyRateString ?? "Weight · 7-day mean",
@@ -82,43 +202,79 @@ struct TodayView: View {
         }
         .background(Palette.oat.ignoresSafeArea())
         .fullScreenCover(item: $runningRoutine) { routine in
-            WorkoutTimerView(routine: routine)
+            // A session only becomes a mark by being finished. `record` is what
+            // sets `completedAt`, so without this the growth form could never
+            // grow and Today would read "Day one" forever.
+            WorkoutTimerView(routine: routine, resuming: resuming) { outcome in
+                switch outcome {
+                case .completed(let start, let end, let skipped):
+                    if let session = todaysSession {
+                        let sync = HealthSync(health: HealthKitService(), context: context)
+                        Task { await sync.record(session: session, start: start, end: end) }
+                    }
+                    skippedToReview = skipped
+                case .abandoned(let skipped):
+                    skippedToReview = skipped
+                }
+            }
+        }
+        .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(item: $inspecting) { MoveSheet(move: $0) }
+        .sheet(isPresented: $loggingSet) { LogSetView() }
+        // Asked after the field register has closed, never inside it.
+        .sheet(isPresented: Binding(get: { !skippedToReview.isEmpty },
+                                    set: { if !$0 { skippedToReview = [] } })) {
+            SkipReviewView(skipped: skippedToReview) { skippedToReview = [] }
         }
         .task {
+            resumable = ActiveSessionStore.load()
             await HealthSync(health: HealthKitService(), context: context).importWeights()
+        }
+        // Cleared once the cover closes, so a second run does not silently
+        // resume the session that was just finished or abandoned.
+        .onChange(of: runningRoutine) { _, routine in
+            if routine == nil { resuming = nil }
         }
     }
 
     // MARK: - Pieces
 
     private var masthead: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(mastheadLabel).almanacLabel()
+        VStack(alignment: .leading, spacing: 10) {
+            Masthead(context: mastheadLabel) { showingSettings = true }
             Text(greeting)
                 .font(.almanacTitle)
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
         }
         .padding(.top, 4)
     }
 
     private func counters(for routine: IntervalRoutine) -> some View {
         HStack(spacing: 0) {
-            counter(routine.totalDuration.durationString, "Minutes")
+            // Whole minutes, and labelled honestly. This read "13:15" under the
+            // word MINUTES, which is m:ss — and the full length is already on
+            // the section head and the button, so it was the third time on one
+            // screen besides.
+            counter("\(Int((routine.totalDuration / 60).rounded()))", "Minutes")
             divider
             counter("\(routine.rounds)", "Rounds")
             divider
             counter("\(Int(routine.clampedWork))/\(Int(routine.rest))", "Work / rest")
         }
+        // Padding first, then the rules — so the rules sit outside the breathing
+        // room rather than flush against the type. Applied the other way round
+        // the figures were pinched between two hairlines.
+        .padding(.vertical, 16)
         .overlay(alignment: .top) { Rule() }
         .overlay(alignment: .bottom) { Rule() }
-        .padding(.vertical, 10)
     }
 
     private func counter(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(value)
-                .font(Face.ui(24))
+                .font(Face.ui(26))
                 .tabular()
                 .foregroundStyle(Palette.ink)
             Text(label).almanacLabel(small: true)
@@ -127,7 +283,87 @@ struct TodayView: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(Palette.rule).frame(width: 1 / displayScale, height: 34)
+        Rectangle().fill(Palette.rule).frame(width: 1 / displayScale, height: 40)
+    }
+
+    /// A session that was running when the app stopped.
+    ///
+    /// It sits above everything because it is the only thing on this screen
+    /// with a clock still attached to it. The wording states what was lost and
+    /// what is left, and offers a way out as well as a way back — being handed
+    /// an unfinished workout with no way to put it down would be worse than
+    /// losing it silently.
+    private func resumeNote(_ session: ActiveSession) -> some View {
+        IndexedSection(number: "00", label: "Open") {
+            SectionHead(title: "Session left open", note: "Interrupted")
+                .padding(.bottom, 10)
+
+            Text("\(session.routine.name) — \(session.summary()). The clock kept running while the app was closed.")
+                .font(.almanacBody)
+                .foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            PrimaryButton(title: "Pick it back up", subtitle: nil) {
+                resuming = session
+                runningRoutine = session.routine
+                resumable = nil
+            }
+            .padding(.top, 14)
+
+            Button("Let it go") {
+                ActiveSessionStore.clear()
+                resumable = nil
+            }
+            .font(.almanacButton)
+            .foregroundStyle(Palette.mute)
+            .padding(.vertical, 12)
+            Rule()
+        }
+    }
+
+    /// Says the app is working rather than broken.
+    ///
+    /// Writing a week can take the better part of a minute on a slow
+    /// connection. Before this, both moments it happens — finishing setup, and
+    /// the first launch of a new week — were completely silent.
+    private func planningNote(_ note: String) -> some View {
+        IndexedSection(number: "00", label: "Plan") {
+            SectionHead(title: "Writing the week", note: "Working")
+                .padding(.bottom, 10)
+            Text(note)
+                .font(.almanacBody)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    /// One sentence on what this week changed and why.
+    ///
+    /// HANDOFF §8.6 requires the plan to explain itself, and this is the only
+    /// place it does. It sits above the numbers rather than below them because
+    /// the reason a session looks the way it does should be read before the
+    /// session is, not offered afterwards as a footnote.
+    @ViewBuilder
+    private var planNote: some View {
+        if !planExplanation.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(planExplanation)
+                    .font(.almanacBodySmall)
+                    .foregroundStyle(Palette.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Only shown when a key is set and the call still failed —
+                // otherwise the offline planner is the plan, not a fallback.
+                if !planFailure.isEmpty {
+                    Text(planFailure)
+                        .font(.almanacBodySmall)
+                        .foregroundStyle(Palette.saffronInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.bottom, 14)
+        }
     }
 
     private var restDayNote: some View {
@@ -149,9 +385,71 @@ struct TodayView: View {
 
     private var completedCount: Int { sessions.filter(\.isComplete).count }
 
-    private var currentWeek: Int { max(1, (completedCount / 6) + 1) }
+    private var keptToday: [LoggedSet] {
+        loggedSets.filter { Calendar.current.isDateInToday($0.date) }
+    }
 
-    private var seasonNote: String { "\(completedCount) marks" }
+    /// States the count, and says plainly that it is not a mark — so the number
+    /// here and the number on the season can differ without looking like a bug.
+    private var keptNote: String {
+        let reps = keptToday.reduce(0) { $0 + $1.reps }
+        guard !keptToday.isEmpty else { return "Off the plan" }
+        return "\(reps) reps · no mark"
+    }
+
+    /// Read from the block, so the week Today draws and the week the planner
+    /// writes cannot drift apart.
+    private var currentWeek: Int { blocks.first?.currentWeek ?? 1 }
+    private var weekCount: Int { blocks.first?.weekCount ?? 12 }
+
+    /// Finished sessions binned by the week they were actually finished in.
+    private var marksByWeek: [Int] {
+        var counts = Array(repeating: 0, count: weekCount)
+        guard let start = blocks.first?.startDate else { return counts }
+        let calendar = Calendar.current
+        let first = calendar.startOfDay(for: start)
+        for session in sessions {
+            guard let done = session.completedAt else { continue }
+            let days = calendar.dateComponents([.day], from: first,
+                                               to: calendar.startOfDay(for: done)).day ?? 0
+            let week = days / 7
+            if counts.indices.contains(week) { counts[week] += 1 }
+        }
+        return counts
+    }
+
+    private var marksThisWeek: Int {
+        marksByWeek.indices.contains(currentWeek - 1) ? marksByWeek[currentWeek - 1] : 0
+    }
+
+    /// The denominators follow the pace she chose rather than a fixed six.
+    /// Hard-coding them meant a block set to four sessions a week still counted
+    /// toward six, so a week she completed in full read as two short.
+    private var marksPerWeek: Int { blocks.first?.pace.sessionsPerWeek ?? Pace.building.sessionsPerWeek }
+    private var marksInBlock: Int { marksPerWeek * weekCount }
+
+    /// "0 marks" under "Day one. Start small." is true and needlessly bleak.
+    private var seasonNote: String {
+        completedCount == 0 ? "Not yet drawn" : "\(completedCount) marks"
+    }
+
+    private func seasonLine(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            // The label holds its line; the leader gives up the width instead.
+            Text(label)
+                .almanacLabel(Palette.mute, small: true)
+                .lineLimit(1)
+                .fixedSize()
+            Rectangle()
+                .fill(Palette.rule)
+                .frame(height: 1 / displayScale)
+            Text(value)
+                .font(Face.ui(14))
+                .tabular()
+                .foregroundStyle(Palette.ink)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     private var mastheadLabel: String {
         Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased()

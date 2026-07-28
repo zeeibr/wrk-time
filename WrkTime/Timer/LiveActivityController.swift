@@ -32,11 +32,17 @@ final class LiveActivityController {
 
     func update(engine: IntervalEngine) {
         guard let activity, let state = state(from: engine) else { return }
-        Task {
-            await activity.update(
-                .init(state: state, staleDate: state.phaseEnds.addingTimeInterval(60))
-            )
-        }
+        // ActivityKit is not Sendable-audited: `Activity` is a non-Sendable
+        // class whose `update` and `end` are nonisolated and async, so awaiting
+        // them from this main-actor controller reads as sending the object off
+        // the actor. Nothing else ever holds it — every touch goes through this
+        // class, on the main actor — so the hop is safe in fact if not in type.
+        nonisolated(unsafe) let live = activity
+        let content = ActivityContent(
+            state: state,
+            staleDate: state.phaseEnds.addingTimeInterval(60)
+        )
+        Task { await live.update(content) }
     }
 
     /// Ends immediately rather than lingering — a finished workout on the lock
@@ -44,9 +50,10 @@ final class LiveActivityController {
     func end() {
         guard let activity else { return }
         self.activity = nil
-        Task {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
+        // See `update(engine:)` — the controller has already let go of it here,
+        // so this really is a handoff, but ActivityKit cannot express that.
+        nonisolated(unsafe) let live = activity
+        Task { await live.end(nil, dismissalPolicy: .immediate) }
     }
 
     private func state(from engine: IntervalEngine) -> WorkoutActivityAttributes.ContentState? {
@@ -58,21 +65,34 @@ final class LiveActivityController {
         let began = Date.now.addingTimeInterval(-intoPhase)
         let ends = began.addingTimeInterval(phase.duration)
 
+        let kind: WorkoutActivityAttributes.ContentState.Phase = switch phase.kind {
+        case .flow: .flow
+        case .work: .work
+        case .rest: .rest
+        }
+
         return .init(
-            phase: phase.isWork ? .work : .rest,
+            phase: kind,
             round: phase.round,
-            moveName: phase.move?.name ?? (phase.isWork ? "Work" : "Rest"),
+            position: phase.position(rounds: engine.routine.rounds,
+                                     flowCount: engine.schedule.flowPhaseCount),
+            moveName: phase.move?.name ?? kind.label,
             phaseEnds: ends,
             phaseBegan: began,
-            nextUp: nextDescription(engine.nextPhase)
+            nextUp: nextDescription(engine.nextPhase),
+            isPaused: engine.status == .paused,
+            // Carried explicitly: once the clock is held, the phase's dates
+            // keep advancing past it and can no longer say what is left.
+            pausedRemaining: engine.status == .paused ? engine.remainingInPhase : nil
         )
     }
 
     private func nextDescription(_ phase: Phase?) -> String {
         guard let phase else { return "Finish" }
-        if phase.isWork, let move = phase.move {
+        if let move = phase.move {
             return "\(move.name), \(phase.duration.clockString)"
         }
-        return "Rest \(phase.duration.clockString)"
+        // A move-less work interval is a plain interval, not a rest.
+        return "\(phase.isRest ? "Rest" : "Work") \(phase.duration.clockString)"
     }
 }

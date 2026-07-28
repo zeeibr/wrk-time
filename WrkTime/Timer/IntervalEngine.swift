@@ -9,12 +9,18 @@ import Observation
 /// dropped tick, a backgrounded app, or a slow frame therefore cannot make the
 /// count wrong — the next tick simply reports the truth.
 @Observable
+@MainActor
 final class IntervalEngine {
     enum Status: Equatable { case idle, running, paused, finished }
 
     private(set) var routine: IntervalRoutine
     private(set) var schedule: RoutineSchedule
     private(set) var status: Status = .idle
+
+    /// Why the session stopped, readable as state. The cue closures are
+    /// single-assignment and already belong to `Haptics`, so a view that needs
+    /// to act on the ending reads this rather than competing for `onFinish`.
+    private(set) var endReason: EndReason?
 
     /// Re-read on every tick so the view updates; derived, never stored state.
     private(set) var elapsed: TimeInterval = 0
@@ -24,7 +30,9 @@ final class IntervalEngine {
     /// Tests drive `refresh()` by hand; a live ticker would race the fake clock.
     private let autoTick: Bool
 
-    private var startDate: Date?
+    /// When the session began. Exposed so a finished session can be written
+    /// back to Health with its real bounds rather than a guess.
+    private(set) var startDate: Date?
     private var pausedTotal: TimeInterval = 0
     private var pauseBegan: Date?
     /// Seconds skipped forward past the natural schedule.
@@ -32,11 +40,20 @@ final class IntervalEngine {
 
     private var ticker: Task<Void, Never>?
 
+    /// Why a session stopped. A session run to the end earns a mark; one you
+    /// walked away from earns nothing and is not congratulated for it.
+    enum EndReason { case completed, abandoned }
+
     /// Fires once per phase boundary, for haptics and audio cues.
     var onPhaseChange: ((Phase?) -> Void)?
-    var onFinish: (() -> Void)?
+    /// Fires once when the session stops, saying why.
+    var onFinish: ((EndReason) -> Void)?
+    /// Fires on each of the last three seconds of a work phase, so the coming
+    /// change can be felt with the phone face-down on the floor.
+    var onCountdownTick: (() -> Void)?
 
     private var lastNotifiedIndex: Int??
+    private var lastTickSecond: Int?
 
     init(routine: IntervalRoutine,
          now: @escaping () -> Date = Date.init,
@@ -78,8 +95,15 @@ final class IntervalEngine {
 
     var completedWorkRounds: Int {
         guard let phase = currentPhase else { return schedule.workPhaseCount }
+        // A flow phase numbers its position in the practice, not a round.
+        // Without this, being three movements into the warm-up would report two
+        // rounds already done.
+        guard !phase.isFlow else { return 0 }
         return max(0, phase.round - 1)
     }
+
+    /// True while the session is still in its opening practice.
+    var isWarmingUp: Bool { currentPhase?.isFlow ?? false }
 
     /// The phase after the current one, for the "up next" line.
     var nextPhase: Phase? {
@@ -97,9 +121,37 @@ final class IntervalEngine {
         skipOffset = 0
         elapsed = 0
         lastNotifiedIndex = nil
+        lastTickSecond = nil
+        endReason = nil
+        skippedMoves = []
         status = .running
         notifyPhaseChangeIfNeeded()
         startTicking()
+    }
+
+    /// Pick a session back up partway through, after the process died under it.
+    ///
+    /// This is the dividend of the engine deriving everything from elapsed
+    /// wall-clock time against a precomputed schedule: there is no accumulated
+    /// per-tick state to reconstruct, so resuming is only a matter of placing
+    /// `startDate` where it would have been. An engine that decremented a
+    /// counter every tick could not do this at all.
+    func restore(to offset: TimeInterval, running: Bool = true) {
+        guard offset > 0, offset < schedule.total else {
+            start()
+            return
+        }
+        startDate = now().addingTimeInterval(-offset)
+        pausedTotal = 0
+        pauseBegan = running ? nil : now()
+        skipOffset = 0
+        elapsed = offset
+        lastNotifiedIndex = nil
+        lastTickSecond = nil
+        endReason = nil
+        status = running ? .running : .paused
+        notifyPhaseChangeIfNeeded()
+        if running { startTicking() }
     }
 
     func pause() {
@@ -121,25 +173,48 @@ final class IntervalEngine {
         switch status {
         case .running: pause()
         case .paused: resume()
-        case .idle, .finished: start()
+        case .idle: start()
+        // A finished session is over. Restarting the whole routine from the
+        // same control that paused it is not a transport action, it is a
+        // thirteen-minute surprise.
+        case .finished: break
         }
     }
+
+    /// Moves skipped this session, in the order they were skipped.
+    ///
+    /// Recorded because "she skipped something" is the most informative thing a
+    /// session produces and it was previously thrown away — the engine jumped
+    /// the clock forward and kept no note of what it had jumped over.
+    private(set) var skippedMoves: [String] = []
 
     /// Jump to the start of the next phase. Implemented as a shift in the
     /// elapsed origin rather than by mutating the schedule, so the schedule
     /// stays a pure function of the routine.
     func skip() {
         guard let index = currentIndex else { return }
+        // Read the move before the clock moves, or we record the next one.
+        // Flow counts: skipping the spinal wave every session is exactly the
+        // kind of thing worth being asked about, and dropping it here would
+        // make the practice the one part of a session with no feedback path.
+        if let move = schedule.phases[index].move, !schedule.phases[index].isRest,
+           !skippedMoves.contains(move.name) {
+            skippedMoves.append(move.name)
+        }
         let target = schedule.start(of: index + 1)
         skipOffset += target - elapsed
         refresh()
     }
 
-    func end() {
+    /// Stop the session. The reason travels with it, because ending early and
+    /// running to the end are not the same event and must not be cued alike.
+    func end(reason: EndReason = .abandoned) {
+        guard status != .finished else { return }
         stopTicking()
         status = .finished
         elapsed = schedule.total
-        onFinish?()
+        endReason = reason
+        onFinish?(reason)
     }
 
     // MARK: - Ticking
@@ -147,14 +222,27 @@ final class IntervalEngine {
     private func startTicking() {
         stopTicking()
         guard autoTick else { return }
+        // The engine is main-actor isolated, so this task inherits that
+        // isolation and touches the engine directly — no hop, no sending.
+        //
+        // `self` is held weakly, and the strong reference the tick borrows is
+        // released before the sleep — holding it across the suspension would
+        // keep the engine alive for as long as the loop ran. The loop ends
+        // itself when the engine goes away or stops running, so there is
+        // nothing left for a deinit to cancel.
         ticker = Task { [weak self] in
-            while !Task.isCancelled {
-                await MainActor.run { self?.refresh() }
+            while !Task.isCancelled, self?.tickOnce() == true {
                 // 20 Hz is smooth for a draining field and cheap enough to run
                 // for half an hour without meaningfully touching the battery.
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
+    }
+
+    /// One pass of the live ticker. Returns whether the loop should continue.
+    private func tickOnce() -> Bool {
+        refresh()
+        return status == .running
     }
 
     private func stopTicking() {
@@ -175,22 +263,34 @@ final class IntervalEngine {
             if status != .finished {
                 stopTicking()
                 status = .finished
-                onFinish?()
+                endReason = .completed
+                onFinish?(.completed)
             }
             return
         }
         notifyPhaseChangeIfNeeded()
+        notifyCountdownIfNeeded()
     }
 
     private func notifyPhaseChangeIfNeeded() {
         let index = currentIndex
         if lastNotifiedIndex != .some(index) {
             lastNotifiedIndex = .some(index)
+            lastTickSecond = nil
             onPhaseChange?(currentPhase)
         }
     }
 
-    deinit { ticker?.cancel() }
+    /// Cue the last three seconds of work. Driven by crossing a second
+    /// boundary rather than by its own timer, so a slow frame can make a tick
+    /// late but cannot drop one or fire it twice.
+    private func notifyCountdownIfNeeded() {
+        guard status == .running, let phase = currentPhase, phase.isWork else { return }
+        let secondsLeft = Int(remainingInPhase.rounded(.up))
+        guard (1...3).contains(secondsLeft), secondsLeft != lastTickSecond else { return }
+        lastTickSecond = secondsLeft
+        onCountdownTick?()
+    }
 }
 
 // MARK: - Formatting

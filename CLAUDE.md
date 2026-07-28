@@ -9,14 +9,33 @@ This file is only the things worth having in context always.
 
 ## Status
 
-Never compiled — written without access to Xcode. Expect compile errors on
-first build; fixing them is the current priority. `WrkTime.xcodeproj/project.pbxproj`
-is hand-written and the riskiest artifact; regenerating the project is a fine
-recovery, since no source file depends on its contents.
+Builds, runs and passes its tests on the iPhone 17 Pro simulator. Never run on
+a physical device, which is why the audio cues and the haptic vocabulary are
+still unverified — both were written to spec and never heard or felt.
+`WrkTime.xcodeproj/project.pbxproj` is hand-written and remains the riskiest
+artifact; it uses file-system synchronized groups, so new files under
+`WrkTime/` are picked up without editing it.
 
 Built: design system, interval engine (tested), timer screen, routine builder,
-growth form, Today, SwiftData + CloudKit, HealthKit, Live Activity.
-Not built: onboarding, the Claude planner, Season and Signals screens, watch app.
+growth form, Today, Season, Signals, block setup, SwiftData + CloudKit,
+HealthKit, Live Activity, backup/restore, the Claude planner with a
+deterministic offline fallback, interrupted-session recovery, the flow warm-up,
+timer-only routines, and drawn move diagrams.
+
+Not built: the watch app, `LiveActivityIntent` (the lock screen is read-only),
+and cycle-aware programming (opt-in only, awaiting the user's decision).
+
+**The planner has never reached the live API.** Every path so far has run
+through the offline fallback because no key was set, and `ClaudePlanner`'s
+response handling is tested against recorded response shapes rather than real
+ones. The first real call is the outstanding verification.
+
+## The two planners
+
+`OfflinePlanner` is not a degraded mode — it is the floor the app stands on,
+and every failure path in `ClaudePlanner` lands there. A week is never blocked
+on a network. `PlanValidator` sits between both and the store: a generated week
+that names a load the kit cannot be set to is rejected **whole**, never trimmed.
 
 ## Hard constraints
 
@@ -25,6 +44,11 @@ Not built: onboarding, the Claude planner, Season and Signals screens, watch app
   offer or generate anything else.
 - **Work intervals cap at 60 seconds**, clamped in `IntervalRoutine`, not in
   the UI.
+- **Every session opens with 3–5 flow movements**, built by `WarmUp` rather
+  than by either planner. It is additive: never a round removed, never a work
+  interval shortened.
+- **A routine may have no moves.** That is a plain interval timer, not an
+  unfinished routine.
 - **Fasting is an input, not a feature.** Stats stay visible; it never gets a
   tab or a hero screen.
 - Health content is educational, never medical advice.
@@ -52,6 +76,23 @@ These look like oversights and are not:
 
 - `IntervalEngine` takes an injected clock and an `autoTick` flag. Both exist so
   tests assert exact values without sleeping. Keep them.
+- `Phase.Kind` has three cases, not two. `flow` holds the field still, gets no
+  countdown tick, and is not a round.
+- `IntervalRoutine.warmUpMoves` and `Move.kindRaw` are Optional because the
+  synthesized decoder *throws* on a missing key rather than using a default.
+  Anything new added to a stored routine must be Optional too.
+- `MoveStrip` draws a move as 2-3 panels on one shared floor. Three things are
+  load-bearing: the stroke is 1.1pt at **every** size, the head is a fixed
+  fraction of panel height, and nothing uses opacity — it renders twice inside
+  the timer's knockout and the boundary cuts both.
+- `Facing` decides panel aspect: portrait for side-on, square for front-on and
+  for the wide low shapes (lying, all fours, incline push-up). A front figure
+  with both arms out is as wide as it is tall and cannot share a portrait frame.
+- `Pose.supine` draws at `Anatomy.recumbent`. It is the one scale exception and
+  it is deliberate: a body on the floor has no height to trade against a tall
+  panel.
+- `MovePlates.strip(for:)` returns nil for an unknown move. A diagram of the
+  wrong movement is worse than none.
 - The engine derives state from elapsed wall-clock time against a precomputed
   schedule. It must never accumulate per-tick decrements.
 - The Live Activity is handed phase start/end **dates**, not a countdown, so the

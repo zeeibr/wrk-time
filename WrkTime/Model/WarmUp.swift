@@ -1,0 +1,64 @@
+import Foundation
+
+/// The flow practice that opens every session.
+///
+/// She already does a round of qi gong and lymphatic movement in the morning
+/// and asked for it to sit in front of the session rather than replace part of
+/// it — "in addition to the session … 3-5 at the start". So this is additive by
+/// construction: it never removes a round, never shortens a work interval, and
+/// never counts toward the rounds a session claims.
+///
+/// It is assembled **here rather than by the planner**, deliberately. Every
+/// week gets a warm-up whether Claude wrote it or the offline planner did,
+/// without another required field for a model to fill and get wrong, and
+/// without spending schema budget on a decision that has one correct answer.
+/// The one thing it has to respect is what she has said about moves, and it
+/// reads that from the same place everything else does.
+enum WarmUp {
+    /// Three to five, aiming at four. Four movements at forty seconds is a
+    /// touch under three minutes — long enough to be a practice, short enough
+    /// that it never becomes the reason a session is skipped.
+    static let target = 4
+    static let minimum = 3
+    static let maximum = 5
+    static let seconds: TimeInterval = 40
+
+    /// The practice for one day.
+    ///
+    /// Rotated by the date rather than shuffled, so the same day always
+    /// produces the same practice — a plan you can look at twice and see the
+    /// same thing — while consecutive days differ. `Set.randomElement` here
+    /// would make a session change under her between opening Today and pressing
+    /// begin.
+    static func moves(on date: Date,
+                      avoiding excluded: Set<String> = [],
+                      count: Int = target,
+                      library: [Move] = MoveLibrary.flow) -> [Move] {
+        let wanted = min(max(count, minimum), maximum)
+        let allowed = library.filter { move in
+            !excluded.contains { !$0.isEmpty && MovePreference.key(move.name).contains($0) }
+        }
+        // If she has ruled out nearly the whole practice, honour that and open
+        // with whatever is left rather than reaching past her to fill the slots.
+        guard !allowed.isEmpty else { return [] }
+
+        // The window advances by one more than its own width each day. Stepping
+        // by exactly the width would make the cycle `library / width` long — 12
+        // flow movements taken 4 at a time gives only three distinct practices,
+        // so every Thursday would open exactly like every Monday. The extra one
+        // walks the window instead, and twelve days pass before a repeat.
+        let offset = dayIndex(date) * (wanted + 1)
+        return (0..<min(wanted, allowed.count)).map { step in
+            allowed[(offset + step) % allowed.count]
+        }
+    }
+
+    /// Days since the reference date, non-negative and stable across time zones
+    /// because it counts calendar days rather than dividing seconds.
+    private static func dayIndex(_ date: Date, calendar: Calendar = .current) -> Int {
+        let days = calendar.dateComponents([.day],
+                                           from: Date(timeIntervalSinceReferenceDate: 0),
+                                           to: calendar.startOfDay(for: date)).day ?? 0
+        return abs(days)
+    }
+}

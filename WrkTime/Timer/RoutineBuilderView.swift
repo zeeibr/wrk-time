@@ -7,24 +7,29 @@ struct RoutineListView: View {
     @Query(sort: \SavedRoutine.createdAt, order: .reverse) private var saved: [SavedRoutine]
 
     @State private var building = false
-    @State private var running: IntervalRoutine?
+    /// The saved routine, not just its decoded value — finishing one needs to
+    /// write `lastRunAt` back to the record it came from.
+    @State private var running: SavedRoutine?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // Every document screen opens the same way.
+                    Masthead(context: "Your own")
+                        .padding(.top, 4)
                     Text("Your own routines")
                         .font(.almanacTitle)
                         .foregroundStyle(Palette.ink)
-                        .padding(.top, 4)
+                        .accessibilityAddTraits(.isHeader)
 
                     PrimaryButton(title: "Build a routine",
-                                  subtitle: "Work stays at 60 seconds or under") {
+                                  subtitle: "Moves optional · work caps at 60 s") {
                         building = true
                     }
 
                     if saved.isEmpty {
-                        Text("Nothing saved yet. A routine is a name, a work and rest length, and the moves you want in rotation.")
+                        Text("Nothing saved yet. A routine is a name, a work and rest length, and — if you want them — the moves to cycle through. Leave the moves out and you have a plain interval timer.")
                             .font(.almanacBody)
                             .foregroundStyle(Palette.mute)
                             .fixedSize(horizontal: false, vertical: true)
@@ -34,8 +39,19 @@ struct RoutineListView: View {
                             Rule(firm: true)
                             ForEach(saved) { item in
                                 if let routine = item.routine {
-                                    savedRow(routine, lastRun: item.lastRunAt)
-                                        .onTapGesture { running = routine }
+                                    // A real Button, not a tap gesture on a
+                                    // stack: without the button role VoiceOver
+                                    // reads this as static text, Switch Control
+                                    // will not scan it, and Voice Control has
+                                    // no name to match — so the main way into a
+                                    // saved workout was unreachable by three
+                                    // assistive technologies at once.
+                                    Button { running = item } label: {
+                                        savedRow(routine, lastRun: item.lastRunAt)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(routine.name)
+                                    .accessibilityHint("Starts this routine")
                                 }
                             }
                         }
@@ -51,7 +67,31 @@ struct RoutineListView: View {
                 context.insert(SavedRoutine(routine: routine))
             }
         }
-        .fullScreenCover(item: $running) { WorkoutTimerView(routine: $0) }
+        .fullScreenCover(item: $running) { item in
+            if let routine = item.routine {
+                WorkoutTimerView(routine: routine) { outcome in
+                    // Only a finished run counts as having run it.
+                    guard case .completed = outcome else { return }
+                    item.lastRunAt = .now
+                    try? context.save()
+                }
+            }
+        }
+    }
+
+    /// "3 moves", or "timer only" — which is a description, not an apology.
+    ///
+    /// The warm-up counts toward whether a routine is bare. A session that
+    /// opens with four flow movements and then runs plain intervals is not a
+    /// "timer only", and calling it one would be the app failing to notice the
+    /// thing she just added.
+    static func rotationNote(_ routine: IntervalRoutine) -> String {
+        switch (routine.moves.count, routine.warmUp.count) {
+        case (0, 0): "timer only"
+        case (0, let warm): "\(warm) to warm up, then the timer"
+        case (1, _): "1 move"
+        case (let count, _): "\(count) moves"
+        }
     }
 
     private func savedRow(_ routine: IntervalRoutine, lastRun: Date?) -> some View {
@@ -59,8 +99,8 @@ struct RoutineListView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(routine.name).font(.almanacMoveName).foregroundStyle(Palette.ink)
-                    Text("\(routine.rounds) × \(Int(routine.clampedWork))/\(Int(routine.rest)) · \(routine.moves.count) moves")
-                        .almanacLabel(Palette.sage, small: true)
+                    Text("\(routine.rounds) × \(Int(routine.clampedWork))/\(Int(routine.rest)) · \(Self.rotationNote(routine))")
+                        .almanacLabel(Palette.mute, small: true)
                         .tabular()
                 }
                 Spacer(minLength: 8)
@@ -69,7 +109,7 @@ struct RoutineListView: View {
                         .font(Face.ui(17)).tabular().foregroundStyle(Palette.ink)
                     if let lastRun {
                         Text("Last run \(lastRun.formatted(.dateTime.weekday(.abbreviated)))")
-                            .almanacLabel(Palette.sage, small: true)
+                            .almanacLabel(Palette.mute, small: true)
                     }
                 }
             }
@@ -94,12 +134,14 @@ struct RoutineBuilderView: View {
     @State private var rest: TimeInterval = 45
     @State private var rounds = 8
     @State private var moves: [Move] = []
+    @State private var warmUp: [Move] = []
     @State private var picking = false
     @Environment(\.displayScale) private var displayScale
 
     private var draft: IntervalRoutine {
         IntervalRoutine(name: name.isEmpty ? "Untitled routine" : name,
                         work: work, rest: rest, rounds: rounds, moves: moves)
+            .warmingUp(with: warmUp)
     }
 
     var body: some View {
@@ -112,6 +154,9 @@ struct RoutineBuilderView: View {
                             .foregroundStyle(Palette.ink)
                             .textFieldStyle(.plain)
                             .padding(.bottom, 8)
+                            // The placeholder vanishes on the first keystroke,
+                            // taking the field's only name with it.
+                            .accessibilityLabel("Routine name")
                         Rule(firm: true)
 
                         HStack(spacing: 0) {
@@ -133,11 +178,33 @@ struct RoutineBuilderView: View {
                     }
 
                     IndexedSection(number: "02", label: "Moves") {
-                        SectionHead(title: "In rotation", note: moves.isEmpty ? nil : "Drag to reorder")
+                        if !warmUp.isEmpty {
+                            SectionHead(title: "Warm-up",
+                                        note: "\(Int(WarmUp.seconds))s each")
+                                .padding(.bottom, 4)
+                            ForEach(Array(warmUp.enumerated()), id: \.element.id) { index, move in
+                                BlockRow(index: index + 1, symbol: move.symbol,
+                                         name: move.name, equipment: move.equipmentLabel,
+                                         measure: "\(Int(WarmUp.seconds))s")
+                                    .removable { warmUp.remove(at: index) }
+                            }
+                            Rule()
+                            Spacer(minLength: 14)
+                        }
+
+                        // Says what is true. Reordering is not built, and a note
+                        // promising a gesture that does not exist is worse than
+                        // no note at all.
+                        SectionHead(title: "In rotation",
+                                    note: moves.isEmpty ? "optional" : "\(moves.count) in cycle")
                             .padding(.bottom, 4)
 
                         if moves.isEmpty {
-                            Text("Add the moves you want to cycle through. Each round takes the next one in the list.")
+                            // An empty rotation is a real answer, not a form
+                            // left half-filled, and the copy has to say so —
+                            // otherwise the one person who wants a bare timer
+                            // reads this screen as refusing to give her one.
+                            Text("Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list.")
                                 .font(.almanacBodySmall)
                                 .foregroundStyle(Palette.mute)
                                 .padding(.vertical, 10)
@@ -147,6 +214,7 @@ struct RoutineBuilderView: View {
                                 BlockRow(index: index + 1, symbol: move.symbol,
                                          name: move.name, equipment: move.equipmentLabel,
                                          measure: "\(Int(work))s")
+                                    .removable { moves.remove(at: index) }
                             }
                             Rule()
                         }
@@ -158,7 +226,7 @@ struct RoutineBuilderView: View {
                                 Image(systemName: "plus")
                                 Text("Add a move").font(.almanacBody)
                                 Spacer()
-                                Text("From your kit").almanacLabel(Palette.sage, small: true)
+                                Text("From your kit").almanacLabel(Palette.mute, small: true)
                             }
                             .foregroundStyle(Palette.moss)
                             .padding(.vertical, 12)
@@ -174,19 +242,20 @@ struct RoutineBuilderView: View {
                                 .tabular()
                                 .foregroundStyle(Palette.ink)
                             Spacer()
-                            Text("\(rounds) × \(Int(work))/\(Int(rest)) · final rest dropped")
-                                .almanacLabel(Palette.sage, small: true)
+                            Text(totalNote)
+                                .almanacLabel(Palette.mute, small: true)
                                 .multilineTextAlignment(.trailing)
                         }
                         .padding(.vertical, 10)
 
+                        // No longer disabled on an empty rotation. A routine
+                        // with no moves is a timer, which is a thing she asked
+                        // to be able to save.
                         PrimaryButton(title: "Save routine",
-                                      subtitle: "\(moves.count) moves") {
+                                      subtitle: RoutineListView.rotationNote(draft)) {
                             onSave(draft)
                             dismiss()
                         }
-                        .disabled(moves.isEmpty)
-                        .opacity(moves.isEmpty ? 0.45 : 1)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -199,9 +268,21 @@ struct RoutineBuilderView: View {
                 }
             }
         }
+        // Where a picked move lands is decided by what it *is*. Adding the
+        // spinal wave to the rotation would put a practice inside a
+        // forty-second work interval and count it down — the one thing
+        // `MoveKind` exists to prevent — so flow goes to the warm-up.
         .sheet(isPresented: $picking) {
-            MovePicker { moves.append($0) }
+            MovePicker { move in
+                if move.kind == .flow { warmUp.append(move) } else { moves.append(move) }
+            }
         }
+    }
+
+    private var totalNote: String {
+        let shape = "\(rounds) × \(Int(work))/\(Int(rest))"
+        guard !warmUp.isEmpty else { return "\(shape) · final rest dropped" }
+        return "\(warmUp.count) to warm up, then \(shape)"
     }
 
     private func stepper(title: String, value: Int, unit: String?, note: String?,
@@ -215,10 +296,24 @@ struct RoutineBuilderView: View {
                 stepperButton("plus", action: increment)
             }
             if let note {
-                Text(note).almanacLabel(Palette.sage, small: true)
+                Text(note).almanacLabel(Palette.mute, small: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // One adjustable control, not two anonymous buttons. Left as-is,
+        // VoiceOver reads "minus, plus" six times across this row with no way
+        // to tell which field it is adjusting, and Voice Control gets six
+        // identical matches.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(unit.map { "\(value) \($0)" } ?? "\(value)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: increment()
+            case .decrement: decrement()
+            @unknown default: break
+            }
+        }
     }
 
     private func stepperButton(_ symbol: String, action: @escaping () -> Void) -> some View {
@@ -228,12 +323,30 @@ struct RoutineBuilderView: View {
                 .foregroundStyle(Palette.moss)
                 .frame(width: 24, height: 24)
                 .overlay(Circle().strokeBorder(Palette.ruleFirm, lineWidth: 1))
+                // The drawn circle stays 24pt — the design wants a small mark —
+                // while the tappable area becomes the 44pt Apple asks for.
+                // Insetting outward grows the hit region without touching
+                // layout, so the two circles keep their 6pt gap instead of
+                // being shoved apart by a larger frame.
+                .contentShape(Rectangle().inset(by: -10))
         }
         .buttonStyle(.plain)
     }
 
     private var divider: some View {
         Rectangle().fill(Palette.rule).frame(width: 1 / displayScale, height: 62)
+    }
+}
+
+private extension View {
+    /// Long-press to take a row back out.
+    ///
+    /// The builder had no way to remove a move at all — the only fix for a
+    /// mistyped rotation was to cancel and start the routine again. A context
+    /// menu rather than a swipe because these rows live in a `VStack`, not a
+    /// `List`, and it is the same gesture Today already uses on a move.
+    func removable(_ remove: @escaping () -> Void) -> some View {
+        contextMenu { Button("Remove", role: .destructive, action: remove) }
     }
 }
 
@@ -245,6 +358,27 @@ struct MovePicker: View {
     var body: some View {
         NavigationStack {
             List {
+                // The morning practice first: it is what she reaches for most
+                // often, and burying it under five equipment headings would
+                // make the thing she does daily the hardest thing to find.
+                if !MoveLibrary.flow.isEmpty {
+                    SwiftUI.Section {
+                        ForEach(MoveLibrary.flow) { move in
+                            Button {
+                                onPick(move)
+                                dismiss()
+                            } label: { row(move) }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("Flow · qi gong and lymphatic").almanacLabel(small: true)
+                    } footer: {
+                        Text("These open the session rather than joining the rotation — they are a practice, not a set.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                    }
+                }
+
                 ForEach(Equipment.allCases) { equipment in
                     let moves = MoveLibrary.moves(for: equipment)
                     if !moves.isEmpty {
@@ -253,12 +387,7 @@ struct MovePicker: View {
                                 Button {
                                     onPick(move)
                                     dismiss()
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(move.name).font(.almanacBody).foregroundStyle(Palette.ink)
-                                        Text(move.cue).font(.almanacBodySmall).foregroundStyle(Palette.mute)
-                                    }
-                                }
+                                } label: { row(move) }
                                 .buttonStyle(.plain)
                             }
                         } header: {
@@ -272,5 +401,25 @@ struct MovePicker: View {
             .navigationTitle("Your kit")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    /// Name, cue, and the plate. The diagram is the point of the row here: a
+    /// list of thirty-eight names is a vocabulary test, and she asked to be
+    /// able to see the shape before choosing it.
+    private func row(_ move: Move) -> some View {
+        HStack(spacing: 12) {
+            // A constant 66x66 cell whatever the facing. A front-facing
+            // signature panel is square and a side one is half as wide; letting
+            // the cell follow would give the list a ragged left edge on the
+            // name column, in a document register built on things lining up.
+            MoveStrip(move: move, style: .signature)
+                .frame(width: 66, height: 66)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(move.name).font(.almanacBody).foregroundStyle(Palette.ink)
+                Text(move.cue).font(.almanacBodySmall).foregroundStyle(Palette.mute)
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }

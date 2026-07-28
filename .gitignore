@@ -7,6 +7,17 @@ xcuserdata/
 WrkTime.xcodeproj/project.xcworkspace/
 WrkTime.xcodeproj/xcuserdata/
 
+# Secrets.
+# The Claude API key lives in the Keychain, entered on the device. It must
+# never reach a file — git history is permanent, and a key committed once is
+# exposed even after it is deleted in a later commit.
+.env
+.env.*
+Secrets.swift
+Secrets.xcconfig
+*.p8
+*.p12
+
 # macOS
 .DS_Store
 
