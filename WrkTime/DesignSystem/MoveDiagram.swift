@@ -437,10 +437,16 @@ enum MovePlates {
             return exact
         }
 
-        // 2. Failing that, a strip for the right kit whose key shares a word
-        //    with the name — how an invented "beam goblet squat" finds the beam
-        //    front squat rather than the bare one.
+        // 2. Failing that, a strip for the right kit whose key shares a
+        //    *movement* word with the name — how an invented "beam goblet
+        //    squat" finds the beam front squat rather than the bare one.
+        //
+        //    Equipment words are struck out first. Left in, every ring strip
+        //    shares the word "ring" with every ring move, so "ring goblet
+        //    squat" and "ring front raise" both matched the ring deadlift and
+        //    drew a hinge for a squat and a hinge for a raise.
         let words = Set(name.split(separator: " ").map(String.init))
+            .subtracting(Self.kitWords)
         if let related = sorted.first(where: { strip in
             strip.equipment == move.equipment
                 && !Set(strip.key.split(separator: " ").map(String.init)).isDisjoint(with: words)
@@ -458,6 +464,13 @@ enum MovePlates {
     static func strip(for name: String) -> Strip? {
         strip(for: Move(name: name, equipment: .bodyweight, cue: ""))
     }
+
+    /// Words that name the kit rather than the movement. A shared one of these
+    /// says nothing about whether two moves are the same shape.
+    private static let kitWords: Set<String> = [
+        "beam", "ring", "rings", "bala", "dumbbell", "dumbbells", "peloton",
+        "walking", "pad", "bodyweight", "lb", "single-arm", "single", "arm"
+    ]
 
     private static let sorted: [Strip] = all.sorted { $0.key.count > $1.key.count }
 
@@ -772,9 +785,20 @@ struct MoveStrip: View {
     }
 
     var body: some View {
-        Canvas { context, size in
-            guard let strip, !poses.isEmpty else { return }
-            draw(strip, poses: poses, in: &context, size: size)
+        Group {
+            if let strip, !poses.isEmpty {
+                Canvas { context, size in
+                    draw(strip, poses: poses, in: &context, size: size)
+                }
+            } else {
+                // Nothing honest to draw of the movement — but the kit is still
+                // a fact, and a hole in an aligned column is worse than a glyph
+                // that claims nothing about shape.
+                Image(systemName: move.symbol)
+                    .font(.system(size: 15, weight: .light))
+                    .foregroundStyle(label)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .accessibilityHidden(true)
     }

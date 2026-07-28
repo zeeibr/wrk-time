@@ -1001,6 +1001,24 @@ struct MovePlateTests {
         }
     }
 
+    @Test("Sharing the name of a piece of kit is not sharing a movement")
+    func kitWordsDoNotMatch() {
+        // Every ring strip contains the word "ring", so an unfiltered word
+        // overlap matched all of them: a goblet squat and a front raise both
+        // resolved to the ring deadlift and drew a hinge.
+        func plate(_ name: String, _ kit: Equipment) -> String? {
+            MovePlates.strip(for: Move(name: name, equipment: kit, cue: ""))?.key
+        }
+        #expect(plate("Ring goblet squat", .rings) == nil)
+        #expect(plate("Ring front raise", .rings) == nil)
+        #expect(plate("Beam overhead press", .beam) == nil)
+
+        // A shared *movement* word still finds its family.
+        #expect(plate("Beam goblet squat", .beam) == "front squat")
+        #expect(plate("Ring halo press", .rings) == "halo")
+        #expect(plate("Tempo squat", .bodyweight) == "squat")
+    }
+
     @Test("A loaded move with no plate for its kit draws nothing at all")
     func noBarePatternForLoadedMoves() {
         // A shape that is right with the hands empty is still the wrong
