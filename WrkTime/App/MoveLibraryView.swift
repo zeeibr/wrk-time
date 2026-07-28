@@ -15,6 +15,12 @@ struct MoveLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
+    /// Observed, not fetched. The rows read a verdict per move, and without a
+    /// query on the type SwiftUI has nothing to redraw against — so a mark was
+    /// recorded and the list went on showing the old answer, which reads as the
+    /// app ignoring her.
+    @Query private var preferences: [MovePreference]
+
     @State private var selection: Set<String> = []
     /// What the last change did to the plan, said once and then cleared.
     @State private var repairNote: String?
@@ -72,7 +78,7 @@ struct MoveLibraryView: View {
 
     private func row(_ move: Move) -> some View {
         let picked = selection.contains(move.name)
-        let verdict = MovePreferences.verdict(for: move.name, in: context)
+        let verdict = self.verdict(for: move.name)
 
         return VStack(spacing: 0) {
             Rule()
@@ -106,6 +112,17 @@ struct MoveLibraryView: View {
         .accessibilityLabel(move.name)
         .accessibilityValue(verdict.map(note(for:)) ?? "No opinion")
         .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// The standing opinion about a move, read from the observed query.
+    ///
+    /// Avoidance wins any tie, the same rule `MovePreferences.verdict` follows:
+    /// if one opinion says a movement hurt, that outranks a milder verdict on
+    /// an overlapping name.
+    private func verdict(for name: String) -> MoveVerdict? {
+        let matches = preferences.filter { $0.covers(name) }
+        if matches.contains(where: { $0.verdict == .avoided }) { return .avoided }
+        return matches.first?.verdict
     }
 
     private func note(for verdict: MoveVerdict) -> String {

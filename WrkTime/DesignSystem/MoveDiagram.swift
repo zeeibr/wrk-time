@@ -484,6 +484,35 @@ enum MovePlates {
                 .holding { [.beam($0.neck)] }
         ], signature: 1),
 
+        // Front-facing, so the bar draws in full with its end ticks — an
+        // overhead press is the one beam move where the bar is the point, and
+        // side-on it would be a dot above her head.
+        Strip(key: "overhead press", equipment: .beam, facing: .front, panels: [
+            .front(spread: 34, elbow: 128).holding { [.beam(midpoint($0.hands))] },
+            .front(spread: 172, elbow: 6).holding { [.beam(midpoint($0.hands))] }
+        ], signature: 1),
+
+        Strip(key: "beam row", equipment: .beam, facing: .side, panels: [
+            .side(anchorX: 0.22, sink: 0.92, lean: 58, shoulder: 4, elbow: 4)
+                .holding { [.beam($0.hand)] },
+            .side(anchorX: 0.22, sink: 0.92, lean: 58, shoulder: 2, elbow: 132)
+                .holding { [.beam($0.hand)] }
+        ], signature: 1),
+
+        Strip(key: "beam reverse lunge", equipment: .beam, facing: .side, panels: [
+            .side(sink: 1.00, shoulder: 88, elbow: 176, split: 0.2)
+                .holding { [.beam($0.chest)] },
+            .side(sink: 0.52, shoulder: 84, elbow: 176, split: 2.6)
+                .holding { [.beam($0.chest)] }
+        ], signature: 1),
+
+        Strip(key: "floor press", equipment: .beam, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 62)
+                .holding { [.beam($0.hand, angle: 90)] },
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0)
+                .holding { [.beam($0.hand, angle: 90)] }
+        ], signature: 1),
+
         Strip(key: "hip thrust", equipment: .beam, facing: .front, panels: [
             .supine(width: 1.0, hipLift: 0, shoulderLift: 1.15, kneeUp: 1.15, armAngle: 92)
                 .holding { [.beam($0.hip), .ledge(x: 0.34, y: Anatomy.floorY + 0.30 * Anatomy.head + 1.15 * Anatomy.head)] },
@@ -503,6 +532,30 @@ enum MovePlates {
         Strip(key: "press-out", equipment: .rings, facing: .side, panels: [
             .side(anchorX: 0.13, shoulder: 30, elbow: 116).holding { [.ring($0.hand)] },
             .side(anchorX: 0.13, shoulder: 88, elbow: 2).holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        Strip(key: "goblet squat", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.21, sink: 1.00, shoulder: 26, elbow: 118)
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.21, sink: 0.34, lean: 26, shoulder: 22, elbow: 118)
+                .holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        Strip(key: "ring row", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.22, sink: 0.88, lean: 60, shoulder: 4, elbow: 4)
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.22, sink: 0.88, lean: 60, shoulder: 2, elbow: 128)
+                .holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        Strip(key: "ring overhead press", equipment: .rings, facing: .front, panels: [
+            .front(spread: 30, elbow: 132).holding { [.ring(midpoint($0.hands))] },
+            .front(spread: 174, elbow: 4).holding { [.ring(midpoint($0.hands))] }
+        ], signature: 1),
+
+        Strip(key: "ring front raise", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.16, shoulder: 22, elbow: 20).holding { [.ring($0.hand)] },
+            .side(anchorX: 0.16, shoulder: 84, elbow: 6).holding { [.ring($0.hand)] }
         ], signature: 1),
 
         Strip(key: "ring deadlift", equipment: .rings, facing: .side, panels: [
@@ -559,6 +612,26 @@ enum MovePlates {
         Strip(key: "around the world", equipment: .dumbbells, facing: .front, panels: [
             .front(spread: 88, elbow: 10).holding { [.bells($0.hands)] },
             .front(spread: 168, elbow: 8).holding { [.bells($0.hands)] }
+        ], signature: 1),
+
+        Strip(key: "shrug", equipment: .dumbbells, facing: .front, panels: [
+            .front(spread: 22, elbow: 14, shrug: 0).holding { [.bells($0.hands)] },
+            .front(spread: 4, elbow: 2, shrug: 0.62).holding { [.bells($0.hands)] }
+        ], signature: 1),
+
+        Strip(key: "upright row", equipment: .dumbbells, facing: .front, panels: [
+            .front(spread: 8, elbow: 6).holding { [.bells($0.hands)] },
+            .front(spread: 62, elbow: -78).holding { [.bells($0.hands)] }
+        ], signature: 1),
+
+        Strip(key: "extension", equipment: .dumbbells, facing: .side, panels: [
+            .side(anchorX: 0.18, shoulder: 168, elbow: -128).holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.18, shoulder: 172, elbow: -8).holding { [.bells([$0.hand])] }
+        ], signature: 0),
+
+        Strip(key: "pullover", equipment: .dumbbells, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0).holding { [.bells([$0.hand])] },
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: -54).holding { [.bells([$0.hand])] }
         ], signature: 1),
 
         Strip(key: "punch", equipment: .dumbbells, facing: .side, panels: [
@@ -698,6 +771,31 @@ enum MovePlates {
             .side(anchorX: 0.13, shoulder: 38, elbow: 108, split: 0.7, footLift: 0.60),
             .side(anchorX: 0.13, shoulder: 104, elbow: -34, split: 0.7, footLift: 0.60)
         ], signature: 0),
+
+        Strip(key: "chest opener", facing: .front, panels: [
+            .front(spread: 44, elbow: 34),
+            .front(spread: 104, elbow: -16)
+        ], signature: 1),
+
+        Strip(key: "standing march", facing: .front, panels: [
+            .front(spread: 14, elbow: 22),
+            .front(spread: 26, elbow: 14, footLift: 1.7)
+        ], signature: 1),
+
+        Strip(key: "arm circles", facing: .front, panels: [
+            .front(spread: 18, elbow: 8),
+            .front(spread: 168, elbow: 6)
+        ], signature: 1),
+
+        Strip(key: "deep squat", facing: .side, panels: [
+            .side(anchorX: 0.21, sink: 1.00, shoulder: 10, elbow: 8),
+            .side(anchorX: 0.21, sink: 0.34, lean: 28, shoulder: 40, elbow: 96)
+        ], signature: 1),
+
+        Strip(key: "ankle rocking", facing: .side, panels: [
+            .side(anchorX: 0.24, lean: -18, shoulder: 2, elbow: 4),
+            .side(anchorX: 0.24, lean: 24, shoulder: 38, elbow: 18)
+        ], signature: 1),
 
         Strip(key: "fold", facing: .side, panels: [
             .side(sink: 1.00, lean: 0, shoulder: 14, elbow: 8),

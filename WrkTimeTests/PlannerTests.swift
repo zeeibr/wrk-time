@@ -974,10 +974,12 @@ struct MovePlateTests {
 
     @Test("A move outside the library has none, and is never guessed at")
     func outsideTheLibrary() {
-        // These are names the planner used to invent. The old matcher resolved
-        // the first to a hinge; now nothing outside the library resolves at all.
-        for name in ["Ring goblet squat", "Beam reverse lunge", "Side plank",
-                     "Turkish get-up", "Shaking", ""] {
+        // Names the planner might invent that the library does not hold.
+        // "Ring goblet squat" and "Beam reverse lunge" used to be here and are
+        // now real moves — which is the point of adding to a closed library
+        // rather than loosening the match.
+        for name in ["Side plank", "Turkish get-up", "Kettlebell swing",
+                     "Barbell back squat", "Shaking", ""] {
             #expect(MovePlates.strip(for: name) == nil, "\(name) resolved to a plate")
         }
     }
@@ -1086,7 +1088,8 @@ struct MovePlateTests {
     /// Poses whose weight is not on the feet at all, or which stand on the pad
     /// rather than the floor line.
     static let floorBound = ["hip thrust", "glute bridge", "dead bug", "floor fly",
-                             "cat cow", "bird dog", "push-up", "walk", "incline walk"]
+                             "cat cow", "bird dog", "push-up", "walk", "incline walk",
+                             "floor press", "pullover"]
 
     @Test("Consecutive panels differ enough to read as a change")
     func panelsDiffer() {
@@ -1119,8 +1122,8 @@ struct MovePlateTests {
     /// Supine and quadruped place their knees rather than solving them — a
     /// foreshortened leg drawn at full length is wrong, not right.
     private func isFloorBound(_ strip: Strip) -> Bool {
-        ["hip thrust", "glute bridge", "dead bug", "floor fly", "cat cow", "bird dog"]
-            .contains(strip.key)
+        ["hip thrust", "glute bridge", "dead bug", "floor fly", "cat cow", "bird dog",
+         "floor press", "pullover"].contains(strip.key)
     }
 }
 

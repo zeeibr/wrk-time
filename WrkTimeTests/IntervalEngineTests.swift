@@ -10,10 +10,19 @@ final class TestClock {
     var provider: () -> Date { { [unowned self] in self.now } }
 }
 
+/// Two named moves rather than two indices.
+///
+/// This used to reach for `MoveLibrary.all[0]` and `[4]`, so adding a move to
+/// the middle of the library silently changed what the rotation test was
+/// asserting about.
+private func named(_ name: String) -> Move {
+    MoveLibrary.all.first { $0.name == name } ?? MoveLibrary.all[0]
+}
+
 private func routine(rounds: Int = 3, work: TimeInterval = 60, rest: TimeInterval = 45,
                      dropsFinalRest: Bool = true) -> IntervalRoutine {
     IntervalRoutine(name: "Test", work: work, rest: rest, rounds: rounds,
-                    moves: [MoveLibrary.all[0], MoveLibrary.all[4]],
+                    moves: [named("Beam front squat"), named("Ring halo")],
                     dropsFinalRest: dropsFinalRest)
 }
 
