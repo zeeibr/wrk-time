@@ -93,8 +93,45 @@ Four rules the code enforces, inherited from the mockups:
 
 ## 4. State of the build
 
-Updated 27 July 2026, after the app was compiled, run on the simulator, run on
-a physical iPhone, and driven against the live Claude API for the first time.
+Updated 28 July 2026, after a four-dimension engineering audit — persistence,
+planner correctness, time arithmetic, concurrency — and the fifteen fixes it
+produced. Every finding below was verified against the source before being
+acted on, and the critical one was confirmed by removing the fix again and
+watching the new test fail.
+
+**What the audit was really about.** Almost every critical finding was the same
+shape: an effect that must happen, placed on a path nobody exercised end to
+end, reporting success anyway. See the section of that name in `CLAUDE.md`;
+it is the single most useful thing to hold in mind when adding to this app.
+
+**The three that were costing real money or writing false records:**
+
+1. The six a.m. background plan was computed, billed and thrown away — a
+   hand-made `ModelContext` does not autosave and nothing in the planner
+   saved. `PlannerService.write` saves for itself now.
+2. Claude's rotation was silently cut from five moves to three, on every paid
+   week, because the draft decoder named three fixed slots while the schema had
+   moved to `Tuning.movesPerSession`. At a setting of two it threw outside the
+   repair loop, which would have sent every remaining week of the block to the
+   offline planner after paying for it.
+3. A resumed run assumed today's planned session, so finishing an interrupted
+   morning practice marked a session she had never started and wrote it to
+   Health. `ActiveSession` carries its subject now.
+
+**Also fixed:** a rewrite adding a second session to a day already trained; four
+disagreeing spellings of "is this move ruled out", which made the shipped
+push-up dislike offer the incline push-up as its own replacement; a backup
+carrying six of the store's eight types, so a restore lost every opinion about
+every move; a Health workout spanning wall-clock including pauses; a weight
+backfill that could never run; flow movements inside the planner's move enum; a
+new block opening with the previous block's marks; an expired resume replaying
+the whole routine; a token counter that was both a race and a half-price
+undercount; a practice reading as undone after a flight; the skip review racing
+the cover it was asked from; and a backward clock stranding the session.
+
+Previously updated 27 July 2026, after the app was compiled, run on the
+simulator, run on a physical iPhone, and driven against the live Claude API for
+the first time.
 
 | Area | State | Where |
 | --- | --- | --- |

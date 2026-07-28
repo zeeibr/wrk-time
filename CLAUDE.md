@@ -110,9 +110,53 @@ read it; they never hard-code colours.
 
 Approved mockup: `docs/design/lane-g-almanac-approved.html`.
 
+## The bug shape this app keeps producing
+
+**A side effect placed on a path nobody exercises end to end, reporting success
+anyway.** It has happened five times, and every instance was invisible because
+the *failure* path worked:
+
+- Recording a finished session hung on `.onChange` attached to the view that
+  finishing removes, so only successful sessions were lost.
+- The overnight planner built its own `ModelContext` — which does not autosave —
+  and nothing in the planner called `save()`, so the week was billed for and
+  discarded while "Written overnight" reported a timestamp.
+- The draft decoder read three move slots while the schema asked for five, so
+  two moves were dropped from every paid week and nothing counted them.
+- A resumed run carried no identity, so finishing an interrupted practice marked
+  a planned session she had never started.
+
+So: **when an effect must happen, do not let a view's lifetime decide whether it
+does.** `IntervalEngine.onEnded` and `PlannerService.write` saving for itself are
+both that rule. And when you add a path, exercise the *success* case on a device
+or the simulator — the tests could not have caught any of these.
+
 ## Things not to "fix"
 
 These look like oversights and are not:
+
+- `MovePreference.anyCovers` is the **only** way to ask whether a move is ruled
+  out. It matches by containment, so "push-up" covers the incline and knee
+  variants — which is why the one seeded preference is written that way. Four
+  places once spelled this question differently and they disagreed.
+- `MoveLibrary.names` is strength only. The planner's move enum feeds the
+  rotation, and a rotation entry becomes a work phase; a flow movement there
+  would be counted down at like a set.
+- `ClaudePlanner.plan` returns its `Usage` rather than leaving it in a static.
+  The static was a cross-actor race, and a repair turn overwrote the first
+  request instead of adding to it.
+- `PlanDraft` reads its move slots by name from `ClaudePlanner.moveSlots` at
+  runtime. A struct with fixed properties silently truncates the moment
+  `Tuning.movesPerSession` changes.
+- A completed session's Health bounds are capped at the routine's own length.
+  Wall-clock includes pauses and any time the app was suspended before it
+  noticed it had finished.
+- The Health weight import watermarks on `.health` entries only. Counting her
+  own typed weigh-ins closed the ninety-day backfill on the first launch, with
+  no path that could ever reopen it.
+- Week bins reject a completion dated before the block began. `days / 7`
+  truncates toward zero, so the six days before a start date all landed in
+  week 1 of the new block.
 
 - `IntervalEngine` takes an injected clock and an `autoTick` flag. Both exist so
   tests assert exact values without sleeping. Keep them.
