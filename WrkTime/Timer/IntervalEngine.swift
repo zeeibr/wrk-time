@@ -277,7 +277,12 @@ final class IntervalEngine {
         guard let startDate else { return }
         var paused = pausedTotal
         if let pauseBegan { paused += now().timeIntervalSince(pauseBegan) }
-        elapsed = now().timeIntervalSince(startDate) - paused + skipOffset
+        // Clamped at zero as well as at the top. `Date.now` is not monotonic:
+        // move the clock back five minutes mid-session and `elapsed` went
+        // negative, `index(atElapsed:)` returned nil, and the session sat in a
+        // no-phase state — count at 0:00, caption reading "Finished", field
+        // full, never finishing — until real time caught up.
+        elapsed = max(0, now().timeIntervalSince(startDate) - paused + skipOffset)
 
         if elapsed >= schedule.total {
             elapsed = schedule.total

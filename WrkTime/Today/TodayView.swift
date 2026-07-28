@@ -69,6 +69,8 @@ struct TodayView: View {
     @State private var resuming: ActiveSession?
     /// Moves skipped in the session that just ended, awaiting a reason.
     @State private var skippedToReview: [String] = []
+    /// Skipped moves waiting for the timer to close before they are asked about.
+    @State private var pendingSkips: [String] = []
     @State private var showingSettings = false
     /// The move whose plate is open. Tapping a row shows the shape; the
     /// long-press menu is still there for an opinion.
@@ -265,7 +267,16 @@ struct TodayView: View {
         // Cleared once the cover closes, so a second run does not silently
         // resume the session that was just finished or abandoned.
         .onChange(of: running) { _, value in
-            if value == nil { resuming = nil }
+            guard value == nil else { return }
+            resuming = nil
+            // Cleared too: the card is offered from a `@State` copy that
+            // `report()` has no way to reach, so it went on offering a session
+            // whose stored copy no longer existed. Tapping it started a
+            // phantom workout.
+            resumable = nil
+            // Asked now the field has closed, never inside it.
+            skippedToReview = pendingSkips
+            pendingSkips = []
         }
     }
 
@@ -576,7 +587,15 @@ struct TodayView: View {
             // at least never a practice, so it cannot invent a mark from one.
             if let session = todaysSession { mark(session, start: start, end: end) }
         }
-        skippedToReview = skipped
+        // Held rather than presented. `report()` now fires from the engine at
+        // the moment the session ends, which on the completed path is while
+        // the cover is still showing the completion screen — asking a sheet to
+        // present over a live full-screen cover either drops the presentation
+        // or invokes its binding's setter with `false`, which clears the array
+        // and destroys the only record of what drove her out of the session.
+        // The abandoned path always worked because it dismisses the cover in
+        // the same update; the completed path is the one nobody exercised.
+        pendingSkips = skipped
     }
 
     /// Writes the mark, then tells Health.

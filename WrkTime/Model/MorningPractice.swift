@@ -101,8 +101,16 @@ enum MorningPractices {
     }
 
     static func done(on date: Date = .now, in context: ModelContext) -> Bool {
-        let day = Calendar.current.startOfDay(for: date)
-        return all(in: context).contains { $0.day == day }
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        // Both sides normalised, which `run` and the fortnight strip already
+        // did and this did not. `day` is stored as an absolute instant stamped
+        // in whatever zone she was in when she finished, so comparing it raw
+        // against a freshly computed midnight failed the moment she changed
+        // time zone: a practice done that morning in Los Angeles read as not
+        // done from New York, Today offered it again, and `record`'s guard let
+        // a second row through for a day that already had one.
+        return all(in: context).contains { calendar.startOfDay(for: $0.day) == day }
     }
 
     /// Records today's, once. Called twice in a day it does nothing the second

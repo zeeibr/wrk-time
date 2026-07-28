@@ -98,7 +98,10 @@ enum PlanRepair {
             }
 
             guard routine.moves.count != (session.routine?.moves.count ?? 0) else { continue }
-            session.routineData = try? JSONEncoder().encode(routine)
+            // `??` rather than a bare `try?`: a failed encode used to leave
+            // the session with its title and date and no routine at all, and
+            // Today falls straight through that to the rest-day copy.
+            session.routineData = (try? JSONEncoder().encode(routine)) ?? session.routineData
             summary.sessionsChanged += 1
             summary.slotsReplaced += abs(routine.moves.count - count)
         }
@@ -155,7 +158,7 @@ enum PlanRepair {
 
             var updated = routine
             updated.moves = repaired
-            session.routineData = try? JSONEncoder().encode(updated)
+            session.routineData = (try? JSONEncoder().encode(updated)) ?? session.routineData
             session.title = routine.name
             summary.sessionsChanged += 1
         }

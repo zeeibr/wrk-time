@@ -228,7 +228,18 @@ struct SignalsView: View {
 
             if walkTarget > 0 {
                 WalkBar(done: walkedThisWeek, target: walkTarget)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 10)
+
+                // The number she can act on today. The planner thinks in weeks
+                // because that is the unit a plan is written in, but nobody
+                // decides on a Tuesday morning how to spend a weekly total —
+                // the useful sentence is how long to be out for today, and how
+                // much of the week is still owed.
+                Text(dailyWalkNote)
+                    .font(.almanacBody)
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 10)
 
                 Text(walkNote)
                     .font(.almanacBodySmall)
@@ -282,6 +293,29 @@ struct SignalsView: View {
     /// It is stated here rather than beside the weight, because this is the
     /// number she can act on. It names walking and the eating window, and stops
     /// there — the app does not tell anyone what to eat.
+    /// "About 26 minutes a day", and what today still owes.
+    ///
+    /// Spread across the days **left in the week**, not across seven. A target
+    /// divided by seven on a Friday is a number that was already impossible on
+    /// Wednesday, and quietly reports a shortfall as a daily requirement. If
+    /// the week is already done it says so and asks for nothing.
+    private var dailyWalkNote: String {
+        let remaining = max(walkTarget - walkedThisWeek, 0)
+        guard remaining > 0 else { return "This week's walking is done." }
+
+        let calendar = Calendar.current
+        let weekEnd = calendar.dateInterval(of: .weekOfYear, for: .now)?.end ?? .now
+        // Today counts as one of them, so the last day of the week asks for
+        // what is left rather than dividing it by nothing.
+        let daysLeft = max(calendar.dateComponents([.day],
+                                                   from: calendar.startOfDay(for: .now),
+                                                   to: weekEnd).day ?? 1, 1)
+        let perDay = Int((Double(remaining) / Double(daysLeft)).rounded())
+
+        guard daysLeft > 1 else { return "\(remaining) minutes today finishes the week." }
+        return "About \(perDay) minutes a day for the rest of the week — \(remaining) still to go."
+    }
+
     private var walkNote: String {
         let base = "The sessions build and keep muscle; they are too short to move the scale. Walking is the part of the plan that does, alongside the eating window you set."
         guard walkedThisWeek < walkTarget else {

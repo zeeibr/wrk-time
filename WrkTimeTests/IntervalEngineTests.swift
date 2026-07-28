@@ -410,3 +410,30 @@ struct SavedRoutineCopyTests {
         #expect(routine.schedule.phases.filter(\.isRest).allSatisfy { $0.move == nil })
     }
 }
+
+@Suite("A clock that moves backwards")
+@MainActor
+struct BackwardClockTests {
+
+    @Test("A backward clock adjustment cannot strand the session with no phase")
+    func elapsedNeverGoesNegative() {
+        // `Date.now` is not monotonic. Turn off "Set Automatically" mid-session
+        // and move the clock back, and `elapsed` went negative:
+        // `index(atElapsed:)` guards `elapsed >= 0` and returned nil, so the
+        // count read 0:00, the caption read "Finished", the field held full,
+        // and the session never finished until real time caught up.
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine(), now: clock.provider, autoTick: false)
+        engine.start()
+        clock.advance(30)
+        engine.refresh()
+        #expect(engine.currentPhase != nil)
+
+        clock.advance(-300)
+        engine.refresh()
+
+        #expect(engine.elapsed == 0)
+        #expect(engine.currentPhase != nil, "the session lost its phase entirely")
+        #expect(engine.status == .running)
+    }
+}
