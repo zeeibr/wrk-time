@@ -78,6 +78,19 @@ struct ClaudePlanner: Sendable {
 
     var session: URLSession = .shared
 
+    /// A week, and what asking for it actually cost.
+    ///
+    /// Returned rather than left in a static. `lastUsage` was a
+    /// `nonisolated(unsafe)` written from a URLSession continuation and read on
+    /// the main actor with nothing serialising them — a real race, not merely a
+    /// wrong number — and it also lost a request: `plan` may send twice, each
+    /// send overwriting the other, while the caller read once. The weeks that
+    /// cost the most were the ones counted at half price.
+    struct Result {
+        var draft: PlanDraft
+        var usage: Usage
+    }
+
     /// Asks for a week, and asks again if the first answer is not usable.
     ///
     /// The repair pass exists because of what the first real call returned: a
@@ -90,7 +103,7 @@ struct ClaudePlanner: Sendable {
     /// Handing the model its own rejected answer and the reason is far more
     /// effective than re-asking blind, and one extra request is cheap next to
     /// a week that falls back to the offline planner.
-    func plan(_ context: PlanContext) async throws -> PlanDraft {
+    func plan(_ context: PlanContext) async throws -> Result {
         guard let key = KeychainStore.read(.claudeAPIKey) else { throw PlannerError.noKey }
 
         var messages: [[String: Any]] = [["role": "user", "content": context.prompt]]
@@ -100,10 +113,15 @@ struct ClaudePlanner: Sendable {
         // Settings while a request is in flight.
         let moveCount = Tuning.movesPerSession
 
+        // Every request this call makes, including the ones that come back
+        // unusable — a refusal and a truncation are both billed.
+        var usage = Usage()
+
         for attempt in 0..<Self.attempts {
             let (draft, raw) = try await send(messages: messages, key: key,
                                               sessionCount: context.pace.sessionsPerWeek,
-                                              moveCount: moveCount)
+                                              moveCount: moveCount,
+                                              usage: &usage)
 
             do {
                 _ = try PlanValidator.routines(from: draft)
@@ -121,7 +139,7 @@ struct ClaudePlanner: Sendable {
                     throw PlanValidator.Failure.nonsenseTiming(
                         "\"\(short.title)\" came back with \(short.moves.count) moves; it needs \(moveCount).")
                 }
-                return draft
+                return Result(draft: draft, usage: usage)
             } catch {
                 lastReason = (error as? LocalizedError)?.errorDescription ?? "\(error)"
                 guard attempt < Self.attempts - 1 else { break }
@@ -146,7 +164,8 @@ struct ClaudePlanner: Sendable {
     // MARK: - Request
 
     private func send(messages: [[String: Any]], key: String,
-                      sessionCount: Int, moveCount: Int) async throws -> (PlanDraft, String) {
+                      sessionCount: Int, moveCount: Int,
+                      usage: inout Usage) async throws -> (PlanDraft, String) {
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -201,6 +220,9 @@ struct ClaudePlanner: Sendable {
             throw PlannerError.http(status, Self.reason(from: data))
         }
 
+        // Counted before decoding, so a refusal or a truncation — both of
+        // which throw on the next line — still counts against the bill.
+        usage += Usage.read(data)
         return try Self.decode(data)
     }
 
@@ -242,22 +264,26 @@ struct ClaudePlanner: Sendable {
             return Usage(inputTokens: usage["input_tokens"] as? Int ?? 0,
                          outputTokens: usage["output_tokens"] as? Int ?? 0)
         }
+
+        /// Straight off the wire, for the one caller that has the bytes rather
+        /// than the parsed object.
+        static func read(_ data: Data) -> Usage {
+            guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return Usage() }
+            return read(object)
+        }
+
+        static func += (total: inout Usage, next: Usage) {
+            total.inputTokens += next.inputTokens
+            total.outputTokens += next.outputTokens
+        }
     }
 
-    /// What the most recent response cost. `decode` is nonisolated, so the
-    /// number is left here for the main-actor caller to record rather than
-    /// hopping actors in the middle of parsing.
-    nonisolated(unsafe) static var lastUsage = Usage()
 
     static func decode(_ data: Data) throws -> (PlanDraft, String) {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw PlannerError.malformed
         }
-        // Read before anything can throw, so a refused or truncated response
-        // still counts against the bill — those cost money too.
-        let usage = Usage.read(object)
-        defer { lastUsage = usage }
-
         switch object["stop_reason"] as? String {
         case "refusal":
             let details = object["stop_details"] as? [String: Any]

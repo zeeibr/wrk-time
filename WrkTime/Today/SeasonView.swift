@@ -188,6 +188,11 @@ struct SeasonView: View {
             guard let done = session.completedAt else { continue }
             let days = calendar.dateComponents([.day], from: first,
                                                to: calendar.startOfDay(for: done)).day ?? 0
+            // Integer division truncates toward zero, so the six days *before*
+            // a block began all mapped to week 0 — and nothing prunes a
+            // previous block's sessions from the query. A new block therefore
+            // opened with the last week of the old one already drawn on it.
+            guard days >= 0 else { continue }
             let week = days / 7
             if counts.indices.contains(week) { counts[week] += 1 }
         }

@@ -178,13 +178,21 @@ enum PlannerService {
         }
 
         do {
+            let result = try await planner.plan(snapshot)
+            PlanTrigger.record(result.usage)
+            // Recorded *after* the request, not before it.
+            //
+            // `lastAskedClaudeAt` is what `changedPreferences` measures against,
+            // so moving it before the call meant a request that failed on a 429
+            // still marked her opinions as seen. She would record "hip thrust
+            // hurt" on Sunday, the Monday run would fail, and the model would
+            // never be told — every following week stepping offline until the
+            // check-in weeks later.
             PlanTrigger.recordCall()
-            defer { PlanTrigger.record(ClaudePlanner.lastUsage) }
-            let generated = try await planner.plan(snapshot)
             // Parsing is not trusting. If the week breaks the kit or the
             // ceiling, it is discarded whole and the offline planner runs.
-            _ = try PlanValidator.routines(from: generated)
-            draft = generated
+            _ = try PlanValidator.routines(from: result.draft)
+            draft = result.draft
             source = .claude
         } catch {
             // The fallback honours her preferences too. A week written because

@@ -23,8 +23,21 @@ final class HealthSync {
         guard await health.requestAuthorization() else { return }
 
         let existing = (try? context.fetch(FetchDescriptor<WeightEntry>())) ?? []
-        let latest = existing.map(\.date).max()
-        let since = latest ?? Calendar.current.date(byAdding: .day, value: -90, to: .now) ?? .now
+        // The watermark is the latest reading **imported from Health**, not the
+        // latest entry of any kind. Counting her own typed weigh-ins closed the
+        // door on the backfill permanently and on the first launch: block setup
+        // inserts a manual entry at `.now`, so the very first import asked
+        // Health for readings since this instant and got nothing — and since
+        // the watermark only moves forward, no later run could ever reach back.
+        // Ninety days of scale history sat in Health, unread, while Signals and
+        // the projection stayed blank.
+        //
+        // It also fixed the recurring case: type a weight at 21:00, let the
+        // scale sync its 07:00 reading at 22:00, and that morning was skipped
+        // for good.
+        let floor = Calendar.current.date(byAdding: .day, value: -90, to: .now) ?? .now
+        let latest = existing.filter { $0.source == .health }.map(\.date).max()
+        let since = latest ?? floor
 
         let known = Set(existing.map(\.date))
         for reading in await health.weights(since: since) where !known.contains(reading.date) {

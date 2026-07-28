@@ -1339,6 +1339,14 @@ struct ClosedLibraryTests {
         // The failure this closes: the planner inventing a name the app then
         // had to guess the shape of.
         #expect(!offered.contains("Beam goblet squat"))
+
+        // And not a flow movement anywhere in it. The only place a generated
+        // move lands is the rotation, where it becomes a work phase and gets
+        // counted down at — so offering the spinal wave here was offering to
+        // program a practice as a forty-second set.
+        let flow = Set(MoveLibrary.flow.map(\.name))
+        #expect(Set(offered).isDisjoint(with: flow))
+        #expect(!flow.isEmpty, "the library has no flow movements to exclude")
     }
 
     @Test("A week naming a move that does not exist is rejected whole")
@@ -2181,5 +2189,78 @@ struct AuditRegressionTests {
 
         #expect(MovePreferences.all(in: fresh).count == 1)
         #expect(MorningPractices.all(in: fresh).count == 1)
+    }
+}
+
+@Suite("The audit's second tier")
+@MainActor
+struct AuditSecondTierTests {
+
+    @Test("A workout is never longer than the routine that produced it")
+    func healthDurationIsCapped() {
+        // Pause for a phone call and resume half an hour later, and wall-clock
+        // said a thirteen-minute routine was a forty-three-minute workout —
+        // every one of those minutes counting toward the Exercise ring. Same
+        // shape when the app is suspended and only discovers it finished on
+        // the way back.
+        let routine = IntervalRoutine(name: "Beam", work: 40, rest: 45, rounds: 8, moves: [])
+        let start = Date(timeIntervalSince1970: 0)
+        let total = routine.schedule.total
+        let cappedEnd = min(start.addingTimeInterval(3_600),
+                            start.addingTimeInterval(total))
+        #expect(cappedEnd.timeIntervalSince(start) == total)
+    }
+
+    @Test("The weight import watermark ignores her own typed entries")
+    func importWatermarkIsHealthOnly() {
+        // Block setup writes a manual entry at `.now`, so watermarking on the
+        // latest entry of any kind closed the ninety-day backfill on the very
+        // first launch — and it could never reopen, because the mark only
+        // moves forward.
+        let now = Date()
+        let entries = [
+            WeightEntry(date: now, pounds: 165, source: .manual),
+            WeightEntry(date: now.addingTimeInterval(-5 * 86_400), pounds: 166, source: .health)
+        ]
+        let watermark = entries.filter { $0.source == .health }.map(\.date).max()
+        #expect(watermark == now.addingTimeInterval(-5 * 86_400))
+        #expect(watermark != now)
+    }
+
+    @Test("Marks from before a block began are not counted as its first week")
+    func marksBeforeTheBlockAreNotWeekOne() {
+        // `dateComponents` returns a negative day count and integer division
+        // truncates toward zero, so the six days before a block started all
+        // landed in week 0 — a fresh block opening with the previous one's last
+        // week already drawn on it.
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        for daysBefore in 1...6 {
+            let done = calendar.date(byAdding: .day, value: -daysBefore, to: start)!
+            let days = calendar.dateComponents([.day], from: start,
+                                               to: calendar.startOfDay(for: done)).day ?? 0
+            #expect(days < 0, "day \(daysBefore) before the block read as \(days)")
+            #expect(days / 7 == 0, "and truncated into week 0, which is why the guard is on days")
+        }
+    }
+
+    @Test("Token counts add across a repair turn rather than replacing each other")
+    func usageAccumulates() {
+        var total = ClaudePlanner.Usage()
+        total += ClaudePlanner.Usage(inputTokens: 1_800, outputTokens: 4_000)
+        total += ClaudePlanner.Usage(inputTokens: 6_200, outputTokens: 3_500)
+        #expect(total.inputTokens == 8_000)
+        #expect(total.outputTokens == 7_500)
+        // A repaired week costs two requests and used to be recorded as one.
+        #expect(total.dollars > ClaudePlanner.Usage(inputTokens: 6_200, outputTokens: 3_500).dollars)
+    }
+
+    @Test("Usage is read straight off a response body")
+    func usageReadsRawData() {
+        let body = Data(#"{"usage":{"input_tokens":1234,"output_tokens":567}}"#.utf8)
+        let usage = ClaudePlanner.Usage.read(body)
+        #expect(usage.inputTokens == 1234)
+        #expect(usage.outputTokens == 567)
+        #expect(ClaudePlanner.Usage.read(Data("not json".utf8)) == ClaudePlanner.Usage())
     }
 }

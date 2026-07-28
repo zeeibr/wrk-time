@@ -633,7 +633,14 @@ struct TodayView: View {
         sessions.first { Calendar.current.isDateInToday($0.scheduledFor) && !$0.isComplete }
     }
 
-    private var completedCount: Int { sessions.filter(\.isComplete).count }
+    /// Marks in **this** block, which is what the figures beside it count.
+    ///
+    /// This was every finished session ever stored, shown over
+    /// `marksPerWeek * weekCount` — a denominator for one block. So the first
+    /// day of a fresh twelve-week block read "47 / 60" while Season, which sums
+    /// the same block's weeks, read "Not yet drawn" on the same afternoon. Two
+    /// screens describing one number, disagreeing.
+    private var completedCount: Int { marksByWeek.reduce(0, +) }
 
     private var keptToday: [LoggedSet] {
         loggedSets.filter { Calendar.current.isDateInToday($0.date) }
@@ -662,6 +669,11 @@ struct TodayView: View {
             guard let done = session.completedAt else { continue }
             let days = calendar.dateComponents([.day], from: first,
                                                to: calendar.startOfDay(for: done)).day ?? 0
+            // Integer division truncates toward zero, so the six days *before*
+            // a block began all mapped to week 0 — and nothing prunes a
+            // previous block's sessions from the query. A new block therefore
+            // opened with the last week of the old one already drawn on it.
+            guard days >= 0 else { continue }
             let week = days / 7
             if counts.indices.contains(week) { counts[week] += 1 }
         }

@@ -252,7 +252,16 @@ enum MoveLibrary {
 
     /// Every move by name, for the places that need the whole closed set:
     /// the planner's schema, the validator, and the plate lookup.
-    static let names: [String] = all.map(\.name)
+    /// The names the planner may put in a **rotation**, which is strength only.
+    ///
+    /// This was every move in the library, flow included, and the only place a
+    /// generated move can land is the rotation — where `RoutineSchedule` makes
+    /// it a work phase and counts it down with work cues and haptics. So a
+    /// spinal wave could be programmed as a forty-second set, which is the one
+    /// thing `MoveKind` exists to prevent. The flow movements reach a session
+    /// through `WarmUp` and the morning practice, neither of which asks the
+    /// model for anything.
+    static let names: [String] = all.filter { $0.kind == .strength }.map(\.name)
 
     static func moves(for equipment: Equipment) -> [Move] {
         all.filter { $0.equipment == equipment && $0.kind == .strength }

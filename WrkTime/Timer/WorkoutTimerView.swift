@@ -113,6 +113,21 @@ struct WorkoutTimerView: View {
         // position is for the start of a workout; she is already mid-round and
         // counting her in again would be theatre.
         if let resuming {
+            // Re-checked here, not only where the card was built. `load()` runs
+            // once in Today's `.task`, and a running session's clock keeps
+            // moving while the card sits on screen — so a session with three
+            // minutes left when the app opened could be tapped forty minutes
+            // later, at which point `restore` fell through to `start()` and ran
+            // the *entire* routine again from round one, still carrying the
+            // original start date. Finishing that replay earned a mark and
+            // wrote an hour-long workout to Health. A session with nothing left
+            // to run is discarded, which is what recovery has always promised.
+            guard !resuming.ranOut(), !resuming.isStale() else {
+                stage = .ended
+                ActiveSessionStore.clear()
+                dismiss()
+                return
+            }
             sessionStart = resuming.startedAt
             stage = .running
             SessionCues(audio: audio).bind(to: engine)
@@ -290,7 +305,22 @@ struct WorkoutTimerView: View {
             onEnd(.abandoned(skipped: engine.skippedMoves))
             return
         }
-        onEnd(.completed(start: start, end: .now, skipped: engine.skippedMoves))
+        // Capped at the routine's own length rather than reported as `.now`.
+        //
+        // Two ways wall-clock lied. Pause for a phone call and resume half an
+        // hour later, and a thirteen-minute routine wrote a forty-three-minute
+        // workout to Health — every one of those minutes counting toward the
+        // Exercise ring. And because the engine only discovers it has finished
+        // when something calls `refresh()`, a session left running while the
+        // app was suspended was stamped at the moment she came back, which
+        // could be an hour after the last round ended.
+        //
+        // The floor is the same guard from the other direction: skipping to the
+        // end is a real ending, and the elapsed clock is the honest length of
+        // it, so the cap only ever removes time nobody was working.
+        let ceiling = start.addingTimeInterval(engine.schedule.total)
+        onEnd(.completed(start: start, end: min(.now, ceiling),
+                         skipped: engine.skippedMoves))
     }
 
     @Environment(\.scenePhase) private var scenePhase
