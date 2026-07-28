@@ -1539,3 +1539,108 @@ struct RestDayOfferTests {
         #expect(week(of: finished) == 1)
     }
 }
+
+@Suite("Written-out sequences")
+struct IntervalSequenceTests {
+
+    /// Her example, verbatim: 30 on, 30 rest, 20 on, 15 rest, 10 on, 10 on,
+    /// 10 on, 30 rest. Note the three work intervals in a row.
+    private let hers: [IntervalStep] = [
+        .work(30), .rest(30), .work(20), .rest(15),
+        .work(10), .work(10), .work(10), .rest(30)
+    ]
+
+    private var routine: IntervalRoutine {
+        IntervalRoutine(name: "Ladder", work: 40, rest: 30, rounds: 8,
+                        moves: [MoveLibrary.all[0], MoveLibrary.all[1]])
+            .following(hers)
+    }
+
+    @Test("The sequence is followed exactly, in the order it was written")
+    func followsTheOrder() {
+        let phases = routine.schedule.phases
+        #expect(phases.map(\.kind) == [.work, .rest, .work, .rest, .work, .work, .work, .rest])
+        #expect(phases.map(\.duration) == [30, 30, 20, 15, 10, 10, 10, 30])
+    }
+
+    @Test("Work intervals in a row are allowed — nothing assumes alternation")
+    func consecutiveWork() {
+        let phases = routine.schedule.phases
+        #expect(phases[4].isWork && phases[5].isWork && phases[6].isWork)
+        // And they are numbered in sequence, so the header counts truthfully.
+        #expect(phases.filter(\.isWork).map(\.round) == [1, 2, 3, 4, 5])
+    }
+
+    @Test("Rounds means work intervals, whatever shape the routine is")
+    func roundsCounted() {
+        #expect(routine.roundCount == 5)
+        // The fixed shape is untouched by any of this.
+        let fixed = IntervalRoutine(name: "Fixed", work: 40, rest: 30, rounds: 8, moves: [])
+        #expect(fixed.roundCount == 8)
+    }
+
+    @Test("The total is the honest sum of what was written")
+    func total() {
+        #expect(routine.totalDuration == 30 + 30 + 20 + 15 + 10 + 10 + 10 + 30)
+    }
+
+    @Test("Moves cycle through the work intervals, skipping the rests")
+    func movesFollowWork() {
+        let onWork = routine.schedule.phases.filter(\.isWork).map(\.move?.name)
+        let a = MoveLibrary.all[0].name, b = MoveLibrary.all[1].name
+        #expect(onWork == [a, b, a, b, a])
+        #expect(routine.schedule.phases.filter(\.isRest).allSatisfy { $0.move == nil })
+    }
+
+    @Test("A sequence cannot route around the sixty-second ceiling")
+    func ceilingHolds() {
+        let over = IntervalRoutine(name: "Over", work: 40, rest: 30, rounds: 1, moves: [])
+            .following([.work(90), .rest(400)])
+        #expect(over.schedule.phases[0].duration == IntervalRoutine.workCeiling)
+        // Rest has no ceiling — a long rest is a choice, not a hazard.
+        #expect(over.schedule.phases[1].duration == 400)
+    }
+
+    @Test("A sequence still opens with its practice")
+    func warmUpComesFirst() {
+        let warmed = routine.warmingUp(with: Array(MoveLibrary.flow.prefix(3)))
+        let phases = warmed.schedule.phases
+        #expect(phases.prefix(3).allSatisfy { $0.isFlow })
+        #expect(phases[3].isWork)
+        #expect(warmed.roundCount == 5)
+    }
+
+    @Test("It runs to the end like any other routine")
+    @MainActor
+    func runs() {
+        let clock = TestClock()
+        let engine = IntervalEngine(routine: routine, now: clock.provider, autoTick: false)
+        var reason: IntervalEngine.EndReason?
+        engine.onFinish = { reason = $0 }
+        engine.start()
+        clock.advance(routine.totalDuration + 1)
+        engine.refresh()
+        #expect(reason == .completed)
+    }
+
+    @Test("A routine stored before sequences existed still decodes")
+    func decodesLegacy() throws {
+        let legacy = """
+        {"id":"\(UUID().uuidString)","name":"Old","work":40,"rest":45,"rounds":8,
+         "dropsFinalRest":true,"moves":[]}
+        """
+        let decoded = try JSONDecoder().decode(IntervalRoutine.self, from: Data(legacy.utf8))
+        #expect(!decoded.isSequence)
+        #expect(decoded.roundCount == 8)
+        #expect(decoded.schedule.workPhaseCount == 8)
+    }
+
+    @Test("A sequence round-trips")
+    func roundTrips() throws {
+        let decoded = try JSONDecoder().decode(
+            IntervalRoutine.self, from: JSONEncoder().encode(routine))
+        #expect(decoded.sequence.map(\.seconds) == hers.map(\.seconds))
+        #expect(decoded.sequence.map(\.isWork) == hers.map(\.isWork))
+        #expect(decoded.totalDuration == routine.totalDuration)
+    }
+}

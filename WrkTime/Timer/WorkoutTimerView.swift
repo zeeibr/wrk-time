@@ -368,7 +368,7 @@ struct WorkoutTimerView: View {
                 moveBlock(move, eyebrow: phase.isFlow ? phaseWord : nil,
                           foreground: foreground, secondary: secondary)
             } else if let next = engine.nextPhase, let move = next.move {
-                moveBlock(move, eyebrow: next.isFlow && engine.routine.rounds > 0
+                moveBlock(move, eyebrow: next.isFlow && engine.routine.roundCount > 0
                                           ? "Warm-up next" : "Next up",
                           foreground: foreground, secondary: secondary)
             }
@@ -410,7 +410,7 @@ struct WorkoutTimerView: View {
                 .padding(.top, 8)
 
             HStack(spacing: 0) {
-                completionFigure("\(engine.routine.rounds)", "Rounds")
+                completionFigure("\(engine.routine.roundCount)", "Rounds")
                 completionFigure(engine.schedule.total.durationString, "Elapsed")
             }
             .padding(.top, 26)
@@ -450,7 +450,7 @@ struct WorkoutTimerView: View {
             "\(word(n).capitalized) \(n == 1 ? singular : plural)."
         }
 
-        let rounds = engine.routine.rounds
+        let rounds = engine.routine.roundCount
         let minutes = Int((engine.schedule.total / 60).rounded())
         // A routine can be shorter than a minute, and "Zero minutes" is not a
         // thing to tell someone who just finished one.
@@ -618,7 +618,7 @@ struct WorkoutTimerView: View {
         // Never "left of forty seconds". The practice is timed so the session
         // moves along, not so she races it, and the caption is the one place
         // the screen can say which of those it means.
-        case .flow: return engine.routine.rounds > 0 ? "warm-up — take your time"
+        case .flow: return engine.routine.roundCount > 0 ? "warm-up — take your time"
                                                      : "the practice — take your time"
         case .rest: return "rest — walk it off"
         case .work: return "left of \(Int(phase.duration.rounded())) seconds"
@@ -627,15 +627,15 @@ struct WorkoutTimerView: View {
 
     private var positionLine: String {
         guard let phase = engine.currentPhase else {
-            return "Round \(engine.routine.rounds) / \(engine.routine.rounds)"
+            return "Round \(engine.routine.roundCount) / \(engine.routine.roundCount)"
         }
-        return phase.position(rounds: engine.routine.rounds,
+        return phase.position(rounds: engine.routine.roundCount,
                               flowCount: engine.schedule.flowPhaseCount)
     }
 
     private var phaseWord: String {
         switch engine.currentPhase?.kind {
-        case .flow: engine.routine.rounds > 0 ? "Warm-up" : "Movement"
+        case .flow: engine.routine.roundCount > 0 ? "Warm-up" : "Movement"
         case .rest: "Rest"
         case .work, nil: "Work"
         }

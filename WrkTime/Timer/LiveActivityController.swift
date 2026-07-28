@@ -20,7 +20,7 @@ final class LiveActivityController {
 
         let attributes = WorkoutActivityAttributes(
             routineName: routine.name,
-            totalRounds: routine.rounds
+            totalRounds: routine.roundCount
         )
 
         activity = try? Activity.request(
@@ -92,7 +92,7 @@ final class LiveActivityController {
         return .init(
             phase: kind,
             round: phase.round,
-            position: phase.position(rounds: engine.routine.rounds,
+            position: phase.position(rounds: engine.routine.roundCount,
                                      flowCount: engine.schedule.flowPhaseCount),
             moveName: phase.move?.name ?? kind.label,
             phaseEnds: ends,

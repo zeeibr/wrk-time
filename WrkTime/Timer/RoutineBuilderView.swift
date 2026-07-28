@@ -135,6 +135,9 @@ struct RoutineBuilderView: View {
     @State private var rounds = 8
     @State private var moves: [Move] = []
     @State private var warmUp: [Move] = []
+    /// A written-out sequence. Empty means the routine is the fixed shape
+    /// above; one step or more and the sequence takes over entirely.
+    @State private var steps: [IntervalStep] = []
     @State private var picking = false
     @Environment(\.displayScale) private var displayScale
 
@@ -142,6 +145,7 @@ struct RoutineBuilderView: View {
         IntervalRoutine(name: name.isEmpty ? "Untitled routine" : name,
                         work: work, rest: rest, rounds: rounds, moves: moves)
             .warmingUp(with: warmUp)
+            .following(steps)
     }
 
     var body: some View {
@@ -234,7 +238,32 @@ struct RoutineBuilderView: View {
                         .buttonStyle(.plain)
                     }
 
-                    IndexedSection(number: "03", label: "Total") {
+                    IndexedSection(number: "03", label: "Sequence") {
+                        SectionHead(title: "Write it out",
+                                    note: steps.isEmpty ? "optional" : draft.totalDuration.durationString)
+                            .padding(.bottom, 4)
+
+                        if steps.isEmpty {
+                            Text("Leave this empty and the routine is the shape above — the same work and rest, every round. Add steps and it follows them instead, each its own length, in the order you write them. Rests are optional: three work intervals in a row is a thing you can ask for.")
+                                .font(.almanacBodySmall)
+                                .foregroundStyle(Palette.mute)
+                                .padding(.vertical, 10)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                                stepRow(index: index, step: step)
+                            }
+                            Rule()
+                        }
+
+                        HStack(spacing: 8) {
+                            addStep("Add work", isWork: true)
+                            addStep("Add rest", isWork: false)
+                        }
+                        .padding(.top, 12)
+                    }
+
+                    IndexedSection(number: "04", label: "Total") {
                         Rule(firm: true)
                         HStack(alignment: .lastTextBaseline) {
                             Text(draft.totalDuration.durationString)
@@ -280,9 +309,68 @@ struct RoutineBuilderView: View {
     }
 
     private var totalNote: String {
-        let shape = "\(rounds) × \(Int(work))/\(Int(rest))"
-        guard !warmUp.isEmpty else { return "\(shape) · final rest dropped" }
+        let shape = steps.isEmpty
+            ? "\(rounds) × \(Int(work))/\(Int(rest)) · final rest dropped"
+            : "\(draft.roundCount) work intervals in \(steps.count) steps"
+        guard !warmUp.isEmpty else { return shape }
         return "\(warmUp.count) to warm up, then \(shape)"
+    }
+
+    /// One step of a written-out sequence.
+    private func stepRow(index: Int, step: IntervalStep) -> some View {
+        VStack(spacing: 0) {
+            Rule()
+            HStack(spacing: 9) {
+                Text(String(format: "%02d", index + 1))
+                    .almanacLabel(Palette.mute, small: true)
+                    .tabular()
+                Text(step.isWork ? "Work" : "Rest")
+                    .font(.almanacBody)
+                    .foregroundStyle(step.isWork ? Palette.ink : Palette.mute)
+                    .frame(width: 46, alignment: .leading)
+                Spacer(minLength: 8)
+                Figure(value: "\(Int(step.clamped))", unit: "sec", size: 19)
+                HStack(spacing: 6) {
+                    stepperButton("minus") { adjust(index, by: -5) }
+                    stepperButton("plus") { adjust(index, by: 5) }
+                }
+                .padding(.leading, 6)
+            }
+            .padding(.vertical, 7)
+        }
+        .removable { steps.remove(at: index) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(index + 1), \(step.isWork ? "work" : "rest")")
+        .accessibilityValue("\(Int(step.clamped)) seconds")
+        .accessibilityAdjustableAction { direction in
+            adjust(index, by: direction == .increment ? 5 : -5)
+        }
+    }
+
+    private func adjust(_ index: Int, by delta: TimeInterval) {
+        guard steps.indices.contains(index) else { return }
+        let ceiling = steps[index].isWork ? IntervalRoutine.workCeiling : 300
+        steps[index].seconds = min(max(steps[index].seconds + delta, 5), ceiling)
+    }
+
+    private func addStep(_ title: String, isWork: Bool) -> some View {
+        Button {
+            // Picks up where the last one of its kind left off, so writing
+            // "30 on, 30 rest, 20 on" is three taps and two adjustments rather
+            // than starting from the same number every time.
+            let last = steps.last { $0.isWork == isWork }?.seconds
+            steps.append(isWork ? .work(last ?? work) : .rest(last ?? rest))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
+                Text(title).font(.almanacBodySmall)
+            }
+            .foregroundStyle(isWork ? Palette.ink : Palette.moss)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .overlay(Rectangle().strokeBorder(Palette.ruleFirm, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func stepper(title: String, value: Int, unit: String?, note: String?,

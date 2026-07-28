@@ -107,7 +107,7 @@ struct SessionCues {
 
     func bind(to engine: IntervalEngine) {
         Haptics.prepare()
-        let lastRound = engine.routine.rounds
+        let lastRound = engine.routine.roundCount
 
         engine.onPhaseChange = { phase in
             guard let phase else { return }

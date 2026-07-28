@@ -70,6 +70,10 @@ about a week is the planner's call.
 - **A rest day is not a locked door.** It states the plan's intent and then
   offers whatever is still available: a session missed earlier this week first,
   otherwise the next one early. Offered, never urged.
+- **A routine can be a fixed shape or a written-out sequence.** `IntervalStep`
+  says what it is, so nothing assumes work and rest alternate — three work
+  intervals in a row is a thing she can ask for. `roundCount` is the number of
+  work intervals either way; never read `rounds` for display.
 - **A routine may have no moves.** That is a plain interval timer, not an
   unfinished routine.
 - **Fasting is an input, not a feature.** Stats stay visible; it never gets a

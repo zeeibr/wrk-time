@@ -58,6 +58,32 @@ struct Move: Identifiable, Hashable, Codable {
     var equipmentLabel: String { equipment.label(forLoad: loadPounds) }
 }
 
+/// One stretch of a hand-built sequence.
+///
+/// A routine can be a fixed shape — so many rounds of so much work against so
+/// much rest — or a written-out sequence where every interval is its own
+/// length. The second is what "30 on, 30 rest, 20 on, 15 rest, 10 on, 10 on,
+/// 10 on, 30 rest" needs, and note that it has three work intervals in a row:
+/// a step says what it is, so nothing here assumes work and rest alternate.
+struct IntervalStep: Identifiable, Hashable, Codable, Sendable {
+    var id: UUID = UUID()
+    var isWork: Bool
+    var seconds: TimeInterval
+
+    static func work(_ seconds: TimeInterval) -> IntervalStep {
+        IntervalStep(isWork: true, seconds: seconds)
+    }
+    static func rest(_ seconds: TimeInterval) -> IntervalStep {
+        IntervalStep(isWork: false, seconds: seconds)
+    }
+
+    /// The same ceiling the fixed shape has, enforced here so a sequence cannot
+    /// route around it.
+    var clamped: TimeInterval {
+        isWork ? min(seconds, IntervalRoutine.workCeiling) : max(seconds, 0)
+    }
+}
+
 /// A self-guided interval routine: fixed work and rest, a rotation of moves,
 /// and a number of rounds. This is also the shape the planner emits, so a
 /// generated session and a hand-built one run through the same engine.
@@ -86,6 +112,20 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     var warmUpMoves: [Move]?
     var warmUpSecondsRaw: TimeInterval?
 
+    /// A written-out sequence, when the routine is not a fixed shape.
+    ///
+    /// Optional for the same reason the warm-up is: routines are on disk as
+    /// JSON without this key, and the synthesized decoder throws on a missing
+    /// non-optional one. Empty and nil both mean "use work, rest and rounds".
+    var steps: [IntervalStep]?
+
+    var sequence: [IntervalStep] { steps ?? [] }
+    var isSequence: Bool { !sequence.isEmpty }
+
+    /// How many work intervals this routine holds, however it is shaped. The
+    /// header counts against this, so "Round 3 / 7" is true of a sequence too.
+    var roundCount: Int { isSequence ? sequence.filter(\.isWork).count : rounds }
+
     var warmUp: [Move] { warmUpMoves ?? [] }
     /// How long each flow movement runs. Longer than a work interval on
     /// purpose: this is a practice, and forty seconds of arm swings is barely
@@ -97,6 +137,13 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     static let workCeiling: TimeInterval = 60
 
     var clampedWork: TimeInterval { min(work, Self.workCeiling) }
+
+    /// The same routine as a written-out sequence.
+    func following(_ steps: [IntervalStep]) -> IntervalRoutine {
+        var copy = self
+        copy.steps = steps.isEmpty ? nil : steps
+        return copy
+    }
 
     /// The same routine with a flow practice on the front.
     func warmingUp(with moves: [Move], seconds: TimeInterval = WarmUp.seconds) -> IntervalRoutine {
@@ -178,6 +225,31 @@ struct RoutineSchedule: Equatable {
             built.append(Phase(kind: .flow, round: position + 1, move: move,
                                duration: flowLength, start: cursor, end: cursor + flowLength))
             cursor += flowLength
+        }
+
+        // A written-out sequence: every interval its own length, in the order
+        // she wrote them, with no assumption that work and rest alternate.
+        // Moves are taken from the rotation in turn as work intervals arrive,
+        // exactly as rounds do.
+        if routine.isSequence {
+            var round = 0
+            for step in routine.sequence {
+                let length = step.clamped
+                guard length > 0 else { continue }
+                if step.isWork {
+                    round += 1
+                    let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
+                    built.append(Phase(kind: .work, round: round, move: move,
+                                       duration: length, start: cursor, end: cursor + length))
+                } else {
+                    built.append(Phase(kind: .rest, round: max(round, 1), move: nil,
+                                       duration: length, start: cursor, end: cursor + length))
+                }
+                cursor += length
+            }
+            phases = built
+            total = cursor
+            return
         }
 
         // A routine may be nothing but its practice — that is the morning
