@@ -1816,3 +1816,105 @@ struct RotationResizeTests {
         #expect(planned.routine?.moves.isEmpty == true)
     }
 }
+
+@Suite("When the model is worth asking", .serialized)
+@MainActor
+struct PlanTriggerTests {
+
+    private func store() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Store.schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    private func block(in context: ModelContext, startingDaysAgo days: Int = 21) -> Block {
+        let block = Block(startDate: Date.now.addingTimeInterval(-Double(days) * 86_400),
+                          goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+        return block
+    }
+
+    private func session(_ daysAgo: Int, done: Bool, on block: Block, in context: ModelContext) {
+        let routine = IntervalRoutine(name: "S", work: 40, rest: 45, rounds: 8, moves: [])
+        let s = PlannedSession(scheduledFor: Date.now.addingTimeInterval(-Double(daysAgo) * 86_400),
+                               title: "S", routine: routine)
+        if done { s.completedAt = .now }
+        s.block = block
+        context.insert(s)
+    }
+
+    /// Without a key the question never arises — the offline planner is the
+    /// plan, not a fallback.
+    @Test("With no key set it never asks")
+    func noKey() throws {
+        let context = try store()
+        let block = block(in: context)
+        let decision = PlanTrigger.decide(week: 3, of: block, in: context, hasKey: false)
+        #expect(!decision.asksClaude)
+        #expect(decision.reason.contains("No key"))
+    }
+
+    @Test("A clean week steps on rather than being written again")
+    func cleanWeekSteps() throws {
+        let context = try store()
+        let block = block(in: context)
+        session(3, done: true, on: block, in: context)
+        session(5, done: true, on: block, in: context)
+        UserDefaults.standard.set(Date.now, forKey: PlanTrigger.Memo.lastAsked)
+        defer { UserDefaults.standard.removeObject(forKey: PlanTrigger.Memo.lastAsked) }
+
+        // Week 3 is not a check-in week and nothing changed.
+        let decision = PlanTrigger.decide(week: 3, of: block, in: context, hasKey: true)
+        #expect(!decision.asksClaude)
+        #expect(decision.reason.contains("Nothing changed"))
+    }
+
+    @Test("A missed session is exactly what the model is for")
+    func missedAsks() throws {
+        let context = try store()
+        let block = block(in: context)
+        session(2, done: false, on: block, in: context)
+        UserDefaults.standard.set(Date.now, forKey: PlanTrigger.Memo.lastAsked)
+        defer { UserDefaults.standard.removeObject(forKey: PlanTrigger.Memo.lastAsked) }
+
+        let decision = PlanTrigger.decide(week: 3, of: block, in: context, hasKey: true)
+        #expect(decision.asksClaude)
+        #expect(decision.reason.contains("undone"))
+    }
+
+    @Test("Week one is always written fresh")
+    func weekOneAsks() throws {
+        let context = try store()
+        let block = block(in: context, startingDaysAgo: 0)
+        #expect(PlanTrigger.decide(week: 1, of: block, in: context, hasKey: true).asksClaude)
+    }
+
+    @Test("A check-in lands every fourth week so it cannot drift")
+    func checkInWeeks() throws {
+        let context = try store()
+        let block = block(in: context)
+        UserDefaults.standard.set(Date.now, forKey: PlanTrigger.Memo.lastAsked)
+        defer { UserDefaults.standard.removeObject(forKey: PlanTrigger.Memo.lastAsked) }
+
+        for week in [5, 9] {
+            #expect(PlanTrigger.decide(week: week, of: block, in: context, hasKey: true).asksClaude,
+                    "week \(week) should be a check-in")
+        }
+    }
+
+    @Test("Over twelve weeks this is a handful of requests, not twelve")
+    func costOverABlock() throws {
+        // The point of the whole thing, stated as an assertion: a block where
+        // she turns up is a few calls, not one a week.
+        let context = try store()
+        let block = block(in: context)
+        for day in 1...13 { session(day, done: true, on: block, in: context) }
+        UserDefaults.standard.set(Date.now, forKey: PlanTrigger.Memo.lastAsked)
+        defer { UserDefaults.standard.removeObject(forKey: PlanTrigger.Memo.lastAsked) }
+
+        let asks = (1...12).filter {
+            PlanTrigger.decide(week: $0, of: block, in: context, hasKey: true).asksClaude
+        }
+        #expect(asks.count <= 5, "a clean block asked \(asks.count) times")
+    }
+}

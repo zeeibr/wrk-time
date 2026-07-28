@@ -57,6 +57,10 @@ enum PlannerService {
         /// Carries why, so Settings can say what happened once rather than
         /// leaving the reader to wonder why the week reads generically.
         case offline(String?)
+        /// Written from the plan's own rules **on purpose** rather than because
+        /// something failed. Kept apart from `offline` so the copy can say the
+        /// difference: one is a fallback, the other is thrift.
+        case stepped(String)
     }
 
     struct Outcome {
@@ -77,6 +81,7 @@ enum PlannerService {
         static let failure = "lastPlanFailure"
         static let weekNumber = "lastPlanWeek"
         static let walkMinutes = "lastPlanWalkMinutes"
+        static let steppedReason = "lastPlanStepped"
 
         static var lastExplanation: String? {
             let text = UserDefaults.standard.string(forKey: explanation)
@@ -96,6 +101,10 @@ enum PlannerService {
             let reason: String? = if case .offline(let note) = outcome.source,
                                      KeychainStore.has(.claudeAPIKey) { note } else { nil }
             defaults.set(reason ?? "", forKey: failure)
+
+            // Said separately from a failure, because it is not one.
+            let stepped: String? = if case .stepped(let note) = outcome.source { note } else { nil }
+            defaults.set(stepped ?? "", forKey: steppedReason)
         }
     }
 
@@ -126,9 +135,15 @@ enum PlannerService {
     }
 
     /// Plans `weekNumber` (1-based) of `block` and writes it to the store.
+    /// Plans `weekNumber` (1-based) of `block` and writes it to the store.
+    ///
+    /// `force` bypasses the decision about whether the model is worth asking —
+    /// it is what the Rewrite button in Settings uses, because that is her
+    /// asking directly.
     static func planWeek(_ weekNumber: Int,
                          of block: Block,
                          in context: ModelContext,
+                         force: Bool = false,
                          planner: ClaudePlanner = ClaudePlanner()) async -> Outcome {
         // Fetched here rather than inside `context(for:)` because Health is
         // async and the snapshot is not.
@@ -145,7 +160,25 @@ enum PlannerService {
         var draft: PlanDraft
         var source: Source
 
+        // Ask the model when there is something to adapt to. A clean week with
+        // nothing new to say produces the same shape either way, and the
+        // progression itself is arithmetic the app already does.
+        let decision = force
+            ? PlanTrigger.Decision(asksClaude: true, reason: "You asked for this week to be written again.")
+            : PlanTrigger.decide(week: weekNumber, of: block, in: context)
+
+        guard decision.asksClaude else {
+            let draft = OfflinePlanner.week(weekNumber, pace: block.pace, avoiding: excluded)
+            let written = write(routines(from: draft), weekNumber: weekNumber, of: block,
+                                avoiding: excluded, in: context)
+            let outcome = Outcome(explanation: draft.explanation, source: .stepped(decision.reason),
+                                  sessionsWritten: written, walkMinutes: draft.walkMinutes)
+            Memo.record(outcome, week: weekNumber)
+            return outcome
+        }
+
         do {
+            PlanTrigger.recordCall()
             let generated = try await planner.plan(snapshot)
             // Parsing is not trusting. If the week breaks the kit or the
             // ceiling, it is discarded whole and the offline planner runs.
@@ -174,6 +207,11 @@ enum PlannerService {
                               sessionsWritten: written, walkMinutes: draft.walkMinutes)
         Memo.record(outcome, week: weekNumber)
         return outcome
+    }
+
+    /// Validated routines, or an empty week rather than a bad one.
+    private static func routines(from draft: PlanDraft) -> [(dayOffset: Int, routine: IntervalRoutine)] {
+        (try? PlanValidator.routines(from: draft)) ?? []
     }
 
     // MARK: - Store

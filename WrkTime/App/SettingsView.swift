@@ -258,6 +258,14 @@ struct SettingsView: View {
                     }
 
                     IndexedSection(number: "05", label: "Week") {
+                        SectionHead(title: "Requests so far", note: "\(PlanTrigger.callsMade)")
+                            .padding(.bottom, 10)
+                        Text("Claude is asked when there is something to adapt to — a session missed, an opinion recorded, or a check-in every \(PlanTrigger.everyNWeeks) weeks. A clean week steps on from the last one for nothing, because the progression is arithmetic the app already does. Rewriting below always asks.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 18)
+
                         SectionHead(title: "Rewrite this week", note: planNote)
                             .padding(.bottom, 10)
 
@@ -368,7 +376,10 @@ struct SettingsView: View {
         planResult = nil
 
         Task {
-            let outcome = await PlannerService.planWeek(block.currentWeek, of: block, in: context)
+            // Pressing the button is her asking directly, so it always asks
+            // Claude rather than deciding the week does not need it.
+            let outcome = await PlannerService.planWeek(block.currentWeek, of: block,
+                                                        in: context, force: true)
             replanning = false
 
             switch outcome.source {
@@ -379,6 +390,9 @@ struct SettingsView: View {
                 // Only a failure if she was expecting Claude to answer.
                 planFailed = KeychainStore.has(.claudeAPIKey)
                 planResult = reason ?? "Written from the plan's own rules."
+            case .stepped(let reason):
+                planFailed = false
+                planResult = reason
             }
         }
     }

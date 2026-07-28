@@ -30,7 +30,20 @@ through the offline fallback because no key was set, and `ClaudePlanner`'s
 response handling is tested against recorded response shapes rather than real
 ones. The first real call is the outstanding verification.
 
-## The two planners
+## Model usage
+
+**The model is for adaptation, not arithmetic.** Progression — rest shortening,
+rounds climbing, work lengthening toward the ceiling — is arithmetic
+`OfflinePlanner` does correctly and for nothing. Claude adds judgement about
+what *changed*: a session missed, an opinion recorded, a trend that turned.
+
+`PlanTrigger` decides. A clean week steps on from the last one; a week with
+something to adapt to is written. A check-in lands every fourth week so a long
+clean run cannot drift. Pressing Rewrite always asks — that is her asking.
+
+Before reaching for the model, ask whether the answer is arithmetic. Resizing a
+rotation, substituting a ruled-out move, building the warm-up and the morning
+practice are all local and free, and each was moved there deliberately.
 
 `OfflinePlanner` is not a degraded mode — it is the floor the app stands on,
 and every failure path in `ClaudePlanner` lands there. A week is never blocked

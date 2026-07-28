@@ -141,7 +141,15 @@ struct ClaudePlanner: Sendable {
             // Thinking is on by default on Opus 5 and `max_tokens` caps thinking
             // and text together, so this is sized for both rather than for the
             // few hundred tokens of JSON that come out the far end.
-            "max_tokens": 16_000,
+            //
+            // Down from 16k. Thinking is what this call actually spends, and
+            // the schema now does most of the work it used to be spent on:
+            // names, loads, rounds, work, rest and days are all closed sets, so
+            // there is far less to deliberate over. A week is comfortably under
+            // this; if one ever is not, `stop_reason` says `max_tokens` and the
+            // offline planner writes the week rather than a truncated one being
+            // trusted.
+            "max_tokens": 8_000,
             "system": Self.systemPrompt,
             "thinking": ["type": "adaptive"],
             "output_config": [
