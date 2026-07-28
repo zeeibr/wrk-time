@@ -17,6 +17,17 @@ struct SettingsView: View {
 
     /// Writes the setting, then reads back what it actually took, so a value
     /// that hits a bound shows the bound rather than what was asked for.
+    /// What the planner has actually cost, from the responses rather than an
+    /// estimate. Shown to the cent because a rounded number invites the
+    /// assumption that it is approximate in other ways too.
+    private var usageNote: String {
+        let calls = PlanTrigger.callsMade
+        guard calls > 0 else { return "None yet" }
+        let spent = PlanTrigger.spent
+        let cost = String(format: "$%.2f", spent.dollars)
+        return "\(calls) · \(cost)"
+    }
+
     private func storeMoves(_ value: Int) {
         Tuning.movesPerSession = value
         movesPerSession = Tuning.movesPerSession
@@ -258,7 +269,7 @@ struct SettingsView: View {
                     }
 
                     IndexedSection(number: "05", label: "Week") {
-                        SectionHead(title: "Requests so far", note: "\(PlanTrigger.callsMade)")
+                        SectionHead(title: "Requests so far", note: usageNote)
                             .padding(.bottom, 10)
                         Text("Claude is asked when there is something to adapt to — a session missed, an opinion recorded, or a check-in every \(PlanTrigger.everyNWeeks) weeks. A clean week steps on from the last one for nothing, because the progression is arithmetic the app already does. Rewriting below always asks.")
                             .font(.almanacBodySmall)

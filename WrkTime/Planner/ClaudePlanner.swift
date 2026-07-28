@@ -186,10 +186,41 @@ struct ClaudePlanner: Sendable {
 
     // MARK: - Response
 
+    /// What a request actually cost, from the response rather than from a
+    /// guess. Thinking bills as output, which is where nearly all of it goes.
+    struct Usage: Equatable {
+        var inputTokens = 0
+        var outputTokens = 0
+
+        /// Opus 5: $5 per million in, $25 per million out.
+        static let inputPerMillion = 5.0
+        static let outputPerMillion = 25.0
+
+        var dollars: Double {
+            Double(inputTokens) / 1_000_000 * Self.inputPerMillion
+                + Double(outputTokens) / 1_000_000 * Self.outputPerMillion
+        }
+
+        static func read(_ object: [String: Any]) -> Usage {
+            guard let usage = object["usage"] as? [String: Any] else { return Usage() }
+            return Usage(inputTokens: usage["input_tokens"] as? Int ?? 0,
+                         outputTokens: usage["output_tokens"] as? Int ?? 0)
+        }
+    }
+
+    /// What the most recent response cost. `decode` is nonisolated, so the
+    /// number is left here for the main-actor caller to record rather than
+    /// hopping actors in the middle of parsing.
+    nonisolated(unsafe) static var lastUsage = Usage()
+
     static func decode(_ data: Data) throws -> (PlanDraft, String) {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw PlannerError.malformed
         }
+        // Read before anything can throw, so a refused or truncated response
+        // still counts against the bill — those cost money too.
+        let usage = Usage.read(object)
+        defer { lastUsage = usage }
 
         switch object["stop_reason"] as? String {
         case "refusal":

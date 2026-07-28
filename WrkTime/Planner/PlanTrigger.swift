@@ -87,6 +87,29 @@ enum PlanTrigger {
     enum Memo {
         static let lastAsked = "lastAskedClaudeAt"
         static let callsMade = "claudeCallsMade"
+        static let inputTokens = "claudeInputTokens"
+        static let outputTokens = "claudeOutputTokens"
+    }
+
+    /// Adds what a request actually cost, read from the response.
+    ///
+    /// Every number the app has shown about cost until now was an estimate off
+    /// the back of an envelope. The response carries the real counts, so there
+    /// is no reason to guess — and a decision about `effort` or a model tier is
+    /// only worth making against measurements.
+    static func record(_ usage: ClaudePlanner.Usage) {
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: Memo.inputTokens) + usage.inputTokens,
+                     forKey: Memo.inputTokens)
+        defaults.set(defaults.integer(forKey: Memo.outputTokens) + usage.outputTokens,
+                     forKey: Memo.outputTokens)
+    }
+
+    /// Everything the app has spent on her key, from the responses themselves.
+    static var spent: ClaudePlanner.Usage {
+        ClaudePlanner.Usage(
+            inputTokens: UserDefaults.standard.integer(forKey: Memo.inputTokens),
+            outputTokens: UserDefaults.standard.integer(forKey: Memo.outputTokens))
     }
 
     /// Notes that a request was actually made, for the counter in Settings and

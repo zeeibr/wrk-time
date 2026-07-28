@@ -179,6 +179,7 @@ enum PlannerService {
 
         do {
             PlanTrigger.recordCall()
+            defer { PlanTrigger.record(ClaudePlanner.lastUsage) }
             let generated = try await planner.plan(snapshot)
             // Parsing is not trusting. If the week breaks the kit or the
             // ceiling, it is discarded whole and the offline planner runs.
