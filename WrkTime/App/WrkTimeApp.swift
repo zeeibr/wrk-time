@@ -48,6 +48,10 @@ struct RootView: View {
         .tint(Palette.ink)
         .environment(activity)
         .task {
+            // Anything still on the lock screen at launch belongs to a session
+            // that is long over — the process that owned it is gone and nothing
+            // else will ever clear it.
+            LiveActivityController.endAll()
             guard !checkedForBlock else { return }
             checkedForBlock = true
             needsSetup = blocks.isEmpty
