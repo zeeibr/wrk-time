@@ -87,16 +87,33 @@ struct RecoverySnapshot: Equatable, Sendable {
         return .hold
     }
 
-    /// One sentence, in the app's voice, naming the reason. Shown on Today so
-    /// an adjustment never arrives unexplained.
-    var explanation: String {
-        switch guidance {
+    /// One sentence, in the app's voice, naming what the numbers say.
+    ///
+    /// It used to say "Today drops a round" and "Today adds a round" — and
+    /// neither happens. `PlanContext` carries no sleep, variability or heart
+    /// rate; `PlanTrigger` never consults recovery; there is no control that
+    /// adds or removes a round. The app was describing an adaptation it does
+    /// not perform, on the screen whose whole claim is that every number here
+    /// is paired with a consequence.
+    ///
+    /// So it reports the reading and leaves the decision where it actually
+    /// lives — with her. When recovery genuinely reaches the planner, this is
+    /// the string that gets to promise something again.
+    ///
+    /// Nil when there is nothing to report. A snapshot with every field empty
+    /// falls to `.hold`, which used to render "Nothing unusual in last night's
+    /// numbers" above three em dashes and four lines above "Nothing came
+    /// through from Health" — the screen asserting knowledge of a night it had
+    /// no reading for, and contradicting itself in the same breath.
+    var explanation: String? {
+        guard sleepHours != nil || hrv != nil || restingHeartRate != nil else { return nil }
+        return switch guidance {
         case .ease:
-            "Sleep and heart rate are both off your usual. Today drops a round — that is the plan working, not you failing."
+            "Sleep and heart rate are both off your usual. Nothing changes on its own — take a round off if today asks for it."
         case .push:
-            "You slept well and your variability is up. Today adds a round if you want it."
+            "You slept well and your variability is up. Today is written as it was; there is room in it if you want more."
         case .hold:
-            "Nothing unusual in last night's numbers. The plan stands."
+            "Nothing unusual in last night's numbers. The plan stands as written."
         }
     }
 }

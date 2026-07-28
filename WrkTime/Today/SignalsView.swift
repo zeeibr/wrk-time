@@ -57,11 +57,13 @@ struct SignalsView: View {
             SectionHead(title: "Last night", note: guidanceNote)
                 .padding(.bottom, 10)
 
-            Text(recovery.explanation)
-                .font(.almanacBody)
-                .foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 14)
+            if let explanation = recovery.explanation {
+                Text(explanation)
+                    .font(.almanacBody)
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 14)
+            }
 
             HStack(alignment: .top, spacing: 14) {
                 StatCell(label: "Sleep",
@@ -93,11 +95,19 @@ struct SignalsView: View {
         }
     }
 
+    /// What the numbers did, not what the plan will do about it.
+    ///
+    /// "Ease off" and "Room to push" read as instructions the plan has issued,
+    /// and the plan issues nothing — recovery never reaches the planner. These
+    /// describe the reading and leave the decision with her. With no readings
+    /// at all it says so rather than claiming the plan stands on evidence it
+    /// does not have.
     private var guidanceNote: String {
-        switch recovery.guidance {
-        case .ease: "Ease off"
-        case .push: "Room to push"
-        case .hold: "Plan stands"
+        guard recovery.explanation != nil else { return "No readings" }
+        return switch recovery.guidance {
+        case .ease: "Down on your usual"
+        case .push: "Up on your usual"
+        case .hold: "As usual"
         }
     }
 
@@ -313,7 +323,7 @@ struct SignalsView: View {
         let perDay = Int((Double(remaining) / Double(daysLeft)).rounded())
 
         guard daysLeft > 1 else { return "\(remaining) minutes today finishes the week." }
-        return "About \(perDay) minutes a day for the rest of the week — \(remaining) still to go."
+        return "About \(perDay) minutes a day for the rest of the week — \(remaining) minutes still to go."
     }
 
     private var walkNote: String {
@@ -354,7 +364,7 @@ struct SignalsView: View {
                 Rule()
             }
 
-            Text("Fasting is an input here, not a feature. It is passed to the planner alongside sleep and attendance, and it never gets a screen of its own or a streak to protect.")
+            Text("Fasting is an input here, not a feature. It is passed to the planner alongside what you actually did, and it never gets a screen of its own or a streak to protect.")
                 .font(.almanacBodySmall)
                 .foregroundStyle(Palette.mute)
                 .fixedSize(horizontal: false, vertical: true)

@@ -484,7 +484,7 @@ struct RoutineBuilderView: View {
                     .frame(width: 46, alignment: .leading)
                 Spacer(minLength: 8)
                 Figure(value: "\(Int(step.clamped))", unit: "sec", size: 19)
-                HStack(spacing: 6) {
+                HStack(spacing: 20) {
                     stepperButton("minus") { adjust(index, by: -5) }
                     stepperButton("plus") { adjust(index, by: 5) }
                 }
@@ -515,7 +515,7 @@ struct RoutineBuilderView: View {
             let last = steps.last { $0.isWork == isWork }?.seconds
             steps.append(isWork ? .work(last ?? work) : .rest(last ?? rest))
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 20) {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
                 Text(title).font(.almanacBodySmall)
             }
@@ -533,7 +533,7 @@ struct RoutineBuilderView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).almanacLabel(small: true)
             Figure(value: "\(value)", unit: unit, size: 24)
-            HStack(spacing: 6) {
+            HStack(spacing: 20) {
                 stepperButton("minus", action: decrement)
                 stepperButton("plus", action: increment)
             }
@@ -589,6 +589,10 @@ private extension View {
     /// `List`, and it is the same gesture Today already uses on a move.
     func removable(_ remove: @escaping () -> Void) -> some View {
         contextMenu { Button("Remove", role: .destructive, action: remove) }
+            // The context menu alone is invisible to VoiceOver, Switch Control
+            // and Voice Control, and removing a row is the only fix for a
+            // mistyped rotation. `RoutineListView` already pairs the two.
+            .accessibilityAction(named: "Remove", remove)
     }
 }
 
@@ -611,6 +615,8 @@ struct MovePicker: View {
                                 dismiss()
                             } label: { row(move) }
                             .buttonStyle(.plain)
+                            .listRowBackground(Palette.oat)
+                            .listRowSeparatorTint(Palette.rule)
                         }
                     } header: {
                         Text("Flow · qi gong and lymphatic").almanacLabel(small: true)
@@ -631,6 +637,8 @@ struct MovePicker: View {
                                     dismiss()
                                 } label: { row(move) }
                                 .buttonStyle(.plain)
+                                .listRowBackground(Palette.oat)
+                                .listRowSeparatorTint(Palette.rule)
                             }
                         } header: {
                             Text(equipment.label).almanacLabel(small: true)
@@ -639,6 +647,10 @@ struct MovePicker: View {
                 }
             }
             .listStyle(.plain)
+            // Without this the rows keep `systemBackground` — white in light
+            // mode, black in dark — so the picker was the one screen not in
+            // the document register, and in dark mode ink names sat on black.
+            .scrollContentBackground(.hidden)
             .background(Palette.oat.ignoresSafeArea())
             .navigationTitle("Your kit")
             .navigationBarTitleDisplayMode(.inline)

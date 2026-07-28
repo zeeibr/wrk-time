@@ -21,6 +21,20 @@
 	  mode only keeps the process alive while a session is genuinely playing,
 	  and declaring it without one is a review risk for no benefit.
 	-->
+	<!--
+	  The design is single-register by construction: an oat ground, ink type
+	  and a dark field that rises out of it. There is no dark variant and
+	  there should not be one — inverting it would invert the field too, and
+	  the register change *is* the design.
+
+	  Declared rather than left to chance, because the system chrome does not
+	  follow the palette. Unset, the tab bar in Dark Mode drew `Palette.ink`
+	  on near-black — the selected tab was invisible at about 1.05:1, so she
+	  could not tell which of the four screens she was on.
+	-->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

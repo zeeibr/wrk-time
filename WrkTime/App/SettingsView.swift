@@ -99,7 +99,7 @@ struct SettingsView: View {
             }
             Spacer(minLength: 8)
             Figure(value: "\(value)", unit: unit, size: 22)
-            HStack(spacing: 6) {
+            HStack(spacing: 20) {
                 stepButton("minus", action: decrement)
                 stepButton("plus", action: increment)
             }

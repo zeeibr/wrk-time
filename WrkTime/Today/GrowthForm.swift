@@ -92,7 +92,7 @@ struct GrowthForm: View {
         .accessibilityValue(
             marks == 0
                 ? "No marks yet. Week \(currentWeek) of \(weeks)."
-                : "\(marks) marks. Week \(currentWeek) of \(weeks), \(marksIn(week: currentWeek)) of \(sessionsPerWeek) this week."
+                : "\(marks.marksPhrase). Week \(currentWeek) of \(weeks), \(marksIn(week: currentWeek)) of \(sessionsPerWeek) this week."
         )
     }
 

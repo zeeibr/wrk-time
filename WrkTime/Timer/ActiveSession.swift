@@ -105,7 +105,10 @@ struct ActiveSession: Codable, Equatable, Sendable {
             // Ran out while the app was away. Naming the routine twice — the
             // card already shows its name — said nothing; how far it got is the
             // thing worth knowing.
-            return "Finished while you were away · \(schedule.total.durationString)"
+            // Never "finished". A run the clock outran earns no mark and is
+            // discarded — calling it finished told her she had completed a
+            // workout that recorded nothing.
+            return "Ran past its end while the app was closed · \(schedule.total.durationString)"
         }
         // Never `routine.rounds`: the practice is built with zero rounds, so
         // this read "Round 4 of 0", and a written-out sequence keeps its count

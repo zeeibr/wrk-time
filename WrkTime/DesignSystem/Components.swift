@@ -109,6 +109,11 @@ struct MarginalIndex: View {
                 .frame(width: 12, height: labelLength)
         }
         .frame(width: 18, alignment: .top)
+        // A typographic device, not content. VoiceOver read "01" and then
+        // "MORNING" before every section on every screen, and the `SectionHead`
+        // immediately after already names the section and carries `.isHeader` —
+        // about ten wasted swipes on Today alone.
+        .accessibilityHidden(true)
     }
 }
 
@@ -315,4 +320,14 @@ struct BlockRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(index). \(name), \(equipment), \(measure)")
     }
+}
+
+/// One mark, or several.
+///
+/// A mark is the app's own unit and it appears on four screens, so it was
+/// written out four times and pluralised in none of them — Today's season
+/// figure read "1 MARKS" the moment she earned her first, which is the one
+/// reading she was always going to look at hardest.
+extension Int {
+    var marksPhrase: String { self == 1 ? "1 mark" : "\(self) marks" }
 }

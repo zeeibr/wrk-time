@@ -219,7 +219,7 @@ struct TodayView: View {
                     .padding(.bottom, 4)
                 }
 
-                IndexedSection(number: "04", label: "Signals") {
+                IndexedSection(number: "05", label: "Signals") {
                     Rule(firm: true)
                     HStack(alignment: .top, spacing: 14) {
                         StatCell(label: weeklyRateString ?? "Weight · 7-day mean",
@@ -346,12 +346,20 @@ struct TodayView: View {
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
-            PrimaryButton(title: "Pick it back up", subtitle: nil) {
-                resuming = session
-                running = .resumed(session)
-                resumable = nil
+            // Only offered when there is something left to run. A session the
+            // clock outran is over: tapping "Pick it back up" would open the
+            // timer, hit the run-out guard, clear the session and dismiss with
+            // no mark and no explanation — a button that cannot do what it
+            // says. It earns nothing either way, and saying so is kinder than
+            // a control that quietly fails.
+            if !session.ranOut(), !session.isStale() {
+                PrimaryButton(title: "Pick it back up", subtitle: nil) {
+                    resuming = session
+                    running = .resumed(session)
+                    resumable = nil
+                }
+                .padding(.top, 14)
             }
-            .padding(.top, 14)
 
             Button("Let it go") {
                 ActiveSessionStore.clear()
@@ -459,8 +467,8 @@ struct TodayView: View {
                 : "Done today."
         }
         return run > 0
-            ? "Eight movements, eight minutes, starting with the rebounding. \(run) days behind it."
-            : "Eight movements, eight minutes, starting with the rebounding. This one happens every day."
+            ? "\(Practice.count) movements, \(Int(Tuning.practiceDuration / 60)) minutes, starting with the rebounding. \(run) days behind it."
+            : "\(Practice.count) movements, \(Int(Tuning.practiceDuration / 60)) minutes, starting with the rebounding. This one happens every day."
     }
 
     /// Flow movements she has asked not to see, in the form the practice wants.
@@ -711,7 +719,11 @@ struct TodayView: View {
 
     /// "0 marks" under "Day one. Start small." is true and needlessly bleak.
     private var seasonNote: String {
-        completedCount == 0 ? "Not yet drawn" : "\(completedCount) marks"
+        switch completedCount {
+        case 0: "Not yet drawn"
+        case 1: "1 mark"
+        default: completedCount.marksPhrase
+        }
     }
 
     private func seasonLine(_ label: String, _ value: String) -> some View {
@@ -738,11 +750,25 @@ struct TodayView: View {
 
     /// Warm, specific, and never exclamatory — the voice this lane inherited
     /// from Season.
+    /// The first line she reads, and it has to be true of the day she is having.
+    ///
+    /// It used to ask `todaysSession == nil`, which is the *unfinished* session
+    /// today — so the moment she finished one, the headline turned into "Rest
+    /// day. That counts too." on a day she had just trained, above a section
+    /// reading DONE. The app telling her she rested is the sort of small
+    /// untruth the whole voice exists to avoid.
+    ///
+    /// It also asserted "Today is a steady one" regardless of what today
+    /// actually held. The session names itself two lines further down; the
+    /// headline does not need to characterise it, and cannot honestly.
     private var greeting: String {
-        let streak = completedCount
-        if streak == 0 { return "Day one. Start small." }
+        let marks = completedCount
+        if finishedToday != nil {
+            return marks == 1 ? "That is one.\nFirst of the season." : "Done for today.\n\(marks) this season."
+        }
+        if marks == 0 { return "Day one. Start small." }
         if todaysSession == nil { return "Rest day. That counts too." }
-        return "\(streak) sessions in.\nToday is a steady one."
+        return marks == 1 ? "One session in.\nHere is the next." : "\(marks) sessions in.\nHere is the next."
     }
 
     private var trend: WeightTrend { WeightTrend(entries: weights) }

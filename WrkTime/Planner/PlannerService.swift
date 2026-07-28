@@ -206,8 +206,18 @@ enum PlannerService {
         // so it should always pass — and if a future edit breaks that, this is
         // where it surfaces rather than in a session she is halfway through.
         guard let routines = try? PlanValidator.routines(from: draft) else {
-            return Outcome(explanation: "This week could not be written.",
-                           source: source, sessionsWritten: 0)
+            // Recorded, not just returned. This path used to return before
+            // `Memo.record`, so the sentence was written nowhere and shown
+            // nowhere — Today found no sessions for the day, fell through to
+            // the rest-day copy, and told her "a rest day is part of the plan,
+            // not a gap in it" about a week that had failed to write. A total
+            // planning failure presented as programming is the worst thing this
+            // app can say.
+            let outcome = Outcome(
+                explanation: "This week has not been written yet. Open Settings and press Rewrite the week, or it will be written the next time the app opens.",
+                source: source, sessionsWritten: 0)
+            Memo.record(outcome, week: weekNumber)
+            return outcome
         }
 
         let written = write(routines, weekNumber: weekNumber, of: block,

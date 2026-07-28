@@ -5,7 +5,7 @@ import SwiftData
 ///
 /// This changes how often you train and how quickly load and rounds climb. It
 /// deliberately does **not** claim to change how fast the scale moves: with
-/// thirteen-minute sessions and 2–15 lb kit, the sessions are not where the
+/// short sessions and 2–15 lb kit, the sessions are not where the
 /// energy balance is decided, and a dial that implied otherwise would be
 /// lying. What it genuinely buys is a faster strength curve and more days
 /// under tension — which is worth having, and worth being honest about.
@@ -27,9 +27,14 @@ enum Pace: String, Codable, CaseIterable, Identifiable, Sendable {
     /// What it actually changes, in the units the plan is written in.
     var note: String {
         switch self {
-        case .steady: "Three sessions a week. Load moves every third week."
-        case .building: "Four a week. Load moves every other week."
-        case .hard: "Five a week. Load moves weekly, and rounds climb."
+        // Never "load moves". The kit is four fixed weights and a walking pad,
+        // so load *cannot* move — `OfflinePlanner` progresses rest down, work
+        // up and rounds up, and the system prompt tells Claude the same thing.
+        // This is the first sentence she reads on the first screen she sees,
+        // and it described a progression the app is incapable of.
+        case .steady: "Three sessions a week. The shape steps on every third week."
+        case .building: "Four a week. The shape steps on every other week."
+        case .hard: "Five a week. Rest shortens weekly and rounds climb."
         }
     }
 
@@ -41,7 +46,7 @@ enum Pace: String, Codable, CaseIterable, Identifiable, Sendable {
         case .building:
             "The middle setting, and the one most weeks survive contact with."
         case .hard:
-            "Strength climbs fastest here. It will not move the scale faster — that is decided by the walking and the eating window, not by these thirteen minutes."
+            "Strength climbs fastest here. It will not move the scale faster — that is decided by the walking and the eating window, not by these short sessions."
         }
     }
 

@@ -201,7 +201,7 @@ struct SeasonView: View {
 
     private func seasonNote(for block: Block) -> String {
         let total = marksByWeek(for: block).reduce(0, +)
-        return total == 0 ? "Not yet drawn" : "\(total) marks"
+        return total == 0 ? "Not yet drawn" : total.marksPhrase
     }
 
     private func formDescription(for block: Block) -> String {

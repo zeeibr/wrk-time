@@ -581,7 +581,10 @@ struct WorkoutTimerView: View {
                     .contentShape(Rectangle().inset(by: -10))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(soundEnabled ? "Sound on" : "Sound off")
+            // "Sound on, button" reads as "this turns sound on". A label
+        // names the control; a value names its state.
+        .accessibilityLabel("Interval cues")
+        .accessibilityValue(soundEnabled ? "On" : "Off")
             .accessibilityHint("Turns the interval cues on or off")
         }
         .padding(.horizontal, 22)

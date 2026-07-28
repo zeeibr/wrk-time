@@ -73,7 +73,7 @@ struct EatingWindowView: View {
                         TimeRow(label: "Closes", time: $closes)
                         Rule()
 
-                        Text("Passed to the planner alongside sleep and attendance. It never changes what the sessions are — the plan does not train you differently because of when you eat.")
+                        Text("Passed to the planner alongside what you actually did. It never changes what the sessions are — the plan does not train you differently because of when you eat.")
                             .font(.almanacBodySmall)
                             .foregroundStyle(Palette.mute)
                             .fixedSize(horizontal: false, vertical: true)

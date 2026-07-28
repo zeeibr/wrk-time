@@ -31,7 +31,14 @@ enum Palette {
     static let saffron = Color(hex: 0xD9A227)
     /// Saffron dark enough to read on oat, at 4.6:1. Same hue family, so it
     /// still says "live" without being illegible about it.
-    static let saffronInk = Color(hex: 0x9A7112)
+    /// Measured, not estimated. This was `0x9A7112`, and its own doc comment
+    /// claimed 4.6:1 on oat; it is 3.51:1 — below the 4.5:1 floor for the
+    /// 13pt body it carries, and below even the 3:1 large-text floor. It is
+    /// the app's only "notice this" colour, so every string it sets is an
+    /// exception state: a plan that failed, a move that was repaired, a
+    /// projection that was capped. Exactly the copy that must be readable.
+    /// `0x7E5C0C` measures 4.87:1 in the same hue family.
+    static let saffronInk = Color(hex: 0x7E5C0C)
 
     /// The working ground. Near-black with the same green bias as the ink, so
     /// the register change reads as the same world seen at night.
