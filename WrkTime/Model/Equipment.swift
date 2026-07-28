@@ -269,8 +269,12 @@ enum MoveLibrary {
     /// read as the app not listening, and be right.
     static func substitute(for move: Move, avoiding excluded: Set<String>) -> Move? {
         moves(for: move.equipment).first {
-            !excluded.contains($0.name.lowercased())
-                && $0.name.lowercased() != move.name.lowercased()
+            // Containment, not equality — see `MovePreference.anyCovers`. This
+            // line used to be `excluded.contains($0.name.lowercased())`, which
+            // is why the first replacement offered for any bodyweight move was
+            // the incline push-up she is on record as disliking.
+            !MovePreference.anyCovers(excluded, $0.name)
+                && MovePreference.key($0.name) != MovePreference.key(move.name)
         }
     }
 }

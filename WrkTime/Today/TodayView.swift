@@ -52,6 +52,16 @@ struct TodayView: View {
             case .resumed(let a): a.routine
             }
         }
+
+        /// What finishing this should record. A resumed run carries its own,
+        /// saved when it started, rather than being guessed at the end.
+        var subject: ActiveSession.Subject {
+            switch self {
+            case .session(let s, _): .session(s.id)
+            case .practice: .practice
+            case .resumed(let a): a.subject
+            }
+        }
     }
     @Query private var practices: [MorningPractice]
     /// A session the process died under, offered back rather than lost.
@@ -235,6 +245,7 @@ struct TodayView: View {
         // records a day — and neither depends on looking today up afterwards.
         .fullScreenCover(item: $running) { workout in
             WorkoutTimerView(routine: workout.routine,
+                             subject: workout.subject,
                              resuming: workout.isResumed ? resuming : nil) { outcome in
                 finish(workout, outcome)
             }
@@ -543,16 +554,27 @@ struct TodayView: View {
             return
         }
 
-        switch workout {
-        case .session(let session, _):
+        // Decided by what the run *was*, which it now carries, rather than by
+        // what happens to be scheduled when it ends. Resuming used to fall
+        // through to "today's session", so an interrupted morning practice
+        // marked a session she had never started and recorded no practice —
+        // and a resumed session finished after midnight marked the wrong day's.
+        switch workout.subject {
+        case .session(let id):
+            guard let session = sessions.first(where: { $0.id == id }) else { break }
             mark(session, start: start, end: end)
-        case .resumed:
-            // A resumed session carries its routine, not its row, so today's is
-            // the only one it can be.
-            if let session = todaysSession { mark(session, start: start, end: end) }
-        case .practice(let routine):
-            MorningPractices.record(routine.warmUp, in: context)
+        case .practice:
+            MorningPractices.record(workout.routine.warmUp, in: context)
             try? context.save()
+        case .routine:
+            // A saved timer routine earns no mark and no practice row. It is
+            // recorded where it belongs, against the routine that was run.
+            break
+        case .unknown:
+            // Written by a build before a run said what it was. Today's
+            // session is the old behaviour and the only guess available; it is
+            // at least never a practice, so it cannot invent a mark from one.
+            if let session = todaysSession { mark(session, start: start, end: end) }
         }
         skippedToReview = skipped
     }

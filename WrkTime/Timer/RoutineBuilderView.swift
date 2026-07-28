@@ -97,7 +97,9 @@ struct RoutineListView: View {
         }
         .fullScreenCover(item: $running) { item in
             if let routine = item.routine {
-                WorkoutTimerView(routine: routine) { outcome in
+                // Marked as its own kind, so an interruption picked up from
+                // Today cannot be mistaken for the day's planned session.
+                WorkoutTimerView(routine: routine, subject: .routine) { outcome in
                     // Only a finished run counts as having run it.
                     guard case .completed = outcome else { return }
                     item.lastRunAt = .now

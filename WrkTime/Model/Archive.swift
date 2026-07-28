@@ -27,12 +27,46 @@ struct Archive: Codable {
     var fasts: [FastRecord] = []
     var loggedSets: [LoggedSetRecord] = []
 
+    /// Both default to empty, so a file written by an earlier build still
+    /// decodes — and both are Optional-free arrays for the same reason every
+    /// stored type here is careful: a missing key must not throw.
+    ///
+    /// These were simply missing. The store has eight model types and the
+    /// archive carried six, so a restore onto a new phone silently dropped
+    /// every opinion she had recorded about a move. The consequence is not a
+    /// cosmetic gap: `PlannerService` passes those refusals to both planners as
+    /// the excluded set, so the first week after a restore would program the
+    /// movement that hurt her — and she would have to be hurt by it again to
+    /// say so again. Her practice history went the same way, taking a streak
+    /// with it.
+    var preferences: [PreferenceRecord] = []
+    var practices: [PracticeRecord] = []
+
     struct BlockRecord: Codable {
         var id: UUID
         var startDate: Date
         var lengthInDays: Int
         var goalWeightPounds: Double
         var startingWeightPounds: Double
+        /// Optional so older files decode. Its absence is why a restored block
+        /// quietly switched to the default pace, changing how many sessions a
+        /// week it wrote and how fast the load climbed.
+        var paceRaw: String?
+    }
+
+    struct PreferenceRecord: Codable {
+        var id: UUID
+        var moveName: String
+        var verdictRaw: String
+        var updatedAt: Date
+        var skipCount: Int
+    }
+
+    struct PracticeRecord: Codable {
+        var id: UUID
+        var day: Date
+        var completedAt: Date
+        var moveNames: [String]
     }
 
     struct SessionRecord: Codable {
@@ -95,7 +129,8 @@ enum ArchiveService {
         archive.blocks = try context.fetch(FetchDescriptor<Block>()).map {
             .init(id: $0.id, startDate: $0.startDate, lengthInDays: $0.lengthInDays,
                   goalWeightPounds: $0.goalWeightPounds,
-                  startingWeightPounds: $0.startingWeightPounds)
+                  startingWeightPounds: $0.startingWeightPounds,
+                  paceRaw: $0.paceRaw)
         }
         archive.sessions = try context.fetch(FetchDescriptor<PlannedSession>()).map {
             .init(id: $0.id, scheduledFor: $0.scheduledFor, title: $0.title,
@@ -119,6 +154,14 @@ enum ArchiveService {
                   windowOpensMinute: $0.windowOpensMinute,
                   windowClosesHour: $0.windowClosesHour,
                   windowClosesMinute: $0.windowClosesMinute)
+        }
+        archive.preferences = try context.fetch(FetchDescriptor<MovePreference>()).map {
+            .init(id: $0.id, moveName: $0.moveName, verdictRaw: $0.verdictRaw,
+                  updatedAt: $0.updatedAt, skipCount: $0.skipCount)
+        }
+        archive.practices = try context.fetch(FetchDescriptor<MorningPractice>()).map {
+            .init(id: $0.id, day: $0.day, completedAt: $0.completedAt,
+                  moveNames: $0.moveNames)
         }
         return archive
     }
@@ -147,6 +190,10 @@ enum ArchiveService {
                               startingWeightPounds: record.startingWeightPounds)
             block.id = record.id
             block.lengthInDays = record.lengthInDays
+            // Only when the file carried one. An older archive has no pace, and
+            // overwriting the default with nothing would be worse than keeping
+            // it.
+            if let paceRaw = record.paceRaw { block.paceRaw = paceRaw }
             context.insert(block)
             blocksByID[record.id] = block
             summary.added += 1
@@ -239,6 +286,45 @@ enum ArchiveService {
             window.windowClosesHour = record.windowClosesHour
             window.windowClosesMinute = record.windowClosesMinute
             context.insert(window)
+            summary.added += 1
+        }
+
+        // Her opinions about moves, which the archive used not to carry at all.
+        // Restored before anything asks the planner for a week, so the first
+        // week on a new phone already knows what hurt.
+        let existingPreferences = Set(try context.fetch(FetchDescriptor<MovePreference>()).map(\.id))
+        for record in archive.preferences {
+            guard !existingPreferences.contains(record.id) else {
+                summary.alreadyPresent += 1
+                continue
+            }
+            let preference = MovePreference(moveName: record.moveName,
+                                            verdict: MoveVerdict(rawValue: record.verdictRaw) ?? .disliked)
+            preference.id = record.id
+            preference.updatedAt = record.updatedAt
+            preference.skipCount = record.skipCount
+            context.insert(preference)
+            summary.added += 1
+        }
+
+        // Matched on the day as well as the id, because these rows are the one
+        // place a duplicate is silently wrong rather than visibly wrong: two
+        // rows for one day do not show up anywhere, they just make the streak
+        // and the fortnight strip disagree.
+        let existingPractices = try context.fetch(FetchDescriptor<MorningPractice>())
+        let practiceIDs = Set(existingPractices.map(\.id))
+        var practiceDays = Set(existingPractices.map { Calendar.current.startOfDay(for: $0.day) })
+        for record in archive.practices {
+            let day = Calendar.current.startOfDay(for: record.day)
+            guard !practiceIDs.contains(record.id), !practiceDays.contains(day) else {
+                summary.alreadyPresent += 1
+                continue
+            }
+            let practice = MorningPractice(day: record.day, moveNames: record.moveNames,
+                                           completedAt: record.completedAt)
+            practice.id = record.id
+            practiceDays.insert(day)
+            context.insert(practice)
             summary.added += 1
         }
 

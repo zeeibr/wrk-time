@@ -22,6 +22,57 @@ struct ActiveSession: Codable, Equatable, Sendable {
     var running: Bool
     var savedAt: Date
 
+    /// **What** was running, not just what it looked like.
+    ///
+    /// This carried only the routine, and the routine is a shape — a practice,
+    /// a planned session and a saved timer routine are indistinguishable once
+    /// they are one. So finishing a resumed run had nothing to go on and
+    /// assumed today's planned session. Interrupt the morning practice, come
+    /// back and finish it, and the app marked a *session* complete that she had
+    /// never started, wrote it to Health, and recorded no practice — a mark on
+    /// the growth form for work that did not happen, which is the one thing
+    /// interrupted-session recovery must never do.
+    ///
+    /// Optional for the reason every stored field here is: this is JSON on
+    /// disk, and the synthesized decoder throws on a missing non-optional key.
+    /// A session written by the previous build decodes with nil, and nil means
+    /// "unknown" rather than any particular kind.
+    var kindRaw: String?
+    /// Which planned session this is, when it is one.
+    var sessionID: UUID?
+
+    /// What a resumed run should be recorded as.
+    enum Subject: Equatable {
+        /// A planned session, named by id rather than by "whatever is today".
+        case session(UUID)
+        case practice
+        /// A saved timer routine, which earns no mark and no practice row.
+        case routine
+        /// Written before this was recorded. Treated as a session for
+        /// continuity with what the old build would have done, but only ever
+        /// against today's session — never a practice, so the worst case is
+        /// the old behaviour rather than a new one.
+        case unknown
+    }
+
+    var subject: Subject {
+        switch kindRaw {
+        case "session": sessionID.map(Subject.session) ?? .unknown
+        case "practice": .practice
+        case "routine": .routine
+        default: .unknown
+        }
+    }
+
+    mutating func setSubject(_ subject: Subject) {
+        switch subject {
+        case .session(let id): kindRaw = "session"; sessionID = id
+        case .practice: kindRaw = "practice"; sessionID = nil
+        case .routine: kindRaw = "routine"; sessionID = nil
+        case .unknown: kindRaw = nil; sessionID = nil
+        }
+    }
+
     /// A session nobody came back to inside this window is not resumed. Coming
     /// back to a workout you abandoned two hours ago is starting a new one, and
     /// silently counting it would put a mark on the form that was not earned.
@@ -51,10 +102,17 @@ struct ActiveSession: Codable, Equatable, Sendable {
         let at = min(elapsedNow(now), schedule.total)
         let remaining = max(schedule.total - at, 0)
         guard let index = schedule.index(atElapsed: at) else {
-            return routine.name
+            // Ran out while the app was away. Naming the routine twice — the
+            // card already shows its name — said nothing; how far it got is the
+            // thing worth knowing.
+            return "Finished while you were away · \(schedule.total.durationString)"
         }
-        let round = schedule.phases[index].round
-        return "Round \(round) of \(routine.rounds) · \(remaining.durationString) left"
+        // Never `routine.rounds`: the practice is built with zero rounds, so
+        // this read "Round 4 of 0", and a written-out sequence keeps its count
+        // in `roundCount`. `position` also knows a flow movement is not a round.
+        return schedule.phases[index]
+            .position(rounds: routine.roundCount, flowCount: schedule.flowPhaseCount)
+            + " · \(remaining.durationString) left"
     }
 }
 

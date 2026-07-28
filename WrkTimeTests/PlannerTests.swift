@@ -624,8 +624,13 @@ struct ActiveSessionTests {
 
     @Test("The summary names the round and what is left")
     func summary() {
+        // "Round 3 / 8" rather than "of" — the card now reads its position from
+        // `Phase.position`, the same call the timer header and the lock screen
+        // use, so the three cannot word the same session differently. It also
+        // knows a flow movement is not a round, which is what stopped the
+        // practice's card reading "Round 4 of 0".
         let text = session(elapsed: 180, savedAgo: 0).summary()
-        #expect(text.contains("Round 3 of 8"))
+        #expect(text.contains("Round 3 / 8"))
         #expect(text.contains("left"))
     }
 
@@ -2003,5 +2008,178 @@ struct PlateTuningTests {
         #expect(Tuning.plateSeconds == 17)
         Tuning.reset()
         #expect(Tuning.plateSeconds == Tuning.defaultPlateSeconds)
+    }
+}
+
+@Suite("The audit's findings, held down")
+@MainActor
+struct AuditRegressionTests {
+
+    // MARK: A week that is planned is a week that is saved
+
+    @Test("Planning saves, so a context that does not autosave still keeps the week")
+    func planningSaves() async throws {
+        // The six a.m. background task must build its own `ModelContext`, and a
+        // hand-made context has `autosaveEnabled == false`. Nothing in the
+        // planner saved, so the week was inserted, never written, and dropped
+        // when the context deallocated — after the request had been billed.
+        let container = Store.container(inMemory: true)
+        let writing = ModelContext(container)
+        writing.autosaveEnabled = false
+
+        let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
+        writing.insert(block)
+        try writing.save()
+
+        _ = await PlannerService.planWeek(1, of: block, in: writing)
+
+        // A second, independent context sees it only if it actually reached the
+        // store. Reading back through `writing` would pass either way.
+        let reading = ModelContext(container)
+        let stored = try reading.fetch(FetchDescriptor<PlannedSession>())
+        #expect(!stored.isEmpty, "the week was never written to the store")
+    }
+
+    // MARK: A rewrite does not double up on a day already trained
+
+    @Test("A rewritten week leaves no second session on a day she has finished")
+    func rewriteRespectsAFinishedDay() async throws {
+        let container = Store.container(inMemory: true)
+        let context = ModelContext(container)
+        let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+
+        _ = await PlannerService.planWeek(1, of: block, in: context)
+        let first = try #require(
+            (block.sessions ?? []).min(by: { $0.scheduledFor < $1.scheduledFor }))
+        let trainedDay = Calendar.current.startOfDay(for: first.scheduledFor)
+        first.completedAt = .now
+        try context.save()
+
+        _ = await PlannerService.planWeek(1, of: block, in: context)
+
+        let onThatDay = (block.sessions ?? []).filter {
+            Calendar.current.startOfDay(for: $0.scheduledFor) == trainedDay
+        }
+        #expect(onThatDay.count == 1, "a rewrite added a second session to a finished day")
+        #expect(onThatDay.first?.isComplete == true)
+    }
+
+    // MARK: One rule for "ruled out"
+
+    @Test("A dislike covers its variants wherever the question is asked")
+    func ruledOutIsContainmentEverywhere() {
+        // The app ships exactly one seeded preference — "push-up" — written so
+        // it also covers the incline and knee variants. Three planner paths
+        // compared exact names instead, so the first substitute offered for any
+        // bodyweight move was the incline push-up she is on record as
+        // disliking.
+        let ruledOut: Set<String> = ["push-up"]
+        #expect(MovePreference.anyCovers(ruledOut, "Incline push-up"))
+        #expect(MovePreference.anyCovers(ruledOut, "Push-up"))
+        #expect(!MovePreference.anyCovers(ruledOut, "Beam front squat"))
+    }
+
+    @Test("A substitute is never something she has ruled out")
+    func substituteRespectsAVariant() throws {
+        let bodyweight = MoveLibrary.all.filter { $0.equipment == .bodyweight && $0.kind == .strength }
+        let source = try #require(bodyweight.first { !$0.name.lowercased().contains("push-up") })
+
+        let swap = MoveLibrary.substitute(for: source, avoiding: ["push-up"])
+        if let swap {
+            #expect(!swap.name.lowercased().contains("push-up"),
+                    "offered \(swap.name) against a recorded dislike of push-ups")
+        }
+    }
+
+    // MARK: A resumed run knows what it is
+
+    @Test("A resumed run carries its own subject rather than being guessed at the end")
+    func activeSessionCarriesItsSubject() throws {
+        var session = ActiveSession(routine: Practice.routine(on: .now), startedAt: .now,
+                                    elapsed: 120, running: true, savedAt: .now)
+        session.setSubject(ActiveSession.Subject.practice)
+
+        let data = try JSONEncoder().encode(session)
+        let back = try JSONDecoder().decode(ActiveSession.self, from: data)
+        #expect(back.subject == .practice)
+
+        let id = UUID()
+        session.setSubject(ActiveSession.Subject.session(id))
+        let asSession = try JSONDecoder().decode(
+            ActiveSession.self, from: try JSONEncoder().encode(session))
+        #expect(asSession.subject == .session(id))
+    }
+
+    @Test("A session stored by the previous build still decodes, as unknown")
+    func oldActiveSessionDecodes() throws {
+        // The stored copy is JSON on disk and the synthesized decoder throws on
+        // a missing non-optional key, so both new fields must be Optional.
+        let json = """
+        {"routine":\(String(decoding: try JSONEncoder().encode(Practice.routine(on: .now)), as: UTF8.self)),
+         "startedAt":0,"elapsed":60,"running":true,"savedAt":0}
+        """
+        let back = try JSONDecoder().decode(ActiveSession.self, from: Data(json.utf8))
+        #expect(back.subject == .unknown)
+    }
+
+    @Test("The resume card never counts a practice in rounds it does not have")
+    func practiceSummaryDoesNotSayRoundOfZero() {
+        // `Practice.routine()` is built with zero rounds, so reading `rounds`
+        // produced "Round 4 of 0".
+        let session = ActiveSession(routine: Practice.routine(on: .now), startedAt: .now,
+                                    elapsed: 180, running: false, savedAt: .now)
+        let summary = session.summary()
+        #expect(!summary.contains("of 0"), "\(summary)")
+        #expect(summary.contains("Movement"), "\(summary)")
+    }
+
+    // MARK: The backup carries the whole store
+
+    @Test("A backup carries her opinions, her practice history and the block's pace")
+    func archiveCarriesEverything() throws {
+        let container = Store.container(inMemory: true)
+        let context = ModelContext(container)
+
+        let block = Block(startDate: .now, goalWeightPounds: 150,
+                          startingWeightPounds: 165, pace: .steady)
+        context.insert(block)
+        MovePreferences.set(.avoided, for: "Beam good morning", in: context)
+        MorningPractices.record(Array(MoveLibrary.flow.prefix(3)), in: context)
+        try context.save()
+
+        let archive = try ArchiveService.export(from: context)
+        #expect(archive.preferences.count == 1)
+        #expect(archive.practices.count == 1)
+        #expect(archive.blocks.first?.paceRaw == Pace.steady.rawValue)
+
+        // Onto an empty store, as a new phone would be.
+        let fresh = ModelContext(Store.container(inMemory: true))
+        try ArchiveService.restore(archive, into: fresh)
+
+        let lists = MovePreferences.lists(in: fresh)
+        #expect(lists.avoided.contains("Beam good morning"),
+                "a restore lost the move she said hurt")
+        #expect(MorningPractices.all(in: fresh).count == 1)
+        #expect(try fresh.fetch(FetchDescriptor<Block>()).first?.pace == .steady)
+    }
+
+    @Test("Restoring the same file twice adds nothing the second time")
+    func restoreIsIdempotent() throws {
+        let container = Store.container(inMemory: true)
+        let context = ModelContext(container)
+        let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+        MovePreferences.set(.disliked, for: "Ring row", in: context)
+        MorningPractices.record(Array(MoveLibrary.flow.prefix(3)), in: context)
+        try context.save()
+
+        let archive = try ArchiveService.export(from: context)
+        let fresh = ModelContext(Store.container(inMemory: true))
+        try ArchiveService.restore(archive, into: fresh)
+        try ArchiveService.restore(archive, into: fresh)
+
+        #expect(MovePreferences.all(in: fresh).count == 1)
+        #expect(MorningPractices.all(in: fresh).count == 1)
     }
 }

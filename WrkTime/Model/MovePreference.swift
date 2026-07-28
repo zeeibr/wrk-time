@@ -99,6 +99,31 @@ final class MovePreference {
 
     var key: String { Self.key(moveName) }
 
+    /// Whether anything she has ruled out covers `name`.
+    ///
+    /// The one predicate for "is this move off the table", and it exists
+    /// because there were two. `covers` below matches by containment — that is
+    /// the whole point of it, and the app ships exactly one seeded preference,
+    /// `"push-up"`, written specifically so it also covers the incline and
+    /// knee variants. But three planner paths tested `excluded.contains(name)`
+    /// instead, which is exact equality, and the disagreement had teeth:
+    /// ruling out any bodyweight move offered "Incline push-up" as its
+    /// replacement, because `"incline push-up" ∉ {"push-up"}`. The app read
+    /// back her own recorded dislike as an acceptable substitute.
+    ///
+    /// Containment in either direction, so "push-up" rules out "Incline
+    /// push-up" and ruling out "Incline push-up" does not rule out every
+    /// push-up.
+    static func anyCovers(_ ruledOut: Set<String>, _ name: String) -> Bool {
+        let candidate = key(name)
+        guard !candidate.isEmpty else { return false }
+        return ruledOut.contains {
+            let mine = key($0)
+            guard !mine.isEmpty else { return false }
+            return candidate.contains(mine) || mine.contains(candidate)
+        }
+    }
+
     /// Whether this opinion covers `name`.
     ///
     /// Containment in either direction, because a dislike is usually about a

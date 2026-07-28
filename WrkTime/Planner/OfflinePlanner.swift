@@ -63,7 +63,10 @@ enum OfflinePlanner {
         var used = Set(moves.map { $0.name.lowercased() })
 
         return moves.map { draft in
-            guard excluded.contains(where: { draft.name.lowercased().contains($0) }) else { return draft }
+            // One predicate for "ruled out" everywhere — see
+            // `MovePreference.anyCovers`. This was one of four spellings of
+            // the same question, and the four did not agree.
+            guard MovePreference.anyCovers(excluded, draft.name) else { return draft }
             guard let equipment = Equipment(rawValue: draft.equipment),
                   let replacement = MoveLibrary.substitute(
                     for: Move(name: draft.name, equipment: equipment, cue: draft.cue,
@@ -141,8 +144,7 @@ enum OfflinePlanner {
                 guard !used.contains(move.name.lowercased()) else { continue }
                 // A longer rotation must not reach past a refusal to fill
                 // itself — the top-up is where that would happen unnoticed.
-                guard !excluded.contains(where: { move.name.lowercased().contains($0) })
-                else { continue }
+                guard !MovePreference.anyCovers(excluded, move.name) else { continue }
                 used.insert(move.name.lowercased())
                 out.append(DraftMove(name: move.name, equipment: move.equipment.rawValue,
                                      cue: move.cue, loadPounds: move.loadPounds ?? 0))

@@ -48,10 +48,16 @@ struct WorkoutTimerView: View {
     /// One ending per session, however many places notice it.
     @State private var reported = false
 
+    /// What this run is, so an interruption can be resumed as the same thing.
+    /// A resumed run inherits the subject it was saved with.
+    private let subject: ActiveSession.Subject
+
     init(routine: IntervalRoutine,
+         subject: ActiveSession.Subject = .unknown,
          resuming: ActiveSession? = nil,
          onEnd: @escaping (Outcome) -> Void = { _ in }) {
         self.routine = routine
+        self.subject = resuming?.subject ?? subject
         self.resuming = resuming
         self.onEnd = onEnd
         _engine = State(initialValue: IntervalEngine(routine: routine))
@@ -140,13 +146,13 @@ struct WorkoutTimerView: View {
     /// no warning at all.
     private func persist() {
         guard stage == .running, engine.status != .finished else { return }
-        ActiveSessionStore.save(
-            ActiveSession(routine: routine,
-                          startedAt: sessionStart ?? .now,
-                          elapsed: engine.elapsed,
-                          running: engine.status == .running,
-                          savedAt: .now)
-        )
+        var session = ActiveSession(routine: routine,
+                                    startedAt: sessionStart ?? .now,
+                                    elapsed: engine.elapsed,
+                                    running: engine.status == .running,
+                                    savedAt: .now)
+        session.setSubject(subject)
+        ActiveSessionStore.save(session)
     }
 
     private var field: some View {

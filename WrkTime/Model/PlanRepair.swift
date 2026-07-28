@@ -85,7 +85,13 @@ enum PlanRepair {
                     .sorted { preferred.contains($0.equipment) && !preferred.contains($1.equipment) }
                 for move in pool where routine.moves.count < count {
                     let key = MovePreference.key(move.name)
-                    guard !used.contains(key), !barred.contains(key) else { continue }
+                    // Containment for what she has ruled out, exact for what
+                    // this rotation already holds. Two different questions:
+                    // "push-up" should bar the incline variant, but a rotation
+                    // holding "Beam row" has not thereby used "Beam row to
+                    // hip". See `MovePreference.anyCovers`.
+                    guard !used.contains(key), !MovePreference.anyCovers(barred, move.name)
+                    else { continue }
                     used.insert(key)
                     routine.moves.append(move)
                 }
@@ -121,7 +127,12 @@ enum PlanRepair {
 
         for session in sessions {
             guard let routine = session.routine else { continue }
-            guard routine.moves.contains(where: { unwanted.contains(MovePreference.key($0.name)) })
+            // Containment on the way in as well as on the way out. Detecting by
+            // exact name meant ruling out "push-up" left every session that
+            // named "Incline push-up" exactly as it was — the app agreeing with
+            // her and changing nothing, which is the failure this whole file
+            // was written to fix.
+            guard routine.moves.contains(where: { MovePreference.anyCovers(unwanted, $0.name) })
             else { continue }
 
             var used = Set(routine.moves.map { MovePreference.key($0.name) })
@@ -129,7 +140,7 @@ enum PlanRepair {
             var stuck = 0
 
             let repaired = routine.moves.map { move -> Move in
-                guard unwanted.contains(MovePreference.key(move.name)) else { return move }
+                guard MovePreference.anyCovers(unwanted, move.name) else { return move }
                 guard let swap = MoveLibrary.substitute(for: move, avoiding: barred.union(used))
                 else { stuck += 1; return move }
                 used.remove(MovePreference.key(move.name))

@@ -248,9 +248,22 @@ enum PlannerService {
             context.delete(existing)
         }
 
+        // Days this week she has already trained. Kept out of the loop below,
+        // because a finished session being left alone is only half the rule —
+        // the other half is not writing a second one on top of it. A rewrite
+        // mid-week used to hand Monday a fresh incomplete session next to the
+        // one she had finished, and everything downstream believed it: Today
+        // listed the day as still to do, and `PlanTrigger` counted it as a
+        // session missed, so the following week was adapted around work she
+        // had actually done.
+        let trained = Set((block.sessions ?? [])
+            .filter { $0.isComplete && $0.scheduledFor >= start && $0.scheduledFor < end }
+            .map { calendar.startOfDay(for: $0.scheduledFor) })
+
         var written = 0
         for entry in routines {
             guard let day = calendar.date(byAdding: .day, value: entry.dayOffset, to: start) else { continue }
+            guard !trained.contains(calendar.startOfDay(for: day)) else { continue }
             let routine = entry.routine.warmingUp(
                 with: WarmUp.afterPractice(on: day, avoiding: excluded))
             let session = PlannedSession(scheduledFor: day,
@@ -260,6 +273,17 @@ enum PlannerService {
             context.insert(session)
             written += 1
         }
+
+        // Saved here rather than left to the caller, because the caller is not
+        // always a view. A `ModelContext` made by hand — as the six a.m.
+        // background task must — has `autosaveEnabled == false`, so the whole
+        // week was inserted, never written to disk, and discarded when the
+        // context deallocated. The request was still made and still billed,
+        // and `setTaskCompleted(success:)` still reported success.
+        //
+        // The one place that mutates is the one place that saves. Anything
+        // else leaves it to whichever context happens to be passed in.
+        try? context.save()
         return written
     }
 

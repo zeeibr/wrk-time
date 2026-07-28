@@ -95,17 +95,31 @@ struct ClaudePlanner: Sendable {
 
         var messages: [[String: Any]] = [["role": "user", "content": context.prompt]]
         var lastReason = ""
+        // Read once. Asking, checking and repairing all have to mean the same
+        // number, and `Tuning` is a `UserDefaults` read she could change from
+        // Settings while a request is in flight.
+        let moveCount = Tuning.movesPerSession
 
         for attempt in 0..<Self.attempts {
             let (draft, raw) = try await send(messages: messages, key: key,
                                               sessionCount: context.pace.sessionsPerWeek,
-                                              moveCount: Tuning.movesPerSession)
+                                              moveCount: moveCount)
 
             do {
                 _ = try PlanValidator.routines(from: draft)
                 guard draft.sessions.count == context.pace.sessionsPerWeek else {
                     throw PlanValidator.Failure.nonsenseTiming(
                         "The week has \(draft.sessions.count) sessions; it needs \(context.pace.sessionsPerWeek).")
+                }
+                // Counted because it went uncounted for weeks. The schema
+                // requires a slot per move, so a short rotation means either
+                // the model ignored a required property or the decoder dropped
+                // one — and the second of those actually happened, silently,
+                // on every paid week. `PlanValidator` checks a rotation is not
+                // empty; it has no way to know how many were asked for.
+                if let short = draft.sessions.first(where: { $0.moves.count != moveCount }) {
+                    throw PlanValidator.Failure.nonsenseTiming(
+                        "\"\(short.title)\" came back with \(short.moves.count) moves; it needs \(moveCount).")
                 }
                 return draft
             } catch {

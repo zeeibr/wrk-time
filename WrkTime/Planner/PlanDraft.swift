@@ -44,7 +44,11 @@ struct PlanContext: Sendable {
             // `minItems` is unsupported by structured outputs, so an empty
             // rotation satisfies the contract and produces a session with
             // nothing in it. The first live call did exactly that.
-            "Every session must list two or three moves. A session with an empty move list is discarded and the whole week is thrown away."
+            // Named from `Tuning` rather than written out, because this line
+            // said "two or three" for weeks after the schema had moved to five.
+            // The schema is what is enforced; a prompt that disagrees with it
+            // only spends thinking on resolving the contradiction.
+            "Every session must fill all \(Tuning.movesPerSession) move slots. A session with an empty move list is discarded and the whole week is thrown away."
         ]
         if let weightNote { lines.append("Weight: \(weightNote)") }
         if let eatingWindow { lines.append("Eating window: \(eatingWindow)") }
@@ -168,21 +172,31 @@ struct DraftSession: Codable, Sendable, Equatable {
         case dayOffset, title, work, rest, rounds, moves
     }
 
-    /// Three named slots rather than a list.
+    /// Named slots rather than a list.
     ///
     /// This exists because of a failure the prompt could not fix. JSON Schema's
     /// `minItems` is not supported by structured outputs, so `moves: []`
     /// satisfies an array contract perfectly — and the model kept returning
     /// exactly that for one session per week, even when handed its own
-    /// rejected answer and told the rule in plain words. Three *required*
-    /// properties are enforceable where a minimum length is not, so the empty
-    /// rotation stops being expressible at all.
+    /// rejected answer and told the rule in plain words. *Required* properties
+    /// are enforceable where a minimum length is not, so the empty rotation
+    /// stops being expressible at all.
     ///
-    /// Three is also what every session in the app already is.
-    private struct Rotation: Codable {
-        var first: DraftMove
-        var second: DraftMove
-        var third: DraftMove
+    /// The slot names are `ClaudePlanner.moveSlots`, and how many of them are
+    /// required is `Tuning.movesPerSession`. That is why this reads them by
+    /// name at runtime instead of declaring a struct: the struct used to name
+    /// `first`, `second` and `third` while the schema had already moved to
+    /// five, so five moves were asked for, billed for, returned — and two of
+    /// them silently dropped on the way in. Nothing caught it, because
+    /// `PlanValidator` counted sessions and never counted moves. And at a
+    /// setting of two the struct failed to decode at all, which threw outside
+    /// the repair loop and sent every week of the block to the offline planner
+    /// after paying for it.
+    private struct SlotKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
     }
 
     init(from decoder: any Decoder) throws {
@@ -195,8 +209,18 @@ struct DraftSession: Codable, Sendable, Equatable {
 
         // The object form is what the schema asks for; the array form is still
         // accepted so a hand-written fixture or an older stored draft decodes.
-        if let rotation = try? container.decode(Rotation.self, forKey: .moves) {
-            moves = [rotation.first, rotation.second, rotation.third]
+        if let slots = try? container.nestedContainer(keyedBy: SlotKey.self, forKey: .moves) {
+            // In slot order, and every slot present is taken. Reading the
+            // container's own keys instead would put the rotation in whatever
+            // order JSON happened to serialise.
+            moves = ClaudePlanner.moveSlots
+                .compactMap { SlotKey(stringValue: $0) }
+                .compactMap { try? slots.decode(DraftMove.self, forKey: $0) }
+            guard !moves.isEmpty else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .moves, in: container,
+                    debugDescription: "A rotation object with no recognised slots.")
+            }
         } else {
             moves = try container.decode([DraftMove].self, forKey: .moves)
         }
