@@ -422,15 +422,15 @@ struct MovePreferenceTests {
     @Test("The offline planner substitutes a rejected move rather than serving it")
     func offlineSubstitutes() throws {
         // "Ring halo" is in the Upper template.
-        let plain = OfflinePlanner.week(1, pace: .building)
+        let plain = OfflinePlanner.week(1, pace: .building, moves: 5)
         #expect(plain.sessions.flatMap(\.moves).contains { $0.name == "Ring halo" })
 
-        let avoided = OfflinePlanner.week(1, pace: .building, avoiding: ["ring halo"])
+        let avoided = OfflinePlanner.week(1, pace: .building, avoiding: ["ring halo"], moves: 5)
         #expect(!avoided.sessions.flatMap(\.moves).contains { $0.name == "Ring halo" })
         // And the week is still a valid, full week.
         let routines = try PlanValidator.routines(from: avoided)
         #expect(routines.count == Pace.building.sessionsPerWeek)
-        for session in avoided.sessions { #expect(session.moves.count == Tuning.movesPerSession) }
+        for session in avoided.sessions { #expect(session.moves.count == 5) }
     }
 
     @Test("Substitution keeps the equipment it replaced")
@@ -1439,7 +1439,7 @@ struct TuningTests {
         for count in Tuning.movesPerSessionRange {
             Tuning.movesPerSession = count
             for pace in Pace.allCases {
-                let draft = OfflinePlanner.week(1, pace: pace)
+                let draft = OfflinePlanner.week(1, pace: pace, moves: count)
                 for session in draft.sessions {
                     #expect(session.moves.count == count,
                             "\(pace) wanted \(count), got \(session.moves.count)")

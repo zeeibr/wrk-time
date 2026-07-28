@@ -24,7 +24,8 @@ enum OfflinePlanner {
     /// Names to keep out of the week, lowercased. Empty by default so the
     /// deterministic planner stays a pure function when nobody has an opinion.
     static func week(_ weekNumber: Int, pace: Pace,
-                     avoiding excluded: Set<String> = []) -> PlanDraft {
+                     avoiding excluded: Set<String> = [],
+                     moves rotation: Int = Tuning.movesPerSession) -> PlanDraft {
         let step = max(weekNumber - 1, 0) / max(pace.progressionWeeks, 1)
 
         let rest = max(restFloor, baseRest - 3 * step)
@@ -42,8 +43,7 @@ enum OfflinePlanner {
                                 rest: rest,
                                 rounds: rounds,
                                 moves: substituting(
-                                    template.rotation(of: Tuning.movesPerSession,
-                                                      avoiding: excluded),
+                                    template.rotation(of: rotation, avoiding: excluded),
                                     avoiding: excluded))
         }
 
