@@ -6,13 +6,24 @@ struct SettingsView: View {
     @State private var showingLibrary = false
     /// Mirrors of `Tuning`, so the steppers redraw. `Tuning` is the truth; these
     /// exist because `UserDefaults` written from non-View code does not publish.
-    @State private var movesPerSession = Tuning.movesPerSession {
-        didSet { Tuning.movesPerSession = movesPerSession
-                 movesPerSession = Tuning.movesPerSession }
+    ///
+    /// Written through `store(…)` rather than by a `didSet`. A `didSet` on a
+    /// property *wrapper* that assigns to itself re-enters its own observer —
+    /// unlike a plain stored property, where Swift suppresses that — so the
+    /// first tap on a stepper recursed until the stack ran out.
+    @State private var movesPerSession = Tuning.movesPerSession
+    @State private var practiceMovements = Tuning.practiceMovements
+
+    /// Writes the setting, then reads back what it actually took, so a value
+    /// that hits a bound shows the bound rather than what was asked for.
+    private func storeMoves(_ value: Int) {
+        Tuning.movesPerSession = value
+        movesPerSession = Tuning.movesPerSession
     }
-    @State private var practiceMovements = Tuning.practiceMovements {
-        didSet { Tuning.practiceMovements = practiceMovements
-                 practiceMovements = Tuning.practiceMovements }
+
+    private func storePractice(_ value: Int) {
+        Tuning.practiceMovements = value
+        practiceMovements = Tuning.practiceMovements
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -202,15 +213,15 @@ struct SettingsView: View {
                                 value: movesPerSession,
                                 unit: nil,
                                 note: "\(Tuning.movesPerSessionRange.lowerBound) – \(Tuning.movesPerSessionRange.upperBound) in the rotation",
-                                decrement: { movesPerSession -= 1 },
-                                increment: { movesPerSession += 1 })
+                                decrement: { storeMoves(movesPerSession - 1) },
+                                increment: { storeMoves(movesPerSession + 1) })
                         Rule()
                         counter(title: "Morning practice",
                                 value: practiceMovements,
                                 unit: "moves",
-                                note: "\(Int(Practice.seconds))s each · \(Tuning.practiceDuration.durationString)",
-                                decrement: { practiceMovements -= 1 },
-                                increment: { practiceMovements += 1 })
+                                note: "\(Int(Practice.seconds))s each · \((Practice.seconds * Double(practiceMovements)).durationString)",
+                                decrement: { storePractice(practiceMovements - 1) },
+                                increment: { storePractice(practiceMovements + 1) })
                         Rule()
 
                         Text("The practice changes from tomorrow morning. A session's rotation changes the next time a week is written — rewrite this week below to see it sooner.")
