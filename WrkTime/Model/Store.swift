@@ -190,6 +190,16 @@ final class SavedRoutine {
     var routine: IntervalRoutine? {
         try? JSONDecoder().decode(IntervalRoutine.self, from: routineData)
     }
+
+    /// Rewrites this record in place.
+    ///
+    /// Editing a saved routine used to be impossible: tapping one ran it, and
+    /// there was no other way in. A routine with a typo in its name or one
+    /// round too many could only be replaced by building it again — and since
+    /// there was no way to delete one either, the wrong one stayed forever.
+    func update(to routine: IntervalRoutine) {
+        routineData = (try? JSONEncoder().encode(routine)) ?? routineData
+    }
 }
 
 /// A set done off the plan — twenty squats while the kettle boils.

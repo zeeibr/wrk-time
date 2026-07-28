@@ -10,6 +10,8 @@ struct RoutineListView: View {
     /// The saved routine, not just its decoded value — finishing one needs to
     /// write `lastRunAt` back to the record it came from.
     @State private var running: SavedRoutine?
+    /// The one being changed. Same reason: an edit writes back to a record.
+    @State private var editing: SavedRoutine?
 
     var body: some View {
         NavigationStack {
@@ -52,6 +54,26 @@ struct RoutineListView: View {
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(routine.name)
                                     .accessibilityHint("Starts this routine")
+                                    // Tapping runs it, which is what she wants
+                                    // nine times in ten. Editing and deleting
+                                    // live under a press rather than competing
+                                    // for the row — but they exist now, which
+                                    // they did not: a routine with one round
+                                    // too many could only be replaced, and
+                                    // since nothing deleted one either, the
+                                    // wrong one stayed forever.
+                                    .contextMenu {
+                                        Button("Edit") { editing = item }
+                                        Button("Delete", role: .destructive) {
+                                            context.delete(item)
+                                            try? context.save()
+                                        }
+                                    }
+                                    .accessibilityAction(named: "Edit") { editing = item }
+                                    .accessibilityAction(named: "Delete") {
+                                        context.delete(item)
+                                        try? context.save()
+                                    }
                                 }
                             }
                         }
@@ -65,6 +87,12 @@ struct RoutineListView: View {
         .sheet(isPresented: $building) {
             RoutineBuilderView { routine in
                 context.insert(SavedRoutine(routine: routine))
+            }
+        }
+        .sheet(item: $editing) { item in
+            RoutineBuilderView(editing: item.routine) { routine in
+                item.update(to: routine)
+                try? context.save()
             }
         }
         .fullScreenCover(item: $running) { item in
@@ -94,12 +122,24 @@ struct RoutineListView: View {
         }
     }
 
+    /// "8 × 40/45", or "6 intervals written out".
+    ///
+    /// Never `routine.rounds` — that field is the fixed shape's round count and
+    /// means nothing once a sequence takes over, so a written-out routine used
+    /// to advertise a shape it does not have. `roundCount` is true of both.
+    static func shapeNote(_ routine: IntervalRoutine) -> String {
+        guard !routine.isSequence else {
+            return "\(routine.sequence.count) intervals written out"
+        }
+        return "\(routine.roundCount) × \(Int(routine.clampedWork))/\(Int(routine.rest))"
+    }
+
     private func savedRow(_ routine: IntervalRoutine, lastRun: Date?) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(routine.name).font(.almanacMoveName).foregroundStyle(Palette.ink)
-                    Text("\(routine.rounds) × \(Int(routine.clampedWork))/\(Int(routine.rest)) · \(Self.rotationNote(routine))")
+                    Text("\(Self.shapeNote(routine)) · \(Self.rotationNote(routine))")
                         .almanacLabel(Palette.mute, small: true)
                         .tabular()
                 }
@@ -129,23 +169,72 @@ struct RoutineBuilderView: View {
     @Environment(\.dismiss) private var dismiss
     let onSave: (IntervalRoutine) -> Void
 
+    /// What the routine is made of. One or the other, never both at once.
+    ///
+    /// It used to be inferred from whether `steps` was empty, and the two
+    /// definitions sat on screen together as if they combined. They do not:
+    /// `RoutineSchedule` ignores work, rest and rounds entirely the moment a
+    /// sequence exists. So the builder showed three live steppers that changed
+    /// nothing, which is the screen lying about what it does.
+    enum Shape: String, CaseIterable, Identifiable {
+        case fixed, written
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .fixed: "Every round the same"
+            case .written: "Write out each interval"
+            }
+        }
+        var note: String {
+            switch self {
+            case .fixed: "One work length, one rest length, so many rounds."
+            case .written: "30 on, 30 rest, 20 on, 15 rest, 10 on, 10 on — each its own length, in the order you write them. Rests are optional."
+            }
+        }
+    }
+
+    @State private var shape: Shape = .fixed
     @State private var name = ""
     @State private var work: TimeInterval = 60
     @State private var rest: TimeInterval = 45
     @State private var rounds = 8
     @State private var moves: [Move] = []
     @State private var warmUp: [Move] = []
-    /// A written-out sequence. Empty means the routine is the fixed shape
-    /// above; one step or more and the sequence takes over entirely.
+    /// A written-out sequence, used only when `shape` is `.written`.
     @State private var steps: [IntervalStep] = []
     @State private var picking = false
     @Environment(\.displayScale) private var displayScale
 
+    /// The routine being changed, when this is an edit rather than a new one.
+    private let editing: IntervalRoutine?
+
+    init(editing routine: IntervalRoutine? = nil, onSave: @escaping (IntervalRoutine) -> Void) {
+        self.editing = routine
+        self.onSave = onSave
+        guard let routine else { return }
+        _name = State(initialValue: routine.name)
+        _work = State(initialValue: routine.work)
+        _rest = State(initialValue: routine.rest)
+        _rounds = State(initialValue: routine.rounds)
+        _moves = State(initialValue: routine.moves)
+        _warmUp = State(initialValue: routine.warmUp)
+        _steps = State(initialValue: routine.sequence)
+        _shape = State(initialValue: routine.isSequence ? .written : .fixed)
+    }
+
+    /// Keeps the routine's identity across an edit, so running it still writes
+    /// back to the record it came from.
     private var draft: IntervalRoutine {
-        IntervalRoutine(name: name.isEmpty ? "Untitled routine" : name,
-                        work: work, rest: rest, rounds: rounds, moves: moves)
+        var routine = IntervalRoutine(id: editing?.id ?? UUID(),
+                                      name: name.isEmpty ? "Untitled routine" : name,
+                                      work: work, rest: rest, rounds: rounds, moves: moves)
             .warmingUp(with: warmUp)
-            .following(steps)
+        // Steps are kept in state while she is on the fixed shape, so switching
+        // back and forth does not throw away what she wrote — but only the
+        // chosen shape reaches the routine.
+        routine = routine.following(shape == .written ? steps : [])
+        return routine
     }
 
     var body: some View {
@@ -163,25 +252,59 @@ struct RoutineBuilderView: View {
                             .accessibilityLabel("Routine name")
                         Rule(firm: true)
 
-                        HStack(spacing: 0) {
-                            stepper(title: "Work", value: Int(work), unit: "sec",
-                                    note: work >= IntervalRoutine.workCeiling ? "At cap" : nil,
-                                    decrement: { work = max(10, work - 5) },
-                                    increment: { work = min(IntervalRoutine.workCeiling, work + 5) })
-                            divider
-                            stepper(title: "Rest", value: Int(rest), unit: "sec", note: "Step 5 s",
-                                    decrement: { rest = max(0, rest - 5) },
-                                    increment: { rest = min(180, rest + 5) })
-                            divider
-                            stepper(title: "Rounds", value: rounds, unit: nil, note: "1 – 20",
-                                    decrement: { rounds = max(1, rounds - 1) },
-                                    increment: { rounds = min(20, rounds + 1) })
+                        ForEach(Shape.allCases) { option in
+                            CheckRow(title: option.title, note: option.note,
+                                     selected: shape == option) { shape = option }
                         }
-                        .padding(.vertical, 12)
-                        Rule()
+                        .padding(.top, 4)
                     }
 
-                    IndexedSection(number: "02", label: "Moves") {
+                    IndexedSection(number: "02", label: shape == .fixed ? "Shape" : "Sequence") {
+                        if shape == .fixed {
+                            HStack(spacing: 0) {
+                                stepper(title: "Work", value: Int(work), unit: "sec",
+                                        note: work >= IntervalRoutine.workCeiling ? "At cap" : nil,
+                                        decrement: { work = max(10, work - 5) },
+                                        increment: { work = min(IntervalRoutine.workCeiling, work + 5) })
+                                divider
+                                stepper(title: "Rest", value: Int(rest), unit: "sec", note: "Step 5 s",
+                                        decrement: { rest = max(0, rest - 5) },
+                                        increment: { rest = min(180, rest + 5) })
+                                divider
+                                stepper(title: "Rounds", value: rounds, unit: nil, note: "1 – 20",
+                                        decrement: { rounds = max(1, rounds - 1) },
+                                        increment: { rounds = min(20, rounds + 1) })
+                            }
+                            .padding(.vertical, 12)
+                            Rule()
+                        } else {
+                            SectionHead(title: "The intervals",
+                                        note: steps.isEmpty ? "none yet"
+                                            : "\(draft.roundCount) work · \(draft.totalDuration.durationString)")
+                                .padding(.bottom, 4)
+
+                            if steps.isEmpty {
+                                Text("Nothing written yet. Add work and rest in the order you want them — three work intervals in a row is a thing you can ask for, and nothing here assumes they alternate.")
+                                    .font(.almanacBodySmall)
+                                    .foregroundStyle(Palette.mute)
+                                    .padding(.vertical, 10)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                                    stepRow(index: index, step: step)
+                                }
+                                Rule()
+                            }
+
+                            HStack(spacing: 8) {
+                                addStep("Add work", isWork: true)
+                                addStep("Add rest", isWork: false)
+                            }
+                            .padding(.top, 12)
+                        }
+                    }
+
+                    IndexedSection(number: "03", label: "Moves") {
                         if !warmUp.isEmpty {
                             SectionHead(title: "Warm-up",
                                         note: "\(Int(WarmUp.seconds))s each")
@@ -208,7 +331,9 @@ struct RoutineBuilderView: View {
                             // left half-filled, and the copy has to say so —
                             // otherwise the one person who wants a bare timer
                             // reads this screen as refusing to give her one.
-                            Text("Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list.")
+                            Text(shape == .fixed
+                                 ? "Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list."
+                                 : "Leave this empty for a plain interval timer. Add moves and the work intervals you wrote take them in turn — first move, second move, back to the first.")
                                 .font(.almanacBodySmall)
                                 .foregroundStyle(Palette.mute)
                                 .padding(.vertical, 10)
@@ -217,10 +342,21 @@ struct RoutineBuilderView: View {
                             ForEach(Array(moves.enumerated()), id: \.element.id) { index, move in
                                 BlockRow(index: index + 1, symbol: move.symbol,
                                          name: move.name, equipment: move.equipmentLabel,
-                                         measure: "\(Int(work))s")
+                                         // A written-out sequence has no single
+                                         // work length, so printing one here
+                                         // would name a duration this move may
+                                         // never run for.
+                                         measure: measure(forMoveAt: index))
                                     .removable { moves.remove(at: index) }
                             }
                             Rule()
+                            if shape == .written, !steps.isEmpty {
+                                Text(rotationExplanation)
+                                    .font(.almanacBodySmall)
+                                    .foregroundStyle(Palette.mute)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.top, 10)
+                            }
                         }
 
                         Button {
@@ -238,38 +374,18 @@ struct RoutineBuilderView: View {
                         .buttonStyle(.plain)
                     }
 
-                    IndexedSection(number: "03", label: "Sequence") {
-                        SectionHead(title: "Write it out",
-                                    note: steps.isEmpty ? "optional" : draft.totalDuration.durationString)
-                            .padding(.bottom, 4)
-
-                        if steps.isEmpty {
-                            Text("Leave this empty and the routine is the shape above — the same work and rest, every round. Add steps and it follows them instead, each its own length, in the order you write them. Rests are optional: three work intervals in a row is a thing you can ask for.")
-                                .font(.almanacBodySmall)
-                                .foregroundStyle(Palette.mute)
-                                .padding(.vertical, 10)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                                stepRow(index: index, step: step)
-                            }
-                            Rule()
-                        }
-
-                        HStack(spacing: 8) {
-                            addStep("Add work", isWork: true)
-                            addStep("Add rest", isWork: false)
-                        }
-                        .padding(.top, 12)
-                    }
-
                     IndexedSection(number: "04", label: "Total") {
                         Rule(firm: true)
                         HStack(alignment: .lastTextBaseline) {
-                            Text(draft.totalDuration.durationString)
+                            // An em dash rather than a number, because an empty
+                            // sequence has no length. `following([])` clears the
+                            // steps and the routine falls back to the fixed
+                            // shape, so `draft` would confidently report the
+                            // 13:15 of a shape she has just chosen not to use.
+                            Text(isUnwritten ? "—" : draft.totalDuration.durationString)
                                 .font(Face.ui(30, weight: .light))
                                 .tabular()
-                                .foregroundStyle(Palette.ink)
+                                .foregroundStyle(isUnwritten ? Palette.mute : Palette.ink)
                             Spacer()
                             Text(totalNote)
                                 .almanacLabel(Palette.mute, small: true)
@@ -280,11 +396,12 @@ struct RoutineBuilderView: View {
                         // No longer disabled on an empty rotation. A routine
                         // with no moves is a timer, which is a thing she asked
                         // to be able to save.
-                        PrimaryButton(title: "Save routine",
+                        PrimaryButton(title: editing == nil ? "Save routine" : "Save changes",
                                       subtitle: RoutineListView.rotationNote(draft)) {
                             onSave(draft)
                             dismiss()
                         }
+                        .disabled(shape == .written && steps.isEmpty)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -308,12 +425,47 @@ struct RoutineBuilderView: View {
         }
     }
 
+    /// Chosen to write it out, and not written it yet.
+    private var isUnwritten: Bool { shape == .written && steps.isEmpty }
+
     private var totalNote: String {
-        let shape = steps.isEmpty
+        guard !isUnwritten else { return "Add an interval to give this a length" }
+        let body = shape == .fixed
             ? "\(rounds) × \(Int(work))/\(Int(rest)) · final rest dropped"
-            : "\(draft.roundCount) work intervals in \(steps.count) steps"
-        guard !warmUp.isEmpty else { return shape }
-        return "\(warmUp.count) to warm up, then \(shape)"
+            : "\(draft.roundCount) work \(draft.roundCount == 1 ? "interval" : "intervals")"
+                + " in \(steps.count) \(steps.count == 1 ? "step" : "steps")"
+        guard !warmUp.isEmpty else { return body }
+        return "\(warmUp.count) to warm up, then \(body)"
+    }
+
+    /// What a move in the rotation actually runs for.
+    ///
+    /// On the fixed shape every work interval is the same length, so the row
+    /// can name it. In a written-out sequence it cannot: the same move may run
+    /// for thirty seconds once and ten the next time round, and printing one
+    /// number would be picking a favourite. So the row names the intervals it
+    /// lands on instead.
+    private func measure(forMoveAt index: Int) -> String {
+        guard shape == .written, !steps.isEmpty else { return "\(Int(work))s" }
+        let lengths = steps.filter(\.isWork).enumerated()
+            .filter { $0.offset % max(moves.count, 1) == index }
+            .map { Int($0.element.clamped) }
+        guard !lengths.isEmpty else { return "unused" }
+        return Set(lengths).count == 1
+            ? "\(lengths[0])s ×\(lengths.count)"
+            : lengths.map { "\($0)" }.joined(separator: "/") + "s"
+    }
+
+    /// Spelled out rather than left to be inferred, because the cycling is
+    /// invisible until it surprises you: five work intervals and two moves is
+    /// the first move three times and the second twice.
+    private var rotationExplanation: String {
+        let work = draft.roundCount
+        guard moves.count > 0, work > 0 else { return "" }
+        if moves.count >= work {
+            return "\(work) work \(work == 1 ? "interval" : "intervals"), taken in order from the top."
+        }
+        return "\(work) work intervals over \(moves.count) moves — the list repeats from the top when it runs out."
     }
 
     /// One step of a written-out sequence.

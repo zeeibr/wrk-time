@@ -371,3 +371,42 @@ struct EndingReportTests {
         #expect(recorded)
     }
 }
+
+@Suite("A saved routine reads as what it is")
+struct SavedRoutineCopyTests {
+
+    @Test("A fixed shape names its work, rest and rounds")
+    func fixedShape() {
+        let routine = IntervalRoutine(name: "Beam", work: 40, rest: 45, rounds: 8, moves: [])
+        #expect(RoutineListView.shapeNote(routine) == "8 × 40/45")
+    }
+
+    @Test("A written-out routine never advertises a shape it does not have")
+    func writtenOut() {
+        // `rounds` is 8 here and means nothing: the sequence overrides it
+        // entirely. The row used to print it anyway, so a six-interval routine
+        // read "8 × 60/45".
+        let routine = IntervalRoutine(name: "Ladder", work: 60, rest: 45, rounds: 8, moves: [])
+            .following([.work(30), .rest(30), .work(20), .rest(15), .work(10), .work(10)])
+        #expect(RoutineListView.shapeNote(routine) == "6 intervals written out")
+        #expect(routine.roundCount == 4)
+    }
+
+    @Test("Moves cycle through a written-out sequence's work intervals")
+    func movesCycleThroughASequence() {
+        // What "add moves with our custom work" already does, asserted so it
+        // stays true: the rotation is taken in turn by the work intervals, and
+        // the rests take none of it.
+        let squat = Move(name: "Beam front squat", equipment: .beam, cue: "")
+        let press = Move(name: "Beam overhead press", equipment: .beam, cue: "")
+        let routine = IntervalRoutine(name: "Ladder", work: 60, rest: 45, rounds: 1,
+                                      moves: [squat, press])
+            .following([.work(30), .rest(30), .work(20), .rest(15), .work(10)])
+
+        let working = routine.schedule.phases.filter(\.isWork)
+        #expect(working.map(\.move?.name) == ["Beam front squat", "Beam overhead press",
+                                              "Beam front squat"])
+        #expect(working.map(\.duration) == [30, 20, 10])
+        #expect(routine.schedule.phases.filter(\.isRest).allSatisfy { $0.move == nil })
+    }
+}
