@@ -244,6 +244,98 @@ final class LoggedSet {
     }
 }
 
+/// Where a run that was not a planned session came from.
+enum RunSource: String, Codable, Sendable, CaseIterable {
+    /// A routine she built in the Timer tab.
+    case saved
+    /// A session the app composed for a day whose plan was already finished.
+    case extra
+
+    var label: String {
+        switch self {
+        case .saved: "Your own routine"
+        case .extra: "Extra session"
+        }
+    }
+}
+
+/// A workout she finished that the plan did not ask for.
+///
+/// Her words: *"sometimes i do a lot of them in a day and i want that to be
+/// considered."* Before this, finishing a routine she had built overwrote a
+/// single `lastRunAt` and left nothing else — no history, no volume, no Health
+/// entry, nothing the planner could see. Running one ten times was
+/// indistinguishable from running it once, so a heavy week was invisible.
+///
+/// **Not a mark**, and that was her call when asked. Rule 3 stands for the same
+/// reason it stands for `LoggedSet` and `MorningPractice`: the growth form means
+/// "I did the plan", and if everything drew on it the form would become a
+/// general activity log and stop being able to say that. This is volume — real
+/// work, recorded, and passed to the planner as a reason the next week might
+/// have room in it.
+///
+/// Stored by name rather than by reference to a `SavedRoutine`: deleting a
+/// routine must not delete the record of having done it, and an extra session
+/// has no stored routine to point at in the first place.
+@Model
+final class RoutineRun {
+    var id: UUID = UUID()
+    var finishedAt: Date = Date()
+    var name: String = ""
+    /// Work intervals actually seen through — `roundCount`, never `rounds`.
+    var roundsCompleted: Int = 0
+    var seconds: TimeInterval = 0
+    var moveNames: [String] = []
+    var sourceRaw: String = RunSource.saved.rawValue
+
+    init(name: String, roundsCompleted: Int, seconds: TimeInterval,
+         moveNames: [String], source: RunSource, finishedAt: Date = .now) {
+        self.name = name
+        self.roundsCompleted = roundsCompleted
+        self.seconds = seconds
+        self.moveNames = moveNames
+        self.sourceRaw = source.rawValue
+        self.finishedAt = finishedAt
+    }
+
+    var source: RunSource { RunSource(rawValue: sourceRaw) ?? .saved }
+
+    /// "Ladder · 6 rounds · 8:20"
+    var summary: String {
+        let rounds = roundsCompleted == 1 ? "1 round" : "\(roundsCompleted) rounds"
+        return roundsCompleted > 0
+            ? "\(name) · \(rounds) · \(seconds.durationString)"
+            : "\(name) · \(seconds.durationString)"
+    }
+}
+
+@MainActor
+enum RoutineRuns {
+    static func all(in context: ModelContext) -> [RoutineRun] {
+        (try? context.fetch(FetchDescriptor<RoutineRun>(
+            sortBy: [SortDescriptor(\.finishedAt, order: .reverse)]))) ?? []
+    }
+
+    /// Records a finished routine from the routine itself, so the caller does
+    /// not have to know what the record wants.
+    static func record(_ routine: IntervalRoutine, source: RunSource,
+                       seconds: TimeInterval, in context: ModelContext) {
+        context.insert(RoutineRun(name: routine.name,
+                                  roundsCompleted: routine.roundCount,
+                                  seconds: seconds,
+                                  moveNames: routine.moves.map(\.name),
+                                  source: source))
+        // Saved here rather than left to the caller. Recording a finished
+        // workout is the effect that must not depend on anything else running,
+        // and this app has lost that effect five times.
+        try? context.save()
+    }
+
+    static func since(_ date: Date, in context: ModelContext) -> [RoutineRun] {
+        all(in: context).filter { $0.finishedAt >= date }
+    }
+}
+
 /// A weight reading. Source is recorded because a Health-sourced number and a
 /// typed one deserve different trust when projecting.
 @Model
@@ -297,7 +389,8 @@ final class FastWindow {
 enum Store {
     static let schema = Schema([
         Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self,
-        FastWindow.self, LoggedSet.self, MovePreference.self, MorningPractice.self
+        FastWindow.self, LoggedSet.self, MovePreference.self, MorningPractice.self,
+        RoutineRun.self
     ])
 
     /// Local-first, synced through the user's own private CloudKit database.

@@ -133,7 +133,64 @@ struct SeasonView: View {
             Text("The last fortnight, most recent on the right.")
                 .almanacLabel(Palette.mute, small: true)
                 .padding(.top, 8)
+
+            // Her own workouts, beside the practice rather than on the growth
+            // form. Both are real work that earns no mark, and this section is
+            // already where the app keeps that category — so the distinction is
+            // carried by *where* it appears rather than by a second notch
+            // vocabulary on the form.
+            Spacer(minLength: 20)
+            SectionHead(title: "Your own", note: runNote)
+                .padding(.bottom, 8)
+
+            if recentRuns.isEmpty {
+                Text("Routines you build and extra sessions you take appear here. They are volume the planner reads — they are not marks, because a mark is a session the plan asked for.")
+                    .font(.almanacBodySmall)
+                    .foregroundStyle(Palette.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(recentRuns) { run in
+                    VStack(spacing: 0) {
+                        Rule()
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(run.name).font(.almanacBody).foregroundStyle(Palette.ink)
+                                Text(run.source.label).almanacLabel(Palette.mute, small: true)
+                            }
+                            Spacer(minLength: 8)
+                            Text(runDetail(run))
+                                .almanacLabel(Palette.mute, small: true)
+                                .tabular()
+                        }
+                        .padding(.vertical, 11)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(run.name)
+                    .accessibilityValue("\(run.source.label), \(runDetail(run))")
+                }
+                Rule()
+            }
         }
+    }
+
+    /// The last fortnight of her own work, newest first. Bounded because this is
+    /// a record to glance at, not a log to scroll.
+    private var recentRuns: [RoutineRun] {
+        let since = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
+        return Array(RoutineRuns.since(since, in: context).prefix(10))
+    }
+
+    private var runNote: String {
+        let count = recentRuns.count
+        guard count > 0 else { return "Nothing yet" }
+        return count == 1 ? "1 in a fortnight" : "\(count) in a fortnight"
+    }
+
+    private func runDetail(_ run: RoutineRun) -> String {
+        let day = run.finishedAt.formatted(.dateTime.weekday(.abbreviated))
+        return run.roundsCompleted > 0
+            ? "\(day) · \(run.roundsCompleted) × \(run.seconds.durationString)"
+            : "\(day) · \(run.seconds.durationString)"
     }
 
     private var practiceNote: String {

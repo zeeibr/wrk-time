@@ -41,6 +41,11 @@ struct Archive: Codable {
     /// with it.
     var preferences: [PreferenceRecord] = []
     var practices: [PracticeRecord] = []
+    /// Workouts she did that the plan did not ask for. Added with the type, not
+    /// after the fact — the store had eight models and this file carried six,
+    /// and the two it dropped were her opinions about moves and her practice
+    /// history. A new model is not finished until it is in here.
+    var routineRuns: [RoutineRunRecord] = []
 
     struct BlockRecord: Codable {
         var id: UUID
@@ -60,6 +65,16 @@ struct Archive: Codable {
         var verdictRaw: String
         var updatedAt: Date
         var skipCount: Int
+    }
+
+    struct RoutineRunRecord: Codable {
+        var id: UUID
+        var finishedAt: Date
+        var name: String
+        var roundsCompleted: Int
+        var seconds: TimeInterval
+        var moveNames: [String]
+        var sourceRaw: String
     }
 
     struct PracticeRecord: Codable {
@@ -162,6 +177,11 @@ enum ArchiveService {
         archive.practices = try context.fetch(FetchDescriptor<MorningPractice>()).map {
             .init(id: $0.id, day: $0.day, completedAt: $0.completedAt,
                   moveNames: $0.moveNames)
+        }
+        archive.routineRuns = try context.fetch(FetchDescriptor<RoutineRun>()).map {
+            .init(id: $0.id, finishedAt: $0.finishedAt, name: $0.name,
+                  roundsCompleted: $0.roundsCompleted, seconds: $0.seconds,
+                  moveNames: $0.moveNames, sourceRaw: $0.sourceRaw)
         }
         return archive
     }
@@ -325,6 +345,23 @@ enum ArchiveService {
             practice.id = record.id
             practiceDays.insert(day)
             context.insert(practice)
+            summary.added += 1
+        }
+
+        let existingRuns = Set(try context.fetch(FetchDescriptor<RoutineRun>()).map(\.id))
+        for record in archive.routineRuns {
+            guard !existingRuns.contains(record.id) else {
+                summary.alreadyPresent += 1
+                continue
+            }
+            let run = RoutineRun(name: record.name,
+                                 roundsCompleted: record.roundsCompleted,
+                                 seconds: record.seconds,
+                                 moveNames: record.moveNames,
+                                 source: RunSource(rawValue: record.sourceRaw) ?? .saved,
+                                 finishedAt: record.finishedAt)
+            run.id = record.id
+            context.insert(run)
             summary.added += 1
         }
 

@@ -32,6 +32,12 @@ struct TodayView: View {
         /// right one — a rest day can offer a session from earlier in the week.
         case session(PlannedSession, IntervalRoutine)
         case practice(IntervalRoutine)
+        /// A second workout for a day whose plan is already finished. Composed
+        /// by `ExtraSession`, never written to the store as a planned session —
+        /// it earns no mark.
+        case extra(IntervalRoutine)
+        /// One she built herself, started from Today rather than the Timer tab.
+        case saved(SavedRoutine, IntervalRoutine)
         /// One the process died under, picked up where it stopped.
         case resumed(ActiveSession)
 
@@ -39,6 +45,8 @@ struct TodayView: View {
             switch self {
             case .session(let s, _): "session-\(s.id)"
             case .practice: "practice"
+            case .extra: "extra"
+            case .saved(let r, _): "saved-\(r.id)"
             case .resumed: "resumed"
             }
         }
@@ -49,6 +57,8 @@ struct TodayView: View {
             switch self {
             case .session(_, let r): r
             case .practice(let r): r
+            case .extra(let r): r
+            case .saved(_, let r): r
             case .resumed(let a): a.routine
             }
         }
@@ -59,6 +69,8 @@ struct TodayView: View {
             switch self {
             case .session(let s, _): .session(s.id)
             case .practice: .practice
+            case .extra: .extra
+            case .saved: .routine
             case .resumed(let a): a.subject
             }
         }
@@ -501,20 +513,133 @@ struct TodayView: View {
                 }
                 Rule()
             }
+
+            moreToday
         }
     }
 
     private func finishedLine(_ session: PlannedSession) -> String {
         guard let at = session.completedAt else { return "Finished." }
         let time = at.formatted(date: .omitted, time: .shortened)
-        return marksThisWeek == 1
-            ? "Finished at \(time). One mark on the season this week."
-            : "Finished at \(time). \(marksThisWeek) marks on the season this week."
+        return "Finished at \(time). \(marksThisWeek.marksPhrase) on the season this week."
     }
 
     /// A session scheduled for today that has been finished.
     private var finishedToday: PlannedSession? {
         sessions.first { Calendar.current.isDateInToday($0.scheduledFor) && $0.isComplete }
+    }
+
+    // MARK: - More today
+
+    /// What else is available once the day's plan is done.
+    ///
+    /// Her ask: *"i want to be able to do multiple sessions in a day with the
+    /// option to have a second set of workouts to do."* The finished branch of
+    /// section 02 had no button at all, so a day the plan scheduled something
+    /// ended when she did it, whether or not she wanted more.
+    ///
+    /// Ordered most-earned first, and offered rather than urged — the same rule
+    /// the rest-day offer already follows. Nothing here implies the day was
+    /// insufficient:
+    ///
+    /// 1. A session the plan already wrote — one missed earlier this week, or
+    ///    the next one early. That earns a mark, because it is the plan.
+    /// 2. Otherwise an extra session composed from the kit, and her own saved
+    ///    routines. Neither earns a mark; both are recorded as volume and both
+    ///    reach the planner. That split was her call when asked.
+    @ViewBuilder
+    private var moreToday: some View {
+        if let offer = offeredSession, let routine = offer.session.routine {
+            Spacer(minLength: 16)
+            SectionHead(title: "More today", note: "Still on the plan")
+                .padding(.bottom, 8)
+            Text(offer.note)
+                .font(.almanacBody)
+                .foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            PrimaryButton(title: offer.action,
+                          subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
+                running = .session(offer.session, routine)
+            }
+            .padding(.top, 14)
+        } else {
+            Spacer(minLength: 16)
+            SectionHead(title: "More today", note: "No mark")
+                .padding(.bottom, 8)
+            Text("The week's sessions are all done or already claimed. Anything below is extra — it is kept and the planner sees it, but a mark on the season stays one finished session from the plan.")
+                .font(.almanacBodySmall)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 10)
+
+            let extra = extraSession
+            Button { running = .extra(extra) } label: {
+                offerRow(title: extra.name,
+                         detail: "\(extra.roundCount) rounds · \(extra.totalDuration.durationString)",
+                         note: extra.moves.map(\.name).joined(separator: ", "))
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Starts an extra session")
+
+            ForEach(savedRoutines) { item in
+                if let routine = item.routine {
+                    Button { running = .saved(item, routine) } label: {
+                        offerRow(title: routine.name,
+                                 detail: "\(RoutineListView.shapeNote(routine)) · \(routine.totalDuration.durationString)",
+                                 note: RoutineListView.rotationNote(routine))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Starts your own routine")
+                }
+            }
+        }
+    }
+
+    /// A real `Button`, not a tap gesture on a stack — the lesson the saved-
+    /// routine list already carries: without the trait VoiceOver reads a row as
+    /// static text and Switch Control will not scan it.
+    private func offerRow(title: String, detail: String, note: String) -> some View {
+        VStack(spacing: 0) {
+            Rule()
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.almanacMoveName).foregroundStyle(Palette.ink)
+                    Text(note).almanacLabel(Palette.mute, small: true)
+                }
+                Spacer(minLength: 8)
+                Text(detail)
+                    .almanacLabel(Palette.mute, small: true)
+                    .tabular()
+                    .multilineTextAlignment(.trailing)
+            }
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue("\(note), \(detail)")
+    }
+
+    /// Composed once per day rather than per redraw, so the offer does not
+    /// change its moves under her while she reads it.
+    private var extraSession: IntervalRoutine {
+        let refused = MovePreferences.lists(in: context)
+        let ruledOut = Set((refused.avoided + refused.disliked).map { MovePreference.key($0) })
+        let doneToday = sessions
+            .filter { Calendar.current.isDateInToday($0.scheduledFor) && $0.isComplete }
+            .flatMap { $0.routine?.moves.map(\.name) ?? [] }
+        let block = blocks.first
+        return ExtraSession.build(week: block?.currentWeek ?? 1,
+                                  pace: block?.pace ?? .building,
+                                  avoiding: ruledOut,
+                                  notRepeating: doneToday)
+    }
+
+    private var savedRoutines: [SavedRoutine] {
+        (try? context.fetch(FetchDescriptor<SavedRoutine>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))) ?? []
     }
 
     /// A rest day, and what is still available on it.
@@ -551,10 +676,14 @@ struct TodayView: View {
                 Rule()
 
                 PrimaryButton(title: offer.action,
-                              subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
+                              subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
                     running = .session(offer.session, routine)
                 }
                 .padding(.top, 14)
+            } else {
+                // Nothing of the plan left to offer, so the same extras a
+                // finished day gets. A rest day is still not a locked door.
+                moreToday
             }
         }
     }
@@ -585,10 +714,18 @@ struct TodayView: View {
         case .practice:
             MorningPractices.record(workout.routine.warmUp, in: context)
             try? context.save()
-        case .routine:
-            // A saved timer routine earns no mark and no practice row. It is
-            // recorded where it belongs, against the routine that was run.
-            break
+        case .routine, .extra:
+            // Neither earns a mark — that was her call, and it keeps rule 3
+            // intact: the growth form means "I did the plan". But it is real
+            // work and it used to leave nothing at all behind, so a heavy week
+            // of her own routines was invisible to her and to the planner.
+            let source: RunSource = workout.subject == .extra ? .extra : .saved
+            RoutineRuns.record(workout.routine, source: source,
+                               seconds: end.timeIntervalSince(start), in: context)
+            if case .saved(let record, _) = workout {
+                record.lastRunAt = end
+                try? context.save()
+            }
         case .unknown:
             // Written by a build before a run said what it was. Today's
             // session is the old behaviour and the only guess available; it is
@@ -764,7 +901,12 @@ struct TodayView: View {
     private var greeting: String {
         let marks = completedCount
         if finishedToday != nil {
-            return marks == 1 ? "That is one.\nFirst of the season." : "Done for today.\n\(marks) this season."
+            // Not "Done for today" — there is more on offer two sections down,
+            // and a headline that closes the day above a section opening it
+            // would be the screen disagreeing with itself.
+            return marks == 1
+                ? "That is one.\nFirst of the season."
+                : "That is today's.\n\(marks.marksPhrase) this season."
         }
         if marks == 0 { return "Day one. Start small." }
         if todaysSession == nil { return "Rest day. That counts too." }

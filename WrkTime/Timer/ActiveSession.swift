@@ -48,6 +48,9 @@ struct ActiveSession: Codable, Equatable, Sendable {
         case practice
         /// A saved timer routine, which earns no mark and no practice row.
         case routine
+        /// A second workout composed for a day whose plan was already done.
+        /// Recorded like a saved routine — volume, not a mark.
+        case extra
         /// Written before this was recorded. Treated as a session for
         /// continuity with what the old build would have done, but only ever
         /// against today's session — never a practice, so the worst case is
@@ -60,6 +63,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
         case "session": sessionID.map(Subject.session) ?? .unknown
         case "practice": .practice
         case "routine": .routine
+        case "extra": .extra
         default: .unknown
         }
     }
@@ -69,6 +73,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
         case .session(let id): kindRaw = "session"; sessionID = id
         case .practice: kindRaw = "practice"; sessionID = nil
         case .routine: kindRaw = "routine"; sessionID = nil
+        case .extra: kindRaw = "extra"; sessionID = nil
         case .unknown: kindRaw = nil; sessionID = nil
         }
     }

@@ -23,16 +23,40 @@ enum OfflinePlanner {
 
     /// Names to keep out of the week, lowercased. Empty by default so the
     /// deterministic planner stays a pure function when nobody has an opinion.
+    /// A week's work, rest and rounds — the progression itself.
+    ///
+    /// Lifted out of `week` so `ExtraSession` can compose a second workout in
+    /// the same shape as the plan without copying the arithmetic. Two versions
+    /// of this would drift the first time the progression changed, and the extra
+    /// session would start feeling like a different app.
+    struct Shape: Equatable {
+        var work: TimeInterval
+        var rest: TimeInterval
+        var rounds: Int
+        /// How many progression steps have been taken, which is what the
+        /// explanation reports on.
+        var step: Int
+    }
+
+    static func shape(week weekNumber: Int, pace: Pace) -> Shape {
+        let step = max(weekNumber - 1, 0) / max(pace.progressionWeeks, 1)
+        return Shape(
+            // Work climbs half as often as the other two, so a session gains
+            // duration slowly and its short shape survives the block.
+            work: TimeInterval(min(Int(IntervalRoutine.workCeiling), baseWork + 5 * (step / 2))),
+            rest: TimeInterval(max(restFloor, baseRest - 3 * step)),
+            rounds: min(roundCeiling, baseRounds + pace.roundStep * step),
+            step: step)
+    }
+
     static func week(_ weekNumber: Int, pace: Pace,
                      avoiding excluded: Set<String> = [],
                      moves rotation: Int = Tuning.movesPerSession) -> PlanDraft {
-        let step = max(weekNumber - 1, 0) / max(pace.progressionWeeks, 1)
-
-        let rest = max(restFloor, baseRest - 3 * step)
-        let rounds = min(roundCeiling, baseRounds + pace.roundStep * step)
-        // Work climbs half as often as the other two, so a session gains
-        // duration slowly and the thirteen-minute shape survives the block.
-        let work = min(Int(IntervalRoutine.workCeiling), baseWork + 5 * (step / 2))
+        let shape = shape(week: weekNumber, pace: pace)
+        let step = shape.step
+        let rest = Int(shape.rest)
+        let rounds = shape.rounds
+        let work = Int(shape.work)
 
         let days = dayPattern(for: pace)
         let sessions = days.enumerated().map { position, day in

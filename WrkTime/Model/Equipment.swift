@@ -271,6 +271,42 @@ enum MoveLibrary {
     /// the strength library so a flow never turns up inside a work interval.
     static var flow: [Move] { all.filter { $0.kind == .flow } }
 
+    /// `count` strength moves from the library, honouring both refusals and
+    /// what is already in hand.
+    ///
+    /// One builder, because there were two. `PlanRepair.resize` grew a rotation
+    /// this way and `ExtraSession` needed the same thing — and the last time a
+    /// question was spelled out separately in several places, the four spellings
+    /// disagreed and the app offered her the incline push-up she was on record
+    /// as disliking. So the two sets are named for what they are and matched
+    /// differently on purpose:
+    ///
+    /// - `ruledOut` is matched by **containment** (`MovePreference.anyCovers`),
+    ///   so "push-up" bars the incline and knee variants.
+    /// - `used` is matched **exactly**, because a rotation holding "Beam row"
+    ///   has not thereby used "Beam row to hip".
+    ///
+    /// `preferring` keeps a beam day from filling up with dumbbells; it is a
+    /// sort, not a filter, so a short library still fills the rotation.
+    static func rotation(of count: Int,
+                         preferring kit: Set<Equipment> = [],
+                         avoiding ruledOut: Set<String> = [],
+                         excluding used: Set<String> = []) -> [Move] {
+        var taken = used
+        var out: [Move] = []
+        let pool = all.filter { $0.kind == .strength }
+            .sorted { kit.contains($0.equipment) && !kit.contains($1.equipment) }
+
+        for move in pool where out.count < count {
+            let key = MovePreference.key(move.name)
+            guard !taken.contains(key), !MovePreference.anyCovers(ruledOut, move.name)
+            else { continue }
+            taken.insert(key)
+            out.append(move)
+        }
+        return out
+    }
+
     /// Another move using the same equipment, avoiding a set of names.
     ///
     /// The offline planner's templates are fixed, so without this a fallback

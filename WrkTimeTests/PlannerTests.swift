@@ -2259,3 +2259,221 @@ struct AuditSecondTierTests {
         #expect(ClaudePlanner.Usage.read(Data("not json".utf8)) == ClaudePlanner.Usage())
     }
 }
+
+@Suite("More than one workout a day")
+@MainActor
+struct ExtraWorkTests {
+
+    private func store() -> ModelContext { ModelContext(Store.container(inMemory: true)) }
+
+    // MARK: The record
+
+    @Test("A finished routine is recorded, and is not a mark")
+    func recordsWithoutMarking() throws {
+        // Her call when asked: volume, not a mark. Rule 3 holds — the growth
+        // form means "I did the plan" — but the work had been leaving nothing
+        // behind at all, so a heavy week was invisible to her and the planner.
+        let context = store()
+        let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+        try context.save()
+
+        let routine = IntervalRoutine(name: "Extra · beam", work: 40, rest: 45, rounds: 6,
+                                      moves: [MoveLibrary.all[0]])
+        RoutineRuns.record(routine, source: .extra, seconds: 300, in: context)
+
+        let runs = RoutineRuns.all(in: context)
+        #expect(runs.count == 1)
+        #expect(runs.first?.roundsCompleted == 6)
+        #expect(runs.first?.source == .extra)
+        // The thing that must not have happened.
+        let sessions = try context.fetch(FetchDescriptor<PlannedSession>())
+        #expect(sessions.allSatisfy { !$0.isComplete })
+    }
+
+    @Test("A routine run survives a backup, and a second restore adds nothing")
+    func archivesTheRun() throws {
+        // A new model is not finished until it is in the archive — the store
+        // once had eight types and the archive carried six.
+        let context = store()
+        let routine = IntervalRoutine(name: "Ladder", work: 30, rest: 30, rounds: 4, moves: [])
+        RoutineRuns.record(routine, source: .saved, seconds: 240, in: context)
+
+        let archive = try ArchiveService.export(from: context)
+        #expect(archive.routineRuns.count == 1)
+
+        let fresh = store()
+        try ArchiveService.restore(archive, into: fresh)
+        try ArchiveService.restore(archive, into: fresh)
+        let restored = RoutineRuns.all(in: fresh)
+        #expect(restored.count == 1, "a second restore duplicated the run")
+        #expect(restored.first?.name == "Ladder")
+        #expect(restored.first?.source == .saved)
+    }
+
+    // MARK: The composer
+
+    @Test("An extra session never programs a move she has ruled out")
+    func extraRespectsRefusals() {
+        // Containment, so "push-up" bars the incline and knee variants.
+        let extra = ExtraSession.build(week: 3, pace: .building, avoiding: ["push-up"])
+        #expect(!extra.moves.isEmpty)
+        #expect(extra.moves.allSatisfy { !$0.name.lowercased().contains("push-up") })
+        #expect(extra.moves.allSatisfy { $0.kind == .strength })
+    }
+
+    @Test("An extra session is not the session she just did")
+    func extraDoesNotRepeatToday() {
+        let done = MoveLibrary.all.filter { $0.equipment == .beam && $0.kind == .strength }
+        let extra = ExtraSession.build(week: 1, pace: .building, avoiding: [],
+                                       notRepeating: done.map(\.name))
+        let repeated = Set(extra.moves.map { MovePreference.key($0.name) })
+            .intersection(done.map { MovePreference.key($0.name) })
+        #expect(repeated.isEmpty, "offered \(repeated) again")
+    }
+
+    @Test("An extra session is shorter than the plan's, and opens with flow")
+    func extraIsShorterAndWarmsUp() {
+        let extra = ExtraSession.build(week: 6, pace: .hard, avoiding: [])
+        let planned = OfflinePlanner.shape(week: 6, pace: .hard)
+        #expect(extra.roundCount < planned.rounds)
+        #expect(extra.roundCount >= ExtraSession.minimumRounds)
+        #expect(!extra.warmUp.isEmpty)
+        #expect(extra.warmUp.allSatisfy { $0.kind == .flow })
+    }
+
+    @Test("Everything ruled out still yields a session rather than a bare timer")
+    func extraNeverEmpties() {
+        // A rotation of nothing would be a plain interval timer presented as a
+        // session. Refusals still hold; only the done-today exclusion relaxes.
+        let everything = MoveLibrary.all.filter { $0.kind == .strength }.map(\.name)
+        let extra = ExtraSession.build(week: 1, pace: .building, avoiding: [],
+                                       notRepeating: everything)
+        #expect(!extra.moves.isEmpty)
+    }
+
+    // MARK: One rotation builder
+
+    @Test("The shared rotation builder respects both sets, differently")
+    func rotationBuilder() {
+        let out = MoveLibrary.rotation(of: 4, avoiding: ["push-up"])
+        #expect(out.count == 4)
+        #expect(Set(out.map(\.name)).count == 4, "returned a duplicate")
+        #expect(out.allSatisfy { !$0.name.lowercased().contains("push-up") })
+
+        // `excluding` is exact, so a near-name is still available.
+        let beam = try? #require(MoveLibrary.all.first { $0.equipment == .beam })
+        if let beam {
+            let without = MoveLibrary.rotation(of: 3, excluding: [MovePreference.key(beam.name)])
+            #expect(!without.contains { $0.name == beam.name })
+        }
+    }
+
+    @Test("The rotation prefers the kit it is given")
+    func rotationPrefersKit() {
+        let out = MoveLibrary.rotation(of: 3, preferring: [.beam])
+        #expect(out.first?.equipment == .beam)
+    }
+
+    // MARK: Considered by the planner
+
+    @Test("The workload counts the last seven days")
+    func workloadCounts() throws {
+        let context = store()
+        let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+
+        let today = PlannedSession(scheduledFor: .now, title: "Lower", routine: nil)
+        today.block = block
+        today.completedAt = .now
+        context.insert(today)
+
+        let old = PlannedSession(scheduledFor: Date.now.addingTimeInterval(-20 * 86_400),
+                                 title: "Ancient", routine: nil)
+        old.block = block
+        old.completedAt = Date.now.addingTimeInterval(-20 * 86_400)
+        context.insert(old)
+        try context.save()
+
+        let routine = IntervalRoutine(name: "Mine", work: 30, rest: 30, rounds: 5, moves: [])
+        RoutineRuns.record(routine, source: .saved, seconds: 200, in: context)
+        RoutineRuns.record(routine, source: .extra, seconds: 200, in: context)
+
+        let workload = PlannerService.workload(for: block, in: context)
+        #expect(workload.sessionsDone == 1)
+        #expect(workload.sessionsPlanned == 1, "a session from three weeks ago was counted")
+        #expect(workload.routineRuns == 2)
+        #expect(workload.beyondThePlan == 2)
+        #expect(workload.carriedNotableExtra)
+    }
+
+    @Test("The prompt tells the model what to do with extra work")
+    func promptCarriesGuidance() {
+        // The heading alone was the whole instruction for off-plan work, which
+        // is why it had never changed a week.
+        var snapshot = PlanContext(weekNumber: 4, pace: .building, recent: ["Tue · Lower · finished"],
+                                   loggedSets: [])
+        snapshot.workload = PlanContext.Workload(sessionsDone: 4, sessionsPlanned: 4, routineRuns: 3)
+        #expect(snapshot.prompt.contains("3 extra workouts of her own"))
+        #expect(snapshot.prompt.contains("room to progress"))
+
+        // And the direction that protects her: extra work next to missed
+        // sessions is not a licence to program more.
+        snapshot.workload = PlanContext.Workload(sessionsDone: 1, sessionsPlanned: 4, routineRuns: 3)
+        #expect(snapshot.prompt.contains("not as a reason to add work"))
+    }
+
+    @Test("A week carrying extra work is worth asking about")
+    func extraWorkTriggersAsking() throws {
+        // It has to be a trigger, not only a prompt line: a week the model is
+        // not asked about is written by `OfflinePlanner`, which gets no context
+        // at all, so the heaviest weeks would be the ones stepped on blindly.
+        let context = store()
+        let block = Block(startDate: Date.now.addingTimeInterval(-14 * 86_400),
+                          goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+        // A clean fortnight, so no other signal fires.
+        for offset in [-3, -5] {
+            let session = PlannedSession(scheduledFor: Date.now.addingTimeInterval(Double(offset) * 86_400),
+                                         title: "Done", routine: nil)
+            session.block = block
+            session.completedAt = Date.now.addingTimeInterval(Double(offset) * 86_400)
+            context.insert(session)
+        }
+        try context.save()
+        UserDefaults.standard.set(Date.now, forKey: PlanTrigger.Memo.lastAsked)
+
+        let quiet = PlanTrigger.decide(week: 3, of: block, in: context, hasKey: true)
+        #expect(!quiet.asksClaude, "asked for reason: \(quiet.reason)")
+
+        let routine = IntervalRoutine(name: "Mine", work: 30, rest: 30, rounds: 5, moves: [])
+        RoutineRuns.record(routine, source: .saved, seconds: 200, in: context)
+        RoutineRuns.record(routine, source: .extra, seconds: 200, in: context)
+
+        let busy = PlanTrigger.decide(week: 3, of: block, in: context, hasKey: true)
+        #expect(busy.asksClaude)
+        #expect(busy.reason.contains("workouts of your own"))
+        UserDefaults.standard.removeObject(forKey: PlanTrigger.Memo.lastAsked)
+    }
+
+    @Test("Two planned sessions finished on one day are two marks")
+    func twoSessionsOneDayTwoMarks() throws {
+        // Locks in the behaviour multiple-sessions-a-day depends on: marks bin
+        // by `completedAt` with no per-day cap, so a second finished planned
+        // session is a second mark. That is right — it is the plan.
+        let context = store()
+        let start = Calendar.current.startOfDay(for: .now)
+        let block = Block(startDate: start, goalWeightPounds: 150, startingWeightPounds: 165)
+        context.insert(block)
+        for title in ["First", "Second"] {
+            let session = PlannedSession(scheduledFor: start, title: title, routine: nil)
+            session.block = block
+            session.completedAt = .now
+            context.insert(session)
+        }
+        try context.save()
+
+        let done = try context.fetch(FetchDescriptor<PlannedSession>()).filter(\.isComplete)
+        #expect(done.count == 2)
+    }
+}

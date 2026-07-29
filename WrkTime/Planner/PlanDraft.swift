@@ -33,6 +33,52 @@ struct PlanContext: Sendable {
     /// rather than a fresh start every time.
     var lastExplanation: String?
 
+    /// How much she actually did in the last seven days.
+    ///
+    /// Her ask, in her words: *"sometimes i do a lot of them in a day and i want
+    /// that to be considered."* Before this the planner was told a binary
+    /// finished/not-done per planned session and up to ten **undated**
+    /// off-plan set summaries. So a week where she did four planned sessions
+    /// and five of her own routines looked identical to a week of four
+    /// sessions and nothing else — the extra work was not merely unweighted,
+    /// it was absent.
+    ///
+    /// An aggregate rather than another list, deliberately. The existing lists
+    /// are truncated at ten and carry no dates, so a busy fortnight silently
+    /// loses its tail; a count cannot.
+    var workload: Workload?
+
+    struct Workload: Sendable, Equatable {
+        var sessionsDone = 0
+        var sessionsPlanned = 0
+        var routineRuns = 0
+        var practices = 0
+        var loggedSets = 0
+
+        /// Workouts beyond what the plan asked for. Practices are excluded —
+        /// they happen every day by design and are not extra.
+        var beyondThePlan: Int { routineRuns }
+
+        /// Whether the week carried appreciably more than it was written for.
+        /// Used as a planning trigger, so the threshold is "worth adapting to"
+        /// rather than "any extra at all": one bonus workout is a good day, not
+        /// a signal the plan is wrong.
+        static let notableExtra = 2
+        var carriedNotableExtra: Bool { beyondThePlan >= Self.notableExtra }
+
+        var line: String {
+            var parts = ["\(sessionsDone) of \(sessionsPlanned) planned sessions finished"]
+            if routineRuns > 0 {
+                parts.append(routineRuns == 1
+                             ? "1 extra workout of her own"
+                             : "\(routineRuns) extra workouts of her own")
+            }
+            if practices > 0 { parts.append("\(practices) morning practices") }
+            if loggedSets > 0 { parts.append("\(loggedSets) loose sets") }
+            return parts.joined(separator: ", ") + "."
+        }
+    }
+
     /// The prompt body. Deliberately plain lines rather than JSON — the model
     /// reads this better, and there is nothing here that needs escaping.
     var prompt: String {
@@ -67,8 +113,25 @@ struct PlanContext: Sendable {
             lines.append("\nLast fortnight:")
             lines.append(contentsOf: recent.map { "- \($0)" })
         }
+        if let workload {
+            lines.append("\nLast seven days: \(workload.line)")
+            // The instruction, not just the number. `Logged off-plan:` sat
+            // under a bare heading with no guidance anywhere in this prompt or
+            // the system prompt, which is why extra work had never changed a
+            // week: the model was handed data and told nothing about it.
+            //
+            // Both directions matter, and the second is the one that protects
+            // her: extra work next to missed sessions is not a licence to
+            // program more.
+            if workload.beyondThePlan > 0 {
+                lines.append("Those extra workouts are hers, not yours to program — but they are real volume. If she is consistently doing more than the plan asks, there is room to progress faster than the default step.")
+                if workload.sessionsDone < workload.sessionsPlanned {
+                    lines.append("She is also missing planned sessions while adding her own. Read that as the plan's shape not fitting her week — try different days or shorter sessions — not as a reason to add work.")
+                }
+            }
+        }
         if !loggedSets.isEmpty {
-            lines.append("\nLogged off-plan:")
+            lines.append("\nLoose sets logged off-plan, newest first:")
             lines.append(contentsOf: loggedSets.map { "- \($0)" })
         }
         if !avoidedMoves.isEmpty {

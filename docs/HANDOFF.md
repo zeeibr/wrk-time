@@ -93,6 +93,20 @@ Four rules the code enforces, inherited from the mockups:
 
 ## 4. State of the build
 
+**Added 29 July 2026 — more than one workout a day.** Today used to dead-end:
+the finished branch of section 02 had no button, so a day the plan scheduled
+something ended when she did it. It now offers what is left — a missed session
+or the next one early, which are the plan and earn marks — and when the plan is
+exhausted, a composed `ExtraSession` plus her own saved routines, which earn
+none. A finished routine previously left one overwritten `lastRunAt` and nothing
+else; it now writes a `RoutineRun`, and `PlanContext.workload` puts that volume
+in front of the planner with an instruction about what to do with it. Two or
+more extra workouts in a week is a `PlanTrigger` signal, because a week the
+model is not asked about gets no context at all.
+
+Whether a finished custom routine earns a mark was **her** decision, asked
+directly: it does not. The growth form stays a record of the plan.
+
 Updated 28 July 2026, after a four-dimension engineering audit — persistence,
 planner correctness, time arithmetic, concurrency — and the fifteen fixes it
 produced. Every finding below was verified against the source before being

@@ -16,6 +16,10 @@ import SwiftData
 /// twenty to forty cents to be told the arithmetic is what the app already
 /// knows is not thrift, it is inattention.
 ///
+/// The signals are: the first week of a block, a session missed in the last
+/// fortnight, an opinion recorded about a move, **several workouts done beyond
+/// what the plan asked for**, and a check-in every fourth week.
+///
 /// This is never a cap or a quota. Every reason below is a real signal, and if
 /// one is present the model is asked without hesitation — a week that should be
 /// adapted and is not is a much worse outcome than a week that cost money.
@@ -51,6 +55,19 @@ enum PlanTrigger {
                             reason: missed == 1
                                 ? "A session went undone in the last fortnight, so this week was written around it."
                                 : "\(missed) sessions went undone in the last fortnight, so this week was written around them.")
+        }
+
+        // A week she added several workouts of her own to is exactly "something
+        // to adapt to" — and it has to be a trigger rather than only a prompt
+        // line, because a week the model is not asked about is written by
+        // `OfflinePlanner`, which receives no context at all. Without this, the
+        // heaviest weeks would be the ones stepped on blindly.
+        let workload = PlannerService.workload(for: block, in: context)
+        if workload.carriedNotableExtra {
+            return Decision(asksClaude: true,
+                            reason: workload.beyondThePlan == 1
+                                ? "You did a workout of your own on top of the plan, so this week was written around that."
+                                : "You did \(workload.beyondThePlan) workouts of your own on top of the plan, so this week was written around that.")
         }
 
         if changedPreferences(since: block, in: context) {

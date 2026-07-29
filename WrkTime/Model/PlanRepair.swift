@@ -77,24 +77,17 @@ enum PlanRepair {
             if routine.moves.count > count {
                 routine.moves = Array(routine.moves.prefix(count))
             } else {
-                var used = Set(routine.moves.map { MovePreference.key($0.name) })
-                // Prefer the kit the session already leans on, so a "beam" day
-                // does not fill up with dumbbells.
-                let preferred = Set(routine.moves.map(\.equipment))
-                let pool = MoveLibrary.all.filter { $0.kind == .strength }
-                    .sorted { preferred.contains($0.equipment) && !preferred.contains($1.equipment) }
-                for move in pool where routine.moves.count < count {
-                    let key = MovePreference.key(move.name)
-                    // Containment for what she has ruled out, exact for what
-                    // this rotation already holds. Two different questions:
-                    // "push-up" should bar the incline variant, but a rotation
-                    // holding "Beam row" has not thereby used "Beam row to
-                    // hip". See `MovePreference.anyCovers`.
-                    guard !used.contains(key), !MovePreference.anyCovers(barred, move.name)
-                    else { continue }
-                    used.insert(key)
-                    routine.moves.append(move)
-                }
+                // The one builder — `MoveLibrary.rotation` — rather than this
+                // logic written out again. It carries the containment-versus-
+                // exact distinction that four separate spellings of it once
+                // got wrong.
+                routine.moves += MoveLibrary.rotation(
+                    of: count - routine.moves.count,
+                    // Prefer the kit the session already leans on, so a "beam"
+                    // day does not fill up with dumbbells.
+                    preferring: Set(routine.moves.map(\.equipment)),
+                    avoiding: barred,
+                    excluding: Set(routine.moves.map { MovePreference.key($0.name) }))
             }
 
             guard routine.moves.count != (session.routine?.moves.count ?? 0) else { continue }

@@ -80,6 +80,20 @@ about a week is the planner's call.
   additive: never a round removed, never a work interval shortened. It draws
   from the movements the morning practice did not use that day, so nothing is
   repeated within a day.
+- **A day can hold more than one workout, and only some of them are marks.**
+  Once the day's plan is done, Today offers what is left: a session missed
+  earlier in the week or the next one early — those are the plan, and they earn
+  marks. When the plan is exhausted it offers an `ExtraSession` composed from
+  the kit, and her own saved routines. Those earn **no mark** and are recorded
+  as `RoutineRun` instead. That split was her decision when asked, and it keeps
+  the growth form meaning "I did the plan" rather than becoming an activity log.
+- **`RoutineRun` is volume, and volume reaches the planner.** `PlanContext.workload`
+  counts the last seven days — sessions done against planned, her own workouts,
+  practices, loose sets — and the prompt says what to do with it. Two or more
+  extra workouts is also a `PlanTrigger` signal, and that part is load-bearing:
+  a week the model is not asked about is written by `OfflinePlanner`, which
+  receives no context at all, so without the trigger the heaviest weeks would be
+  the ones stepped on blindly.
 - **A rest day is not a locked door.** It states the plan's intent and then
   offers whatever is still available: a session missed earlier this week first,
   otherwise the next one early. Offered, never urged.
@@ -139,6 +153,14 @@ These look like oversights and are not:
   out. It matches by containment, so "push-up" covers the incline and knee
   variants — which is why the one seeded preference is written that way. Four
   places once spelled this question differently and they disagreed.
+- `MoveLibrary.rotation` is the **only** builder for "pick N moves from the
+  library". It matches refusals by containment and what is already in hand
+  exactly, which is two different questions — and the last time they were
+  spelled out separately in several places, the spellings disagreed and the app
+  offered her the incline push-up she was on record as disliking.
+- `ExtraSession` returns an `IntervalRoutine` and never a `PlannedSession`.
+  Writing one would earn a mark it is not entitled to and would collide with
+  `PlanValidator.duplicateDay` and with `write`'s set of days already trained.
 - `MoveLibrary.names` is strength only. The planner's move enum feeds the
   rotation, and a rotation entry becomes a work phase; a flow movement there
   would be counted down at like a set.

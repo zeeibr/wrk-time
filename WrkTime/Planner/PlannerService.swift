@@ -365,8 +365,32 @@ enum PlannerService {
             hardMoves: preferences.hard,
             // Threaded back in so week five reads as a continuation of week
             // four rather than as a fresh start with amnesia.
-            lastExplanation: Memo.lastExplanation
+            lastExplanation: Memo.lastExplanation,
+            workload: workload(for: block, in: context)
         )
+    }
+
+    /// The last seven days, counted rather than listed.
+    ///
+    /// Seven days rather than the fortnight the attendance list uses: the
+    /// question this answers is "what is she doing *now*", and a fortnight
+    /// averages a heavy week together with a quiet one into something that
+    /// describes neither.
+    static func workload(for block: Block, in context: ModelContext,
+                         now: Date = .now) -> PlanContext.Workload {
+        let since = Calendar.current.date(byAdding: .day, value: -7, to: now) ?? now
+        let week = (block.sessions ?? []).filter {
+            $0.scheduledFor >= since && $0.scheduledFor <= now
+        }
+        let sets = ((try? context.fetch(FetchDescriptor<LoggedSet>())) ?? [])
+            .filter { $0.date >= since }
+
+        return PlanContext.Workload(
+            sessionsDone: week.filter(\.isComplete).count,
+            sessionsPlanned: week.count,
+            routineRuns: RoutineRuns.since(since, in: context).count,
+            practices: MorningPractices.all(in: context).filter { $0.completedAt >= since }.count,
+            loggedSets: sets.count)
     }
 
     /// Weight is passed as a trend and a direction, never as a target to
