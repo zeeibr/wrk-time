@@ -2477,3 +2477,41 @@ struct ExtraWorkTests {
         #expect(done.count == 2)
     }
 }
+
+@Suite("Every finished run is written down")
+@MainActor
+struct RunRecordingContractTests {
+
+    @Test("Only the two non-plan kinds record a run, and each records its own kind")
+    func recordedSources() {
+        // The contract that was broken. Recording lived in `TodayView.finish`,
+        // and a routine started from the Timer tab has its own `onEnd` closure
+        // that never reaches it — so those runs left no trace at all. It lives
+        // in `WorkoutTimerView.report` now, driven by the engine's ending, so
+        // no presenter gets to decide whether a finished workout is recorded.
+        #expect(ActiveSession.Subject.routine.recordedSource == .saved)
+        #expect(ActiveSession.Subject.extra.recordedSource == .extra)
+        // A planned session earns a mark instead, and only the presenter has
+        // the row to mark. The practice keeps its own record.
+        #expect(ActiveSession.Subject.session(UUID()).recordedSource == nil)
+        #expect(ActiveSession.Subject.practice.recordedSource == nil)
+        #expect(ActiveSession.Subject.unknown.recordedSource == nil)
+    }
+
+    @Test("A run started from the Timer tab carries the subject that records it")
+    func timerTabSubjectRecords() {
+        // `RoutineListView` presents with `subject: .routine`; the guard is that
+        // this subject is one that writes a record.
+        #expect(ActiveSession.Subject.routine.recordedSource != nil)
+    }
+
+    @Test("A resumed run keeps its recording kind across the store")
+    func resumedRunStillRecords() throws {
+        var session = ActiveSession(routine: Practice.routine(on: .now), startedAt: .now,
+                                    elapsed: 60, running: true, savedAt: .now)
+        session.setSubject(ActiveSession.Subject.routine)
+        let back = try JSONDecoder().decode(
+            ActiveSession.self, from: try JSONEncoder().encode(session))
+        #expect(back.subject.recordedSource == .saved)
+    }
+}

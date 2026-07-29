@@ -127,7 +127,7 @@ Approved mockup: `docs/design/lane-g-almanac-approved.html`.
 ## The bug shape this app keeps producing
 
 **A side effect placed on a path nobody exercises end to end, reporting success
-anyway.** It has happened five times, and every instance was invisible because
+anyway.** It has happened six times, and every instance was invisible because
 the *failure* path worked:
 
 - Recording a finished session hung on `.onChange` attached to the view that
@@ -139,6 +139,17 @@ the *failure* path worked:
   two moves were dropped from every paid week and nothing counted them.
 - A resumed run carried no identity, so finishing an interrupted practice marked
   a planned session she had never started.
+- Recording a finished routine went into `TodayView.finish`, and a routine
+  started from the **Timer tab** has its own `onEnd` and never reaches it — so
+  those runs left no trace. The plan for that change said to wire both call
+  sites; only one was wired, and only the wired one was verified.
+
+The sixth is the instructive one: having the rule written down did not prevent
+it. What prevents it is not having two call sites. When an effect must happen
+for *every* instance of something, put it where that something is detected —
+`IntervalEngine.onEnded`, `WorkoutTimerView.report`, `PlannerService.write`
+saving for itself — and never in a caller who could have been a different
+caller.
 
 So: **when an effect must happen, do not let a view's lifetime decide whether it
 does.** `IntervalEngine.onEnded` and `PlannerService.write` saving for itself are

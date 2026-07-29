@@ -715,13 +715,13 @@ struct TodayView: View {
             MorningPractices.record(workout.routine.warmUp, in: context)
             try? context.save()
         case .routine, .extra:
-            // Neither earns a mark — that was her call, and it keeps rule 3
-            // intact: the growth form means "I did the plan". But it is real
-            // work and it used to leave nothing at all behind, so a heavy week
-            // of her own routines was invisible to her and to the planner.
-            let source: RunSource = workout.subject == .extra ? .extra : .saved
-            RoutineRuns.record(workout.routine, source: source,
-                               seconds: end.timeIntervalSince(start), in: context)
+            // The `RoutineRun` itself is written by `WorkoutTimerView.report`,
+            // because a run started from the Timer tab never reaches this
+            // function — it has its own `onEnd`. Recording it here as well
+            // would double-count exactly the weeks she does most in.
+            //
+            // What is left is presenter-specific: only Today knows which saved
+            // routine was tapped, so only Today can date it.
             if case .saved(let record, _) = workout {
                 record.lastRunAt = end
                 try? context.save()

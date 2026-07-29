@@ -56,6 +56,21 @@ struct ActiveSession: Codable, Equatable, Sendable {
         /// against today's session — never a practice, so the worst case is
         /// the old behaviour rather than a new one.
         case unknown
+
+        /// What kind of `RoutineRun` finishing this should write, or nil when
+        /// the run is not one — a planned session earns a mark instead, and the
+        /// practice keeps its own record.
+        ///
+        /// Named and testable rather than a `switch` buried in a view.
+        /// Recording used to live in `TodayView.finish`, which a run started
+        /// from the Timer tab never reaches, so those runs left no trace at all.
+        var recordedSource: RunSource? {
+            switch self {
+            case .routine: .saved
+            case .extra: .extra
+            case .session, .practice, .unknown: nil
+            }
+        }
     }
 
     var subject: Subject {

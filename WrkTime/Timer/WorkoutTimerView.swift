@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// The field register.
 ///
@@ -24,6 +25,9 @@ struct WorkoutTimerView: View {
     @State private var entryProgress: CGFloat = 0
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
+    /// Needed because this screen records a finished routine itself — see
+    /// `report()`. Both presenters have a context to inherit.
+    @Environment(\.modelContext) private var context
 
     private let routine: IntervalRoutine
     private let onEnd: (Outcome) -> Void
@@ -319,8 +323,26 @@ struct WorkoutTimerView: View {
         // end is a real ending, and the elapsed clock is the honest length of
         // it, so the cap only ever removes time nobody was working.
         let ceiling = start.addingTimeInterval(engine.schedule.total)
-        onEnd(.completed(start: start, end: min(.now, ceiling),
-                         skipped: engine.skippedMoves))
+        let end = min(.now, ceiling)
+
+        // Recorded here, by the screen that knows the workout finished, rather
+        // than by whoever presented it.
+        //
+        // This was in `TodayView.finish` alone, so a routine started from the
+        // Timer tab — which has its own `onEnd` closure and never touches
+        // `finish` — left no record at all. That is the sixth instance of the
+        // shape named in CLAUDE.md: an effect placed on one of two paths, the
+        // wired path verified, the other never exercised. A presenter must not
+        // get to decide whether a finished workout is written down.
+        //
+        // A planned session is not recorded here: it earns a mark, which needs
+        // the session row, which only the presenter has.
+        if let source = subject.recordedSource {
+            RoutineRuns.record(routine, source: source,
+                               seconds: end.timeIntervalSince(start), in: context)
+        }
+
+        onEnd(.completed(start: start, end: end, skipped: engine.skippedMoves))
     }
 
     @Environment(\.scenePhase) private var scenePhase
