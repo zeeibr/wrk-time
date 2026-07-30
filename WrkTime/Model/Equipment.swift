@@ -244,6 +244,29 @@ enum MoveLibrary {
              cue: "Sit as low as is comfortable, heels down if they reach. Breathe there."),
         Move(name: "Ankle rocking", equipment: .bodyweight, kind: .flow,
              cue: "Rock forward onto the toes, then back onto the heels. Small and slow."),
+        // From the reel's warm-up. Two of them — the corkscrew and the Allen
+        // wrench — are drawn from her own description rather than guessed;
+        // `MovePlates.strip(for:)` is a lookup and a plate of the wrong
+        // movement is worse than none.
+        //
+        // "Cross body swings" and "trunk twists" are deliberately absent: they
+        // are `Arm swings` and `Standing twist` under different names, and a
+        // closed library with two names for one movement is how a rotation
+        // starts repeating itself. Her call when asked.
+        Move(name: "Corkscrew", equipment: .bodyweight, kind: .flow,
+             cue: "Arms out to the sides at shoulder height. Twist them in place, palms turning over and back."),
+        Move(name: "Allen wrench", equipment: .bodyweight, kind: .flow,
+             cue: "Both elbows bent square — one arm up, one down. Rotate back and forth, swapping which is which."),
+        Move(name: "Vertical arm swings", equipment: .bodyweight, kind: .flow,
+             cue: "One arm swings up overhead as the other swings down past the hip. They alternate, long and loose."),
+        Move(name: "Bent-over trunk twists", equipment: .bodyweight, kind: .flow,
+             cue: "Hinge forward with a flat back, arms wide, and rotate one shoulder toward the floor and back."),
+        Move(name: "Slam dunks", equipment: .bodyweight, kind: .flow,
+             cue: "Both arms overhead, then drive them down past the hips together and with intent. The knees give a little."),
+        Move(name: "Golf swings", equipment: .bodyweight, kind: .flow,
+             cue: "Hands together, swing low across the body and up over the far shoulder. Both directions."),
+        Move(name: "High knee circles", equipment: .bodyweight, kind: .flow,
+             cue: "One knee up to hip height, then circle it out and away. Slow, and both legs."),
         Move(name: "Zone 2 walk", equipment: .walkingPad,
              cue: "A pace you could hold a conversation at."),
         Move(name: "Incline walk", equipment: .walkingPad,

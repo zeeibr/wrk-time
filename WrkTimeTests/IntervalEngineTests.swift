@@ -373,6 +373,7 @@ struct EndingReportTests {
 }
 
 @Suite("A saved routine reads as what it is")
+@MainActor
 struct SavedRoutineCopyTests {
 
     @Test("A fixed shape names its work, rest and rounds")
@@ -435,5 +436,85 @@ struct BackwardClockTests {
         #expect(engine.elapsed == 0)
         #expect(engine.currentPhase != nil, "the session lost its phase entirely")
         #expect(engine.status == .running)
+    }
+}
+
+@Suite("A cadence written once and repeated")
+@MainActor
+struct SequenceRepeatTests {
+
+    private let cadence: [IntervalStep] = [
+        .work(30), .rest(30), .work(20), .rest(20), .work(10), .rest(10)
+    ]
+
+    @Test("Repeating multiplies the intervals without rewriting them")
+    func repeatsTheCadence() {
+        // Her ask: six steps wanted four times over was twenty-four steppers.
+        let once = IntervalRoutine(name: "Ladder", work: 60, rest: 45, rounds: 1, moves: [])
+            .following(cadence)
+        let four = once.following(cadence, repeats: 4)
+
+        #expect(once.roundCount == 3)
+        #expect(four.roundCount == 12)
+        #expect(four.totalDuration == once.totalDuration * 4)
+        #expect(four.schedule.phases.count == once.schedule.phases.count * 4)
+    }
+
+    @Test("Rounds keep counting across passes rather than restarting")
+    func roundsRunOn() {
+        let four = IntervalRoutine(name: "Ladder", work: 60, rest: 45, rounds: 1, moves: [])
+            .following(cadence, repeats: 4)
+        let work = four.schedule.phases.filter(\.isWork)
+        #expect(work.map(\.round) == Array(1...12))
+    }
+
+    @Test("A missing or absurd repeat count reads as one pass")
+    func defaultsToOnce() {
+        // Optional on disk, so a routine saved by the previous build decodes
+        // with nil — which must mean one, not zero.
+        var routine = IntervalRoutine(name: "Ladder", work: 60, rest: 45, rounds: 1, moves: [])
+            .following(cadence)
+        #expect(routine.sequenceRepeats == 1)
+        routine.sequenceRepeatsRaw = 0
+        #expect(routine.sequenceRepeats == 1)
+    }
+
+}
+
+@Suite("A flow of her own")
+@MainActor
+struct FlowRoutineTests {
+
+    @Test("Movements with no rounds schedule as flow, not as sets")
+    func flowRoutineSchedules() {
+        // Her question: "what if im trying to make a warm up routine?" A flow
+        // movement inside a work interval would be counted down at like a set,
+        // which is what `MoveKind` exists to prevent — but when the whole
+        // routine is flow it is not warming up for anything.
+        let movements = Array(MoveLibrary.flow.prefix(5))
+        let routine = IntervalRoutine(name: "My warm-up", work: 0, rest: 0, rounds: 0, moves: [])
+            .warmingUp(with: movements, seconds: 45)
+
+        let schedule = routine.schedule
+        #expect(schedule.phases.count == 5)
+        #expect(schedule.phases.allSatisfy { $0.isFlow })
+        #expect(schedule.phases.allSatisfy { $0.duration == 45 })
+        #expect(schedule.total == 225)
+        // Not a round anywhere in it, so nothing counts down at her.
+        #expect(routine.roundCount == 0)
+        #expect(schedule.workPhaseCount == 0)
+    }
+
+    @Test("A flow is recognisable as one from the routine alone")
+    func flowIsRecognisable() {
+        // What the row copy keys off: no rounds, no rotation, but movements.
+        // Asserted on the routine rather than through `RoutineListView`, whose
+        // statics are main-actor isolated and read badly from a test.
+        let routine = IntervalRoutine(name: "My warm-up", work: 0, rest: 0, rounds: 0, moves: [])
+            .warmingUp(with: Array(MoveLibrary.flow.prefix(4)), seconds: 40)
+        #expect(routine.rounds == 0)
+        #expect(routine.moves.isEmpty)
+        #expect(routine.warmUp.count == 4)
+        #expect(routine.warmUpSeconds == 40)
     }
 }

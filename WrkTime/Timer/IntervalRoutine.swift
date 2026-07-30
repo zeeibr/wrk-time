@@ -119,12 +119,28 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     /// non-optional one. Empty and nil both mean "use work, rest and rounds".
     var steps: [IntervalStep]?
 
+    /// How many times the written-out cadence runs.
+    ///
+    /// Her ask: *"i want to be able to say repeat this cadence for x rounds
+    /// without having to set 6 things x more times."* Writing 30/30, 20/20,
+    /// 10/10 and then wanting it four times over meant twenty-four steppers.
+    ///
+    /// Optional for the reason every field added to a stored routine is: these
+    /// are JSON on disk and the synthesized decoder *throws* on a missing
+    /// non-optional key, so a non-optional here would make every routine
+    /// already saved undecodable. Nil reads as one pass.
+    var sequenceRepeatsRaw: Int?
+
     var sequence: [IntervalStep] { steps ?? [] }
     var isSequence: Bool { !sequence.isEmpty }
+    /// At least one, however the stored value got there.
+    var sequenceRepeats: Int { max(sequenceRepeatsRaw ?? 1, 1) }
 
     /// How many work intervals this routine holds, however it is shaped. The
     /// header counts against this, so "Round 3 / 7" is true of a sequence too.
-    var roundCount: Int { isSequence ? sequence.filter(\.isWork).count : rounds }
+    var roundCount: Int {
+        isSequence ? sequence.filter(\.isWork).count * sequenceRepeats : rounds
+    }
 
     var warmUp: [Move] { warmUpMoves ?? [] }
     /// How long each flow movement runs. Longer than a work interval on
@@ -138,10 +154,11 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
 
     var clampedWork: TimeInterval { min(work, Self.workCeiling) }
 
-    /// The same routine as a written-out sequence.
-    func following(_ steps: [IntervalStep]) -> IntervalRoutine {
+    /// The same routine as a written-out sequence, optionally repeated.
+    func following(_ steps: [IntervalStep], repeats: Int = 1) -> IntervalRoutine {
         var copy = self
         copy.steps = steps.isEmpty ? nil : steps
+        copy.sequenceRepeatsRaw = steps.isEmpty ? nil : max(repeats, 1)
         return copy
     }
 
@@ -233,19 +250,24 @@ struct RoutineSchedule: Equatable {
         // exactly as rounds do.
         if routine.isSequence {
             var round = 0
-            for step in routine.sequence {
-                let length = step.clamped
-                guard length > 0 else { continue }
-                if step.isWork {
-                    round += 1
-                    let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
-                    built.append(Phase(kind: .work, round: round, move: move,
-                                       duration: length, start: cursor, end: cursor + length))
-                } else {
-                    built.append(Phase(kind: .rest, round: max(round, 1), move: nil,
-                                       duration: length, start: cursor, end: cursor + length))
+            // The cadence, however many times she asked for it. Rounds keep
+            // counting across passes rather than restarting, so "Round 7 / 12"
+            // is true of a three-work cadence run four times.
+            for _ in 0..<routine.sequenceRepeats {
+                for step in routine.sequence {
+                    let length = step.clamped
+                    guard length > 0 else { continue }
+                    if step.isWork {
+                        round += 1
+                        let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
+                        built.append(Phase(kind: .work, round: round, move: move,
+                                           duration: length, start: cursor, end: cursor + length))
+                    } else {
+                        built.append(Phase(kind: .rest, round: max(round, 1), move: nil,
+                                           duration: length, start: cursor, end: cursor + length))
+                    }
+                    cursor += length
                 }
-                cursor += length
             }
             phases = built
             total = cursor

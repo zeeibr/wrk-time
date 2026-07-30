@@ -920,6 +920,7 @@ struct WarmUpTests {
 }
 
 @Suite("Timer-only routines")
+@MainActor
 struct TimerOnlyTests {
 
     private let bare = IntervalRoutine(name: "Just the clock", work: 45, rest: 30,

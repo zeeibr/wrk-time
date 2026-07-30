@@ -116,11 +116,17 @@ struct RoutineListView: View {
     /// "timer only", and calling it one would be the app failing to notice the
     /// thing she just added.
     static func rotationNote(_ routine: IntervalRoutine) -> String {
+        // A routine of movements and no rounds is a flow in its own right, not
+        // a warm-up for something that never comes — that reading was what
+        // stopped her building one.
+        if routine.rounds == 0, routine.moves.isEmpty, !routine.warmUp.isEmpty {
+            return routine.warmUp.count == 1 ? "1 movement" : "\(routine.warmUp.count) movements"
+        }
         switch (routine.moves.count, routine.warmUp.count) {
-        case (0, 0): "timer only"
-        case (0, let warm): "\(warm) to warm up, then the timer"
-        case (1, _): "1 move"
-        case (let count, _): "\(count) moves"
+        case (0, 0): return "timer only"
+        case (0, let warm): return "\(warm) to warm up, then the timer"
+        case (1, _): return "1 move"
+        case (let count, _): return "\(count) moves"
         }
     }
 
@@ -130,8 +136,13 @@ struct RoutineListView: View {
     /// means nothing once a sequence takes over, so a written-out routine used
     /// to advertise a shape it does not have. `roundCount` is true of both.
     static func shapeNote(_ routine: IntervalRoutine) -> String {
+        if routine.rounds == 0, routine.moves.isEmpty, !routine.warmUp.isEmpty {
+            return "\(Int(routine.warmUpSeconds))s each, held"
+        }
         guard !routine.isSequence else {
-            return "\(routine.sequence.count) intervals written out"
+            let written = "\(routine.sequence.count) intervals written out"
+            return routine.sequenceRepeats > 1
+                ? written + " × \(routine.sequenceRepeats)" : written
         }
         return "\(routine.roundCount) × \(Int(routine.clampedWork))/\(Int(routine.rest))"
     }
@@ -179,19 +190,21 @@ struct RoutineBuilderView: View {
     /// sequence exists. So the builder showed three live steppers that changed
     /// nothing, which is the screen lying about what it does.
     enum Shape: String, CaseIterable, Identifiable {
-        case fixed, written
+        case fixed, written, flow
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .fixed: "Every round the same"
             case .written: "Write out each interval"
+            case .flow: "All flow, no rounds"
             }
         }
         var note: String {
             switch self {
             case .fixed: "One work length, one rest length, so many rounds."
             case .written: "30 on, 30 rest, 20 on, 15 rest, 10 on, 10 on — each its own length, in the order you write them. Rests are optional."
+            case .flow: "A warm-up, or a flow of your own. Movements held one after another with no work intervals and no rests — the field holds still and nothing counts down at you."
             }
         }
     }
@@ -205,6 +218,10 @@ struct RoutineBuilderView: View {
     @State private var warmUp: [Move] = []
     /// A written-out sequence, used only when `shape` is `.written`.
     @State private var steps: [IntervalStep] = []
+    /// How many times the written-out cadence runs. One is a single pass.
+    @State private var repeats = 1
+    /// How long each movement is held in a flow routine.
+    @State private var flowSeconds = Int(WarmUp.seconds)
     @State private var picking = false
     @Environment(\.displayScale) private var displayScale
 
@@ -223,11 +240,20 @@ struct RoutineBuilderView: View {
         _warmUp = State(initialValue: routine.warmUp)
         _steps = State(initialValue: routine.sequence)
         _shape = State(initialValue: routine.isSequence ? .written : .fixed)
+        _repeats = State(initialValue: routine.sequenceRepeats)
+        _flowSeconds = State(initialValue: Int(routine.warmUpSeconds))
+        // A routine with movements and no rounds is a flow, which is exactly
+        // what the morning practice is. Recognised rather than stored as a
+        // third flag.
+        if routine.rounds == 0, routine.moves.isEmpty, !routine.warmUp.isEmpty {
+            _shape = State(initialValue: .flow)
+        }
     }
 
     /// Keeps the routine's identity across an edit, so running it still writes
     /// back to the record it came from.
     private var draft: IntervalRoutine {
+        guard shape != .flow else { return flowDraft }
         var routine = IntervalRoutine(id: editing?.id ?? UUID(),
                                       name: name.isEmpty ? "Untitled routine" : name,
                                       work: work, rest: rest, rounds: rounds, moves: moves)
@@ -235,8 +261,27 @@ struct RoutineBuilderView: View {
         // Steps are kept in state while she is on the fixed shape, so switching
         // back and forth does not throw away what she wrote — but only the
         // chosen shape reaches the routine.
-        routine = routine.following(shape == .written ? steps : [])
+        routine = routine.following(shape == .written ? steps : [], repeats: repeats)
         return routine
+    }
+
+    /// A flow of her own: movements held in order, no work, no rest, no rounds.
+    ///
+    /// Her question: *"what if im trying to make a warm up routine?"* Picking a
+    /// flow movement in the other two shapes sends it to the warm-up, which is
+    /// right there — a spinal wave inside a work interval would be counted down
+    /// at like a set, which is what `MoveKind` exists to prevent. But when the
+    /// whole routine *is* flow it is not warming up for anything; it is the
+    /// routine.
+    ///
+    /// `RoutineSchedule` already allows a routine of zero rounds — that is how
+    /// the morning practice exists — so this needs no new machinery, only a way
+    /// to ask for it.
+    private var flowDraft: IntervalRoutine {
+        IntervalRoutine(id: editing?.id ?? UUID(),
+                        name: name.isEmpty ? "Untitled flow" : name,
+                        work: 0, rest: 0, rounds: 0, moves: [])
+            .warmingUp(with: warmUp, seconds: TimeInterval(flowSeconds))
     }
 
     var body: some View {
@@ -261,8 +306,24 @@ struct RoutineBuilderView: View {
                         .padding(.top, 4)
                     }
 
-                    IndexedSection(number: "02", label: shape == .fixed ? "Shape" : "Sequence") {
-                        if shape == .fixed {
+                    IndexedSection(number: "02", label: sectionTwoLabel) {
+                        if shape == .flow {
+                            SectionHead(title: "How long each",
+                                        note: warmUp.isEmpty
+                                            ? "add movements below"
+                                            : draft.totalDuration.durationString)
+                                .padding(.bottom, 4)
+                            Text("Every movement is held for the same length, one after another. Add them in section 03 in the order you want them.")
+                                .font(.almanacBodySmall)
+                                .foregroundStyle(Palette.mute)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 10)
+                            stepper(title: "Each movement", value: flowSeconds, unit: "sec",
+                                    note: "5 s steps",
+                                    decrement: { flowSeconds = max(15, flowSeconds - 5) },
+                                    increment: { flowSeconds = min(120, flowSeconds + 5) })
+                            Rule().padding(.top, 12)
+                        } else if shape == .fixed {
                             HStack(spacing: 0) {
                                 stepper(title: "Work", value: Int(work), unit: "sec",
                                         note: work >= IntervalRoutine.workCeiling ? "At cap" : nil,
@@ -303,6 +364,21 @@ struct RoutineBuilderView: View {
                                 addStep("Add rest", isWork: false)
                             }
                             .padding(.top, 12)
+
+                            // Write the cadence once and say how many times.
+                            // Her ask, and the arithmetic is obvious: six steps
+                            // wanted four times over was twenty-four steppers.
+                            if !steps.isEmpty {
+                                Rule().padding(.top, 14)
+                                stepper(title: "Repeat the cadence",
+                                        value: repeats, unit: "×",
+                                        note: repeats == 1
+                                            ? "Once through"
+                                            : "\(draft.roundCount) work intervals in all",
+                                        decrement: { repeats = max(1, repeats - 1) },
+                                        increment: { repeats = min(20, repeats + 1) })
+                                    .padding(.top, 12)
+                            }
                         }
                     }
 
@@ -403,7 +479,8 @@ struct RoutineBuilderView: View {
                             onSave(draft)
                             dismiss()
                         }
-                        .disabled(shape == .written && steps.isEmpty)
+                        .disabled((shape == .written && steps.isEmpty)
+                  || (shape == .flow && warmUp.isEmpty))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -422,20 +499,48 @@ struct RoutineBuilderView: View {
         // `MoveKind` exists to prevent — so flow goes to the warm-up.
         .sheet(isPresented: $picking) {
             MovePicker { move in
-                if move.kind == .flow { warmUp.append(move) } else { moves.append(move) }
+                // In a flow routine everything picked is a held movement — a
+                // strength move with no rounds is a hold, which is a legitimate
+                // thing to want in a warm-up. In the other two shapes the old
+                // rule stands: flow opens the session, strength joins the
+                // rotation, because a spinal wave inside a work interval would
+                // be counted down at like a set.
+                if shape == .flow || move.kind == .flow {
+                    warmUp.append(move)
+                } else {
+                    moves.append(move)
+                }
             }
         }
     }
 
+    private var sectionTwoLabel: String {
+        switch shape {
+        case .fixed: "Shape"
+        case .written: "Sequence"
+        case .flow: "Flow"
+        }
+    }
+
     /// Chosen to write it out, and not written it yet.
-    private var isUnwritten: Bool { shape == .written && steps.isEmpty }
+    private var isUnwritten: Bool {
+        (shape == .written && steps.isEmpty) || (shape == .flow && warmUp.isEmpty)
+    }
 
     private var totalNote: String {
-        guard !isUnwritten else { return "Add an interval to give this a length" }
+        guard !isUnwritten else {
+            return shape == .flow
+                ? "Add a movement to give this a length"
+                : "Add an interval to give this a length"
+        }
+        if shape == .flow {
+            return "\(warmUp.count) \(warmUp.count == 1 ? "movement" : "movements") · \(flowSeconds)s each"
+        }
         let body = shape == .fixed
             ? "\(rounds) × \(Int(work))/\(Int(rest)) · final rest dropped"
             : "\(draft.roundCount) work \(draft.roundCount == 1 ? "interval" : "intervals")"
                 + " in \(steps.count) \(steps.count == 1 ? "step" : "steps")"
+                + (repeats > 1 ? " × \(repeats)" : "")
         guard !warmUp.isEmpty else { return body }
         return "\(warmUp.count) to warm up, then \(body)"
     }

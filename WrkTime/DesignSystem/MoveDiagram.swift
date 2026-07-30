@@ -777,6 +777,83 @@ enum MovePlates {
             .front(spread: 104, elbow: -16)
         ], signature: 1),
 
+        // The reel's warm-up.
+        //
+        // Every key here is *longer* than the existing key it would otherwise
+        // collide with, because `byName` matches by containment against a list
+        // sorted longest-first. "vertical arm swing" beats "arm swing";
+        // "high knee circle" beats "circles"; "bent-over trunk twist" beats
+        // "twist". Get that wrong and the move silently inherits a plate of a
+        // different movement — which is worse than no plate, and is exactly
+        // what closing the library was meant to end.
+
+        // Arms out at shoulder height, rotating in place. The rotation itself is
+        // not drawable — this figure has no forearm roll — so the forearms carry
+        // it, angling up and then down through the same shoulder line.
+        Strip(key: "corkscrew", facing: .front, panels: [
+            .front(spread: 90, elbow: 28),
+            .front(spread: 90, elbow: -28)
+        ], signature: 0),
+
+        // Both elbows square, one arm up and one down, swapping. `front` mirrors
+        // its arms about the spine, so it cannot draw an asymmetric pair at all —
+        // this is the one flow move that has to be side-on, where `farArm` gives
+        // the second arm its own angles.
+        Strip(key: "allen wrench", facing: .side, panels: [
+            .side(anchorX: 0.24, shoulder: 158, elbow: -80, farArm: (24, 80)),
+            .side(anchorX: 0.24, shoulder: 24, elbow: 80, farArm: (158, -80))
+        ], signature: 0),
+
+        // One arm at a time, which is the whole distinction from a slam dunk —
+        // her correction. `front` mirrors its arms about the spine and so cannot
+        // draw an asymmetric pair at all, which forces side-on, where `farArm`
+        // gets its own angles. Straight arms here against the Allen wrench's
+        // bent squares, so the two side-on flow plates stay distinguishable.
+        //
+        // It was also drawn symmetric *and* overhead first, which made its
+        // signature identical to `arm circles` in the library list.
+        Strip(key: "vertical arm swing", facing: .side, panels: [
+            .side(anchorX: 0.24, shoulder: 172, elbow: 4, farArm: (10, 4)),
+            .side(anchorX: 0.24, shoulder: 10, elbow: 4, farArm: (172, 4))
+        ], signature: 0),
+
+        // Hinged and rotating. The hinge is what separates this from the
+        // standing twist, so both panels keep the lean and only the shoulders
+        // turn.
+        Strip(key: "bent-over trunk twist", facing: .front, panels: [
+            .front(spread: 96, elbow: 8, shift: -0.55),
+            .front(spread: 96, elbow: 8, shift: 0.55)
+        ], signature: 0),
+
+        // Both arms together and with intent — her words, and the reason this is
+        // front-on where the vertical swing is side-on. The knee bend on the
+        // second panel is the intensity: nobody drives down hard standing tall.
+        Strip(key: "slam dunk", facing: .front, panels: [
+            .front(sink: 1.0, spread: 170, elbow: 4),
+            .front(sink: 0.78, spread: -16, elbow: 8)
+        ], signature: 0),
+
+        // Hands together through the whole arc, so the arms read as one lever
+        // rather than two. Low across the body, then up over the far shoulder.
+        Strip(key: "golf swing", facing: .front, panels: [
+            .front(sink: 0.90, spread: 30, elbow: -18, shift: -0.45),
+            .front(sink: 1.0, spread: 148, elbow: 14, shift: 0.40)
+        ], signature: 1),
+
+        // The two panels have to be *seen* to differ — a guard in the suite
+        // measures the travel between consecutive panels against a head width,
+        // and the first version of this moved the knee barely a tenth of one.
+        // Knee up in front, then swung out and away, with the hip following.
+        // Standing, then the knee up and the hip swung out after it. Two guards
+        // in the suite shaped this: widening the stance lifted both feet clear
+        // of the floor, and a large `shift` with a foot already raised put the
+        // planted leg out of reach of the ground — the solver lands it short.
+        // Half a head of shift is what a lifted leg leaves room for.
+        Strip(key: "high knee circle", facing: .front, panels: [
+            .front(spread: 20, elbow: 16),
+            .front(spread: 20, elbow: 16, shift: 0.5, footLift: 1.7)
+        ], signature: 0),
+
         Strip(key: "standing march", facing: .front, panels: [
             .front(spread: 14, elbow: 22),
             .front(spread: 26, elbow: 14, footLift: 1.7)
