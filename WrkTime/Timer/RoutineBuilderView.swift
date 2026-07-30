@@ -384,13 +384,22 @@ struct RoutineBuilderView: View {
 
                     IndexedSection(number: "03", label: "Moves") {
                         if !warmUp.isEmpty {
-                            SectionHead(title: "Warm-up",
-                                        note: "\(Int(WarmUp.seconds))s each")
+                            // Read from the draft, never from `WarmUp.seconds`.
+                            // Both of these printed the 40-second constant, so
+                            // setting the flow to 60 left every row still
+                            // reading 40s — the routine was saved correctly and
+                            // the screen contradicted it, which is worse than
+                            // being wrong in one place.
+                            //
+                            // The heading was wrong too: in a flow routine these
+                            // movements are not warming up for anything.
+                            SectionHead(title: shape == .flow ? "The movements" : "Warm-up",
+                                        note: "\(Int(draft.warmUpSeconds))s each")
                                 .padding(.bottom, 4)
                             ForEach(Array(warmUp.enumerated()), id: \.element.id) { index, move in
                                 BlockRow(index: index + 1, symbol: move.symbol,
                                          name: move.name, equipment: move.equipmentLabel,
-                                         measure: "\(Int(WarmUp.seconds))s")
+                                         measure: "\(Int(draft.warmUpSeconds))s")
                                     .removable { warmUp.remove(at: index) }
                             }
                             Rule()
@@ -400,8 +409,14 @@ struct RoutineBuilderView: View {
                         // Says what is true. Reordering is not built, and a note
                         // promising a gesture that does not exist is worse than
                         // no note at all.
-                        SectionHead(title: "In rotation",
-                                    note: moves.isEmpty ? "optional" : "\(moves.count) in cycle")
+                        // Section 03 describes the rotation, and a flow has no
+                        // rotation — the movements it collects are the routine.
+                        // Left unchanged it read "In rotation · optional" over
+                        // copy about work intervals taking moves in turn, none
+                        // of which is true in this mode. The same class of
+                        // untruth as printing the 40-second constant.
+                        SectionHead(title: shape == .flow ? "In order" : "In rotation",
+                                    note: flowHeadNote)
                             .padding(.bottom, 4)
 
                         if moves.isEmpty {
@@ -409,9 +424,7 @@ struct RoutineBuilderView: View {
                             // left half-filled, and the copy has to say so —
                             // otherwise the one person who wants a bare timer
                             // reads this screen as refusing to give her one.
-                            Text(shape == .fixed
-                                 ? "Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list."
-                                 : "Leave this empty for a plain interval timer. Add moves and the work intervals you wrote take them in turn — first move, second move, back to the first.")
+                            Text(rotationExplainer)
                                 .font(.almanacBodySmall)
                                 .foregroundStyle(Palette.mute)
                                 .padding(.vertical, 10)
@@ -511,6 +524,25 @@ struct RoutineBuilderView: View {
                     moves.append(move)
                 }
             }
+        }
+    }
+
+    /// What section 03 counts, which is a different thing in each shape.
+    private var flowHeadNote: String {
+        if shape == .flow {
+            return warmUp.isEmpty ? "required" : "\(warmUp.count) movements"
+        }
+        return moves.isEmpty ? "optional" : "\(moves.count) in cycle"
+    }
+
+    private var rotationExplainer: String {
+        switch shape {
+        case .fixed:
+            "Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list."
+        case .written:
+            "Leave this empty for a plain interval timer. Add moves and the work intervals you wrote take them in turn — first move, second move, back to the first."
+        case .flow:
+            "Add the movements in the order you want them. Each is held for the length above, one after another — a flow needs at least one."
         }
     }
 

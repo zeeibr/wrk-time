@@ -518,3 +518,31 @@ struct FlowRoutineTests {
         #expect(routine.warmUpSeconds == 40)
     }
 }
+
+@Suite("A flow holds for as long as she said")
+struct FlowLengthTests {
+
+    @Test("The length she sets is the length every movement gets")
+    func flowUsesTheSetLength() {
+        // The builder printed `WarmUp.seconds` — the 40-second constant — in
+        // both the section note and every row, so setting the flow to 60 left
+        // the screen reading 40s over a routine that was actually saved at 60.
+        let movements = Array(MoveLibrary.flow.prefix(3))
+        for seconds in [15, 40, 60, 90] {
+            let routine = IntervalRoutine(name: "Mine", work: 0, rest: 0, rounds: 0, moves: [])
+                .warmingUp(with: movements, seconds: TimeInterval(seconds))
+            #expect(routine.warmUpSeconds == TimeInterval(seconds))
+            #expect(routine.totalDuration == TimeInterval(seconds * 3))
+            #expect(routine.schedule.phases.allSatisfy { $0.duration == TimeInterval(seconds) })
+        }
+    }
+
+    @Test("A routine with no stated length falls back to the warm-up default")
+    func absentLengthFallsBack() {
+        // Nil is legitimate: routines saved before the flow shape existed have
+        // no stored length, and their warm-ups really are the default.
+        var routine = IntervalRoutine(name: "Old", work: 40, rest: 45, rounds: 8, moves: [])
+        routine.warmUpMoves = Array(MoveLibrary.flow.prefix(2))
+        #expect(routine.warmUpSeconds == WarmUp.seconds)
+    }
+}
