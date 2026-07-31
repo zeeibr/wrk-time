@@ -1466,12 +1466,21 @@ struct TuningTests {
             let session = try #require(defs["session"] as? [String: Any])
             let properties = try #require(session["properties"] as? [String: Any])
             let moves = try #require(properties["moves"] as? [String: Any])
-            let required = try #require(moves["required"] as? [String])
-            // Named slots, because `minItems` is not supported — so the count
-            // has to be the number of required properties or it is not required.
-            #expect(required.count == count)
-            let slots = try #require(moves["properties"] as? [String: Any])
-            #expect(slots.count == count)
+            // An array now, not named slots. The slots made the count a schema
+            // guarantee, which `minItems` cannot express — but they cost one
+            // whole move definition each, and at five sessions of five that was
+            // what the grammar could not compile.
+            //
+            // The count is still enforced, just a layer later: `plan` counts the
+            // moves in every session, hands a short week back to the model with
+            // the reason, and falls to the offline planner if the repair turn
+            // does not fix it. The number is named in the description so the
+            // model is told, and checked afterwards so it cannot be ignored.
+            #expect(moves["type"] as? String == "array")
+            let items = try #require(moves["items"] as? [String: Any])
+            #expect(items["$ref"] as? String == "#/$defs/move")
+            let description = try #require(moves["description"] as? String)
+            #expect(description.contains("\(count)"))
         }
     }
 

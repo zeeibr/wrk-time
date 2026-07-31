@@ -487,12 +487,26 @@ struct ClaudePlanner: Sendable {
                 "enum": roundCounts,
                 "description": "How many times the rotation runs. Eight is a normal week-one session; the whole thing should come to roughly thirteen minutes."
             ],
+            // An array, not five named slots.
+            //
+            // The slots existed because `minItems` is unsupported by structured
+            // outputs, so an array could come back empty — and once did, on the
+            // first live call. That is no longer the only defence: `plan` counts
+            // the moves in every session and hands a short week back to the
+            // model with the reason, then falls to the offline planner if the
+            // repair turn does not fix it.
+            //
+            // And the slots were expensive. Five *required properties* per
+            // session, each pulling in the whole move definition, across five
+            // sessions at the hard pace — twenty-five instances of a
+            // thirty-five-way name enum. Asking for a name and nothing else was
+            // not enough on its own: it compiled at four sessions and still
+            // failed at five, which is the difference between the simulator I
+            // tested on and her phone.
             "moves": [
-                "type": "object",
-                "additionalProperties": false,
-                "description": "The \(names.count) moves this session rotates through, in order.",
-                "required": names,
-                "properties": slotProperties
+                "type": "array",
+                "description": "The \(names.count) moves this session rotates through, in order. Exactly \(names.count) of them — a session with fewer is rejected and the week is thrown away.",
+                "items": ["$ref": "#/$defs/move"]
             ]
         ]
     ]
