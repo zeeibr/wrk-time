@@ -375,7 +375,17 @@ struct ClaudePlanner: Sendable {
     static var moveSchema: [String: Any] {[
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "equipment", "cue", "loadPounds"],
+        // Only the name. Equipment, cue and load were all facts the closed
+        // library already holds — "Ring halo" *is* the 5 lb ring — and every
+        // one of them was paid for once per move slot per session, which at the
+        // hard pace is twenty-five times over. That redundancy is what put the
+        // compiled grammar past its size limit and returned 400, "schema too
+        // complex". Coarsening the rest list first was aiming at the wrong
+        // thing entirely.
+        //
+        // Stricter, not looser: a week naming a move with a load its kit cannot
+        // be set to is now unrepresentable rather than caught afterwards.
+        "required": ["name"],
         "properties": [
             // The library, closed. Move names were the last free-text field in
             // this schema and every fuzzy-matching problem downstream came from
@@ -388,17 +398,7 @@ struct ClaudePlanner: Sendable {
             // density and volume — the kit tops out at 15 lb — so the planner's
             // job is which moves and in what order, not inventing a
             // thirty-eighth for a drawer with four things in it.
-            "name": ["type": "string", "enum": MoveLibrary.names],
-            "equipment": [
-                "type": "string",
-                "enum": Equipment.allCases.map(\.rawValue)
-            ],
-            "cue": ["type": "string", "description": "One line of form in plain words."],
-            "loadPounds": [
-                "type": "number",
-                "enum": legalLoads,
-                "description": "The load in pounds, and it must be one this equipment actually offers: beam 15; rings 5, 8 or 10; dumbbells 2. Use 0 for bodyweight and the walking pad."
-            ]
+            "name": ["type": "string", "enum": MoveLibrary.names]
         ]
     ]}
 

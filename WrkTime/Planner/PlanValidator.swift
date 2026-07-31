@@ -110,10 +110,20 @@ enum PlanValidator {
     /// The check the whole brief hangs on: the rings are three *different*
     /// weights, so a load is only legal if it is one the kit can actually be
     /// set to. Validated against `availableLoadsPounds`, never against prose.
+    /// The library move the name refers to, taken whole.
+    ///
+    /// It used to cross-check the model's equipment against the library's and
+    /// its load against `availableLoadsPounds`. Those checks are gone because
+    /// what they guarded is now unrepresentable: the schema asks only for a
+    /// name, and a legal name determines the equipment, the cue and the load.
+    /// "Ring halo" *is* the 5 lb ring. A week can no longer name a move with a
+    /// load its kit cannot be set to, because the load is not the model's to
+    /// state — which is stricter than checking it after the fact.
+    ///
+    /// It also removed three fields from a definition paid for once per move
+    /// slot per session, which is what put the compiled grammar over the size
+    /// limit and returned 400 "schema too complex".
     static func move(from draft: DraftMove) throws -> Move {
-        guard let equipment = Equipment(rawValue: draft.equipment) else {
-            throw Failure.unknownEquipment(draft.equipment)
-        }
         // The library is closed, so a name outside it is a week that would draw
         // the wrong shape or none at all. Rejected here rather than papered
         // over by a matcher further down.
@@ -122,35 +132,14 @@ enum PlanValidator {
         }) else {
             throw Failure.unknownMove(draft.name)
         }
-        guard known.equipment == equipment else {
-            throw Failure.unknownEquipment(draft.equipment)
-        }
-        // The second gate, and it was open. `names` — the schema's enum — is
-        // strength only, but this lookup runs against the whole library, so a
-        // week naming "Zone 2 walk" parsed and validated even though the model
-        // was never offered it. Walking is a weekly total; a rotation entry
-        // becomes a work interval, and forty seconds on the pad is longer to
-        // set up than to do.
+        // `MoveLibrary.names` — the schema's enum — is strength only, but this
+        // lookup runs against the whole library, so the second gate has to say
+        // so too. A flow movement in a rotation becomes a work interval and
+        // gets counted down at like a set.
         guard known.kind == .strength else {
             throw Failure.unknownMove(draft.name)
         }
-
-        let available = equipment.availableLoadsPounds
-        if available.isEmpty {
-            // Bodyweight and the pad load nothing. A number here means the
-            // planner has misunderstood the kit, not that it picked wrongly.
-            guard draft.loadPounds == 0 else {
-                throw Failure.impossibleLoad(move: draft.name, equipment: equipment, pounds: draft.loadPounds)
-            }
-            return Move(name: known.name, equipment: equipment, kind: known.kind,
-                        cue: draft.cue, loadPounds: nil)
-        }
-
-        guard available.contains(draft.loadPounds) else {
-            throw Failure.impossibleLoad(move: draft.name, equipment: equipment, pounds: draft.loadPounds)
-        }
-        return Move(name: known.name, equipment: equipment, kind: known.kind,
-                    cue: draft.cue, loadPounds: draft.loadPounds)
+        return known
     }
 
     /// Recognises a flow movement by name.

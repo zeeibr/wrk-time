@@ -303,10 +303,34 @@ struct DraftSession: Codable, Sendable, Equatable {
 struct DraftMove: Codable, Sendable, Equatable {
     var name: String
     /// Must decode to a case of `Equipment`; anything else is rejected.
-    var equipment: String
-    var cue: String
-    /// Pounds. Zero means the move carries no load — bodyweight and the pad.
-    /// Modelled as a plain number rather than a nullable one because structured
-    /// outputs handle a required scalar more reliably than an optional.
-    var loadPounds: Double
+    var equipment: String = ""
+    var cue: String = ""
+    /// Pounds. Zero means the move carries no load — bodyweight.
+    var loadPounds: Double = 0
+
+    init(name: String, equipment: String = "", cue: String = "", loadPounds: Double = 0) {
+        self.name = name
+        self.equipment = equipment
+        self.cue = cue
+        self.loadPounds = loadPounds
+    }
+
+    /// Only `name` is required.
+    ///
+    /// The schema asks Claude for the name and nothing else, because the
+    /// library is closed and therefore already holds the equipment, the cue and
+    /// the load for every legal name — "Ring halo" *is* the 5 lb ring. Making
+    /// the model restate them was asking it to repeat three facts the app
+    /// owns, and each one multiplied across every move slot in the week, which
+    /// is what put the compiled grammar over the size limit.
+    ///
+    /// The other three stay on the struct because `OfflinePlanner` builds
+    /// complete drafts by hand and the archive's fixtures carry them.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        equipment = try container.decodeIfPresent(String.self, forKey: .equipment) ?? ""
+        cue = try container.decodeIfPresent(String.self, forKey: .cue) ?? ""
+        loadPounds = try container.decodeIfPresent(Double.self, forKey: .loadPounds) ?? 0
+    }
 }

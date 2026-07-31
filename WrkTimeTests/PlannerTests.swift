@@ -35,18 +35,24 @@ struct PlanValidatorTests {
     // The rings are three different weights, not a matched set. A planner that
     // assumes a uniform ring load produces a session she cannot do, and this is
     // the only thing standing between that and her Tuesday.
-    @Test("Rejects a ring weight that does not exist", arguments: [3.0, 7.0, 12.0, 15.0])
-    func impossibleRingLoad(pounds: Double) {
-        #expect(throws: PlanValidator.Failure.self) {
-            try PlanValidator.routines(from: draft([move(.rings, pounds)]))
-        }
+    @Test("A ring weight that does not exist cannot be asked for at all",
+          arguments: [3.0, 7.0, 12.0, 15.0])
+    func impossibleRingLoad(pounds: Double) throws {
+        // This used to be a rejection. It is now unrepresentable, which is
+        // stronger: the schema asks Claude for a move *name* and nothing else,
+        // so the load comes from the closed library rather than from the model.
+        // "Ring halo" is the 5 lb ring whatever a draft claims alongside it.
+        let routines = try PlanValidator.routines(from: draft([move(.rings, pounds)]))
+        let ring = try #require(routines.first?.routine.moves.first)
+        #expect(ring.loadPounds == 5, "took the draft's load instead of the library's")
+        #expect(Equipment.rings.availableLoadsPounds.contains(ring.loadPounds ?? 0))
     }
 
-    @Test("Rejects the beam set to anything but 15")
-    func impossibleBeamLoad() {
-        #expect(throws: PlanValidator.Failure.self) {
-            try PlanValidator.routines(from: draft([move(.beam, 25)]))
-        }
+    @Test("The beam is fifteen pounds whatever a draft says")
+    func impossibleBeamLoad() throws {
+        let routines = try PlanValidator.routines(from: draft([move(.beam, 25)]))
+        let beam = try #require(routines.first?.routine.moves.first)
+        #expect(beam.loadPounds == 15)
     }
 
     @Test("Rejects equipment that does not exist")
@@ -57,14 +63,11 @@ struct PlanValidatorTests {
         }
     }
 
-    @Test("Rejects a load on something that loads nothing")
-    func loadOnBodyweight() {
-        #expect(throws: PlanValidator.Failure.self) {
-            try PlanValidator.routines(from: draft([move(.bodyweight, 10)]))
-        }
-        #expect(throws: PlanValidator.Failure.self) {
-            try PlanValidator.routines(from: draft([move(.walkingPad, 5)]))
-        }
+    @Test("A bodyweight move carries no load whatever a draft says")
+    func loadOnBodyweight() throws {
+        let routines = try PlanValidator.routines(from: draft([move(.bodyweight, 10)]))
+        let move = try #require(routines.first?.routine.moves.first)
+        #expect(move.loadPounds == nil)
     }
 
     @Test("Holds the 60-second work ceiling")
@@ -98,11 +101,14 @@ struct PlanValidatorTests {
     func rejectsWhole() {
         // One good session and one impossible one. Keeping the good half would
         // hand her a week the planner never wrote.
+        // The bad half names a move outside the closed library — which is what
+        // "impossible" means now that loads and equipment are the library's to
+        // supply rather than the model's to state.
         let mixed = PlanDraft(explanation: "x", sessions: [
             DraftSession(dayOffset: 0, title: "Good", work: 40, rest: 45, rounds: 8,
                          moves: [move(.beam, 15)]),
             DraftSession(dayOffset: 2, title: "Bad", work: 40, rest: 45, rounds: 8,
-                         moves: [move(.rings, 7)])
+                         moves: [DraftMove(name: "Barbell back squat")])
         ])
         #expect(throws: PlanValidator.Failure.self) {
             try PlanValidator.routines(from: mixed)
@@ -1180,18 +1186,32 @@ struct ResponseSchemaTests {
         #expect(days == [0, 1, 2, 3, 4, 5, 6])
     }
 
-    @Test("Only loads the kit can be set to are expressible")
-    func loadsMatchTheKit() throws {
+    @Test("A move is a name and nothing else")
+    func moveIsJustAName() throws {
+        // A load the kit cannot be set to used to be expressible-and-rejected.
+        // It is now not expressible: the schema asks for a name, and the closed
+        // library supplies the equipment, the cue and the load for it.
+        //
+        // That is also what brought the compiled grammar back under its size
+        // limit. Four fields, each paid for once per move slot per session —
+        // twenty-five times at the hard pace — is what returned 400, "schema
+        // too complex".
         let defs = try #require(ClaudePlanner.schema(sessions: 4)["$defs"] as? [String: Any])
         let move = try #require(defs["move"] as? [String: Any])
-        let loads = try #require(try property("loadPounds", of: move)["enum"] as? [Double])
+        let properties = try #require(move["properties"] as? [String: Any])
 
-        // Zero, for bodyweight and the pad, plus every real load — and nothing
-        // else. A schema that offered 20 lb would be describing a kit she does
-        // not own.
+        #expect(Array(properties.keys) == ["name"])
+        #expect(move["required"] as? [String] == ["name"])
+        #expect(properties["loadPounds"] == nil)
+        #expect(properties["equipment"] == nil)
+        #expect(properties["cue"] == nil)
+
+        // Every load the app can produce is still one the kit offers — it just
+        // comes from the library rather than from the model.
         let real = Set(Equipment.allCases.flatMap(\.availableLoadsPounds))
-        #expect(Set(loads) == real.union([0]))
-        #expect(!loads.contains(20))
+        for move in MoveLibrary.all where move.loadPounds != nil {
+            #expect(real.contains(move.loadPounds ?? 0), "\(move.name) names a load the kit lacks")
+        }
     }
 
     @Test("Every session the offline planner writes is expressible")
@@ -1381,13 +1401,18 @@ struct ClosedLibraryTests {
         #expect(MovePlates.strip(for: move) != nil)
     }
 
-    @Test("A move claiming the wrong kit is rejected")
-    func validatorChecksEquipment() {
+    @Test("The kit comes from the library, not from the draft")
+    func validatorTakesEquipmentFromTheLibrary() throws {
+        // Also no longer a rejection, for the same reason: equipment is not a
+        // field the model fills in. A legal name determines it, so a draft
+        // claiming the wrong kit cannot survive as one — it simply is not read.
         let draft = DraftMove(name: "Beam deadlift", equipment: "dumbbells",
                               cue: "No.", loadPounds: 2)
-        #expect(throws: PlanValidator.Failure.unknownEquipment("dumbbells")) {
-            _ = try PlanValidator.move(from: draft)
-        }
+        let move = try PlanValidator.move(from: draft)
+        #expect(move.equipment == .beam)
+        #expect(move.loadPounds == 15)
+        // And the cue is the authored one, not whatever came back.
+        #expect(move.cue != "No.")
     }
 
     @Test("Every week the offline planner writes still passes")
