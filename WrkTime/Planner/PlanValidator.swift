@@ -125,6 +125,15 @@ enum PlanValidator {
         guard known.equipment == equipment else {
             throw Failure.unknownEquipment(draft.equipment)
         }
+        // The second gate, and it was open. `names` — the schema's enum — is
+        // strength only, but this lookup runs against the whole library, so a
+        // week naming "Zone 2 walk" parsed and validated even though the model
+        // was never offered it. Walking is a weekly total; a rotation entry
+        // becomes a work interval, and forty seconds on the pad is longer to
+        // set up than to do.
+        guard known.kind == .strength else {
+            throw Failure.unknownMove(draft.name)
+        }
 
         let available = equipment.availableLoadsPounds
         if available.isEmpty {

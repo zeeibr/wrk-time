@@ -103,6 +103,11 @@ about a week is the planner's call.
   work intervals either way; never read `rounds` for display.
 - **A routine may have no moves.** That is a plain interval timer, not an
   unfinished routine.
+- **Walking is a weekly total, never an interval.** `MoveKind.walk` keeps the
+  pad out of every rotation — the planner's move enum, the builder's picker,
+  `MoveLibrary.rotation` and `PlanValidator` all refuse it. Forty seconds on the
+  pad takes longer to set up than to do. The target lives in `walkMinutes` and
+  is drawn on Signals.
 - **Fasting is an input, not a feature.** Stats stay visible; it never gets a
   tab or a hero screen.
 - Health content is educational, never medical advice.

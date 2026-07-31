@@ -10,11 +10,27 @@ import Foundation
 enum MoveKind: String, Codable, Sendable, CaseIterable {
     case strength
     case flow
+    /// The walking pad. A third kind rather than a filter written out at each
+    /// site, for the same reason `.flow` is one.
+    ///
+    /// Her words: *"40 seconds of an incline walk or zone 2 walk isn't going to
+    /// do anything and will take longer to set up the treadmill."* The pad was
+    /// `.strength` by default, so it was rotation-eligible everywhere — the
+    /// planner's move enum offered it, the picker listed it, and
+    /// `MoveLibrary.rotation` could put it in an extra session. A work interval
+    /// is the wrong unit for walking entirely.
+    ///
+    /// Walking already has its own place: a weekly minutes target the planner
+    /// sets, drawn on Signals and read back from Health. Four filters already
+    /// ask `kind == .strength`, so naming this excludes the pad from all of
+    /// them at once rather than adding a fifth thing to remember.
+    case walk
 
     var label: String {
         switch self {
         case .strength: "Strength"
         case .flow: "Flow"
+        case .walk: "Walking"
         }
     }
 }

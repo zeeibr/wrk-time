@@ -192,10 +192,16 @@ enum OfflinePlanner {
                 draft("Beam good morning", .beam, "Soft knees, flat back. Stop when your hamstrings say so.", 15),
                 draft("Dumbbell press", .dumbbells, "Two pounds is enough when you go slowly.", 2)
             ]),
-            Template(title: "Easy · pad and floor", moves: [
-                draft("Zone 2 walk", .walkingPad, "A pace you could hold a conversation at.", 0),
+            // The easy day is floor work, not the pad. This template used to
+            // open and close with a walk, which is how "Easy · pad and floor"
+            // put two treadmill intervals inside a session — and a
+            // forty-second walk is longer to set the pad up for than to do.
+            // Walking is a weekly total the plan sets separately and Signals
+            // draws; it was never meant to be a work interval.
+            Template(title: "Easy · floor", moves: [
                 draft("Dead bug", .bodyweight, "Ribs down, low back flat on the floor.", 0),
-                draft("Incline walk", .walkingPad, "Raise the incline before you raise the speed.", 0)
+                draft("Glute bridge", .bodyweight, "Push through the heels. Squeeze at the top, then lower slowly.", 0),
+                draft("Bird dog", .bodyweight, "Opposite arm and leg, long and level. Nothing rotates.", 0)
             ])
         ]
 

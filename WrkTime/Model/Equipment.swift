@@ -267,9 +267,12 @@ enum MoveLibrary {
              cue: "Hands together, swing low across the body and up over the far shoulder. Both directions."),
         Move(name: "High knee circles", equipment: .bodyweight, kind: .flow,
              cue: "One knee up to hip height, then circle it out and away. Slow, and both legs."),
-        Move(name: "Zone 2 walk", equipment: .walkingPad,
+        // `.walk`, so neither can reach a rotation. They are here to be named
+        // — in the kit list, and in what Signals says walking is for — not to
+        // be programmed as intervals.
+        Move(name: "Zone 2 walk", equipment: .walkingPad, kind: .walk,
              cue: "A pace you could hold a conversation at."),
-        Move(name: "Incline walk", equipment: .walkingPad,
+        Move(name: "Incline walk", equipment: .walkingPad, kind: .walk,
              cue: "Raise the incline before you raise the speed.")
     ]
 
@@ -285,6 +288,10 @@ enum MoveLibrary {
     /// through `WarmUp` and the morning practice, neither of which asks the
     /// model for anything.
     static let names: [String] = all.filter { $0.kind == .strength }.map(\.name)
+
+    /// The pad, kept out of every rotation. Walking is a weekly total, not a
+    /// forty-second interval.
+    static var walks: [Move] { all.filter { $0.kind == .walk } }
 
     static func moves(for equipment: Equipment) -> [Move] {
         all.filter { $0.equipment == equipment && $0.kind == .strength }

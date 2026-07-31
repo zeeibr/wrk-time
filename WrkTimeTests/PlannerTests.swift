@@ -2516,3 +2516,45 @@ struct RunRecordingContractTests {
         #expect(back.subject.recordedSource == .saved)
     }
 }
+
+@Suite("The pad is not an interval")
+struct WalkingIsNotASetTests {
+
+    @Test("No rotation anywhere can contain a walk")
+    func padNeverReachesARotation() {
+        // Her words: "40 seconds of an incline walk or zone 2 walk isn't going
+        // to do anything and will take longer to set up the treadmill." The pad
+        // was `.strength` by default, so it was rotation-eligible in all four
+        // places that ask that question.
+        let walks = Set(MoveLibrary.walks.map(\.name))
+        #expect(!walks.isEmpty, "the pad moves went missing entirely")
+
+        // The planner's closed enum.
+        #expect(Set(MoveLibrary.names).isDisjoint(with: walks))
+        // The shared rotation builder, which `PlanRepair` and `ExtraSession`
+        // both go through.
+        let rotation = MoveLibrary.rotation(of: 40)
+        #expect(Set(rotation.map(\.name)).isDisjoint(with: walks))
+        // The routine builder's picker.
+        #expect(MoveLibrary.moves(for: .walkingPad).isEmpty)
+    }
+
+    @Test("A generated week naming a walk is rejected whole")
+    func validatorRejectsAWalk() {
+        // The library is closed and the pad is no longer in it, so a walk in a
+        // rotation is an unknown move — refused rather than trimmed, like any
+        // other week that names something outside the kit.
+        let draft = DraftMove(name: "Zone 2 walk", equipment: Equipment.walkingPad.rawValue,
+                              cue: "A pace you could hold a conversation at.", loadPounds: 0)
+        #expect(throws: PlanValidator.Failure.self) { try PlanValidator.move(from: draft) }
+    }
+
+    @Test("The pad is still in the kit, and still has its moves named")
+    func padStillExists() {
+        // Not deleted — walking is the lever that moves the scale, and Signals
+        // says so. It simply is not an interval.
+        #expect(MoveLibrary.walks.count == 2)
+        #expect(MoveLibrary.walks.allSatisfy { $0.equipment == .walkingPad })
+        #expect(Equipment.allCases.contains(.walkingPad))
+    }
+}
