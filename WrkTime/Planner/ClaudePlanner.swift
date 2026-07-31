@@ -339,7 +339,18 @@ struct ClaudePlanner: Sendable {
     /// rest by three seconds a step. A schema that could not express 42 seconds
     /// would forbid Claude from writing a week the app's own floor writes every
     /// day — and the repair turn would then be arguing against the house.
-    static let restSeconds = Array(stride(from: 15, through: 90, by: 3))
+    /// Five-second steps, not three.
+    ///
+    /// Structured outputs compile the schema into a grammar with a size limit,
+    /// and exceeding it is a 400 — "schema too complex" — before the model sees
+    /// anything. The cost is combinatorial: at the hard pace a week is five
+    /// sessions, each carrying work × rest × rounds, and each holding
+    /// `Tuning.movesPerSession` move slots with their own name and load enums.
+    ///
+    /// Rest was much the largest list at twenty-six values, and three-second
+    /// granularity bought nothing — nobody rests 48 seconds rather than 50.
+    /// Sixteen values now, over the same 15–90 range.
+    static let restSeconds = Array(stride(from: 15, through: 90, by: 5))
     /// Rounds a thirteen-minute session can sensibly hold. Well inside
     /// `PlanValidator.roundCeiling`, and starting nowhere near zero.
     static let roundCounts = Array(6...16)

@@ -1015,8 +1015,11 @@ struct MovePlateTests {
         #expect(key("Beam front squat", .beam) == "front squat")
         #expect(key("Split squat", .bodyweight) == "split squat")
         #expect(key("Wall sit", .bodyweight) == "wall sit")
-        #expect(key("Incline walk", .walkingPad) == "incline walk")
-        #expect(key("Zone 2 walk", .walkingPad) == "walk")
+        // The pad's two moves are gone from the library, so they have no plate
+        // — nil rather than a drawing of something else, which is the whole
+        // point of the lookup being a lookup.
+        #expect(key("Incline walk", .walkingPad) == nil)
+        #expect(key("Zone 2 walk", .walkingPad) == nil)
         #expect(key("Ring deadlift", .rings) == "ring deadlift")
         #expect(key("Beam deadlift", .beam) == "deadlift")
         #expect(key("Arnold press", .dumbbells) == "arnold press")
@@ -2517,44 +2520,36 @@ struct RunRecordingContractTests {
     }
 }
 
-@Suite("The pad is not an interval")
+@Suite("The pad is not in the library")
 struct WalkingIsNotASetTests {
 
-    @Test("No rotation anywhere can contain a walk")
-    func padNeverReachesARotation() {
+    @Test("No walk is selectable anywhere")
+    func padMovesAreGone() {
         // Her words: "40 seconds of an incline walk or zone 2 walk isn't going
-        // to do anything and will take longer to set up the treadmill." The pad
-        // was `.strength` by default, so it was rotation-eligible in all four
-        // places that ask that question.
-        let walks = Set(MoveLibrary.walks.map(\.name))
-        #expect(!walks.isEmpty, "the pad moves went missing entirely")
-
-        // The planner's closed enum.
-        #expect(Set(MoveLibrary.names).isDisjoint(with: walks))
-        // The shared rotation builder, which `PlanRepair` and `ExtraSession`
-        // both go through.
-        let rotation = MoveLibrary.rotation(of: 40)
-        #expect(Set(rotation.map(\.name)).isDisjoint(with: walks))
-        // The routine builder's picker.
+        // to do anything and will take longer to set up the treadmill" — and
+        // then, decisively: the walks already come from Whoop through Health,
+        // so naming them as moves was duplicating a number she already has.
+        #expect(!MoveLibrary.all.contains { $0.equipment == .walkingPad })
         #expect(MoveLibrary.moves(for: .walkingPad).isEmpty)
+        #expect(!MoveLibrary.names.contains { $0.lowercased().contains("walk") })
+        #expect(!MoveLibrary.rotation(of: 40).contains { $0.equipment == .walkingPad })
     }
 
     @Test("A generated week naming a walk is rejected whole")
     func validatorRejectsAWalk() {
-        // The library is closed and the pad is no longer in it, so a walk in a
-        // rotation is an unknown move — refused rather than trimmed, like any
-        // other week that names something outside the kit.
+        // The library is closed, so a walk is now simply an unknown move —
+        // refused rather than trimmed, like anything else outside the kit.
         let draft = DraftMove(name: "Zone 2 walk", equipment: Equipment.walkingPad.rawValue,
                               cue: "A pace you could hold a conversation at.", loadPounds: 0)
         #expect(throws: PlanValidator.Failure.self) { try PlanValidator.move(from: draft) }
     }
 
-    @Test("The pad is still in the kit, and still has its moves named")
-    func padStillExists() {
-        // Not deleted — walking is the lever that moves the scale, and Signals
-        // says so. It simply is not an interval.
-        #expect(MoveLibrary.walks.count == 2)
-        #expect(MoveLibrary.walks.allSatisfy { $0.equipment == .walkingPad })
+    @Test("Walking is still tracked, just not as an interval")
+    func walkingStillCounts() {
+        // The pad stays in `Equipment` so anything already stored against it
+        // still decodes, and the weekly target is untouched — that number comes
+        // from Health, which is where Whoop writes her walks.
         #expect(Equipment.allCases.contains(.walkingPad))
+        #expect(PlanValidator.walkCeiling > 0)
     }
 }

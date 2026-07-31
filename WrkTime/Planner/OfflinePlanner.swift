@@ -44,7 +44,15 @@ enum OfflinePlanner {
             // Work climbs half as often as the other two, so a session gains
             // duration slowly and its short shape survives the block.
             work: TimeInterval(min(Int(IntervalRoutine.workCeiling), baseWork + 5 * (step / 2))),
-            rest: TimeInterval(max(restFloor, baseRest - 3 * step)),
+            // Five-second steps, matching `ClaudePlanner.restSeconds`.
+            //
+            // These two grids have to agree: a test asserts every offline week
+            // is expressible in the schema, because a fallback week the model
+            // could not have written is a fallback that quietly means something
+            // different from the plan it replaces. Coarsening the schema to fit
+            // the grammar limit moved this too. 45, 40, 35, 30 — same span, and
+            // it lands on the floor a week later than before.
+            rest: TimeInterval(max(restFloor, baseRest - 5 * step)),
             rounds: min(roundCeiling, baseRounds + pace.roundStep * step),
             step: step)
     }

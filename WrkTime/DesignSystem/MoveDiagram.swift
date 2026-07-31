@@ -457,7 +457,7 @@ enum MovePlates {
 
     private static let sorted: [Strip] = all.sorted { $0.key.count > $1.key.count }
 
-    static let all: [Strip] = beam + rings + dumbbells + bodyweight + pad + flow
+    static let all: [Strip] = beam + rings + dumbbells + bodyweight + flow
 
     // MARK: Beam
     //
@@ -698,22 +698,6 @@ enum MovePlates {
     //
     // Three panels because walking is a cycle: stride, pass, opposite stride.
 
-    private static let pad: [Strip] = [
-        Strip(key: "incline walk", equipment: .walkingPad, facing: .side, panels: [
-            .side(sink: 0.98, lean: 8, shoulder: 44, elbow: 14, split: 2.3, groundY: incline)
-                .holding { _ in [.pad(rise: 0.9)] },
-            .side(sink: 0.99, lean: 8, shoulder: 4, elbow: 8, split: 0.15, groundY: incline)
-                .holding { _ in [.pad(rise: 0.9)] },
-            .side(sink: 0.98, lean: 8, shoulder: -34, elbow: 12, split: 2.3, groundY: incline)
-                .holding { _ in [.pad(rise: 0.9)] }
-        ], signature: 0),
-
-        Strip(key: "walk", equipment: .walkingPad, facing: .side, panels: [
-            .side(sink: 0.99, shoulder: 42, elbow: 14, split: 2.3).holding { _ in [.pad(rise: 0)] },
-            .side(sink: 1.00, shoulder: 4, elbow: 8, split: 0.15).holding { _ in [.pad(rise: 0)] },
-            .side(sink: 0.99, shoulder: -34, elbow: 12, split: 2.3).holding { _ in [.pad(rise: 0)] }
-        ], signature: 0)
-    ]
 
     private static func incline(_ x: Double) -> Double {
         Anatomy.floorY + 0.9 * Anatomy.head * (x / 0.5)
