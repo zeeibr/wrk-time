@@ -295,12 +295,12 @@ struct RePlanningTests {
     func plansTheCurrentWeek() async {
         let (block, context) = block(daysAgo: 14)   // week 3
         #expect(block.currentWeek == 3)
-        #expect(!PlannerService.isPlanned(3, of: block))
+        #expect(!PlannerService.isPlanned(3, of: block, in: context))
 
         let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
         let written = try! #require(outcome)
         #expect(written.sessionsWritten == block.pace.sessionsPerWeek)
-        #expect(PlannerService.isPlanned(3, of: block))
+        #expect(PlannerService.isPlanned(3, of: block, in: context))
     }
 
     @Test("Planning an already-planned week does nothing")

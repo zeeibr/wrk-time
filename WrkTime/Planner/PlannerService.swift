@@ -109,10 +109,32 @@ enum PlannerService {
     }
 
     /// Whether a week has had anything written to it yet.
-    static func isPlanned(_ weekNumber: Int, of block: Block) -> Bool {
+    static func isPlanned(_ weekNumber: Int, of block: Block,
+                          in context: ModelContext) -> Bool {
         let start = weekStart(weekNumber, of: block)
         let end = Calendar.current.date(byAdding: .day, value: 7, to: start) ?? start
-        return (block.sessions ?? []).contains { $0.scheduledFor >= start && $0.scheduledFor < end }
+
+        // A store query, not `block.sessions`.
+        //
+        // This is the guard that stops the app re-planning a week it has
+        // already written, and it ran through a to-many relationship from
+        // `.task` at launch — before that relationship had necessarily faulted
+        // in. An unfaulted relationship reads as empty, so the guard said "not
+        // planned" for a week that was, and the app spent a request rewriting
+        // it. Once per launch, silently, and each one billed: thirty-two of
+        // them turned up in the request counter inside an hour of running the
+        // test suite, which launches the app every time.
+        //
+        // Fetching by date has no faulting behaviour to get wrong. The block is
+        // matched in Swift rather than in the predicate because a `#Predicate`
+        // across an optional relationship is exactly the sort of thing that
+        // fails quietly.
+        let blockID = block.id
+        var descriptor = FetchDescriptor<PlannedSession>(
+            predicate: #Predicate { $0.scheduledFor >= start && $0.scheduledFor < end })
+        descriptor.fetchLimit = 50
+        let sessions = (try? context.fetch(descriptor)) ?? []
+        return sessions.contains { $0.block?.id == blockID }
     }
 
     /// Writes the week the block is currently in, if nobody has yet.
@@ -130,7 +152,7 @@ enum PlannerService {
                                         planner: ClaudePlanner = ClaudePlanner()) async -> Outcome? {
         guard !block.hasEnded else { return nil }
         let week = block.currentWeek
-        guard !isPlanned(week, of: block) else { return nil }
+        guard !isPlanned(week, of: block, in: context) else { return nil }
         return await planWeek(week, of: block, in: context, planner: planner)
     }
 

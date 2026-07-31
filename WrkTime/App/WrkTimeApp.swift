@@ -127,7 +127,7 @@ struct RootView: View {
     /// past week one.
     private func planCurrentWeekIfNeeded() async {
         guard let block = blocks.first, !planning else { return }
-        guard !block.hasEnded, !PlannerService.isPlanned(block.currentWeek, of: block) else { return }
+        guard !block.hasEnded, !PlannerService.isPlanned(block.currentWeek, of: block, in: context) else { return }
         planning = true
         activity.begin(week: block.currentWeek)
         defer { planning = false; activity.finish() }
