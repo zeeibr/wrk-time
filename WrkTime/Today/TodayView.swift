@@ -4,12 +4,11 @@ import SwiftData
 /// The document register.
 ///
 /// Reading order is deliberate: what today is, what it asks of you, the control
-/// that starts it, then the supporting figures. Fasting appears once, as a cell
-/// beside weight — it is an input to the plan, not the point of the app.
+/// that starts it, then the supporting figures. Nothing on this screen competes
+/// with the control that begins the session.
 struct TodayView: View {
     @Query(sort: \PlannedSession.scheduledFor) private var sessions: [PlannedSession]
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
-    @Query private var fastWindows: [FastWindow]
 
     @State private var runningRoutine: IntervalRoutine?
     @Environment(\.displayScale) private var displayScale
@@ -64,13 +63,13 @@ struct TodayView: View {
                         StatCell(label: weeklyRateString ?? "Weight · 7-day mean",
                                  value: latestWeightString,
                                  unit: "lb")
-                        StatCell(label: "Fasting",
-                                 value: fastingString,
+                        StatCell(label: "This week",
+                                 value: "\(sessionsThisWeek) / 6",
                                  emphasis: Palette.moss)
                     }
                     .padding(.top, 12)
 
-                    Text(fastingFootnote)
+                    Text(projectionFootnote)
                         .font(.almanacBodySmall)
                         .foregroundStyle(Palette.mute)
                         .padding(.top, 10)
@@ -179,11 +178,19 @@ struct TodayView: View {
         return String(format: "%+.1f lb this week", rate)
     }
 
-    private var fastingString: String {
-        fastWindows.first?.summaryLine ?? "Not tracking"
+    /// Sessions finished since Monday. Six is a full week of the plan.
+    private var sessionsThisWeek: Int {
+        let calendar = Calendar.current
+        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: .now)?.start else {
+            return 0
+        }
+        return sessions.filter { session in
+            guard let completedAt = session.completedAt else { return false }
+            return completedAt >= weekStart
+        }.count
     }
 
-    private var fastingFootnote: String {
-        "Your eating window is one of three inputs to the projected rate, alongside session volume and sleep."
+    private var projectionFootnote: String {
+        "The projected rate comes from session volume and sleep, weighed against the seven-day weight trend."
     }
 }

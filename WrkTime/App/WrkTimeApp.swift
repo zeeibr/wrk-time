@@ -29,7 +29,7 @@ struct RootView: View {
             }
             Tab("Signals", systemImage: "waveform.path.ecg") {
                 PlaceholderView(title: "Signals",
-                                note: "Weight against projection, sleep and HRV from Whoop, and the eating window as a stated input.")
+                                note: "Weight against projection, with sleep, HRV and resting heart rate from Whoop.")
             }
         }
         .tint(Palette.ink)
@@ -54,7 +54,6 @@ struct RootView: View {
         context.insert(session)
         // Set the inverse; SwiftData maintains the other side.
         session.block = block
-        context.insert(FastWindow())
     }
 }
 

@@ -25,8 +25,10 @@ Not built: onboarding, the Claude planner, Season and Signals screens, watch app
   offer or generate anything else.
 - **Work intervals cap at 60 seconds**, clamped in `IntervalRoutine`, not in
   the UI.
-- **Fasting is an input, not a feature.** Stats stay visible; it never gets a
-  tab or a hero screen.
+- **No fasting.** It was cut from the app entirely. Do not reintroduce a
+  fasting timer, an eating window, or fasting stats — not on Today, not in the
+  planner's inputs, not as a "small" addition. The mockups in `docs/design/`
+  predate the removal and still show it.
 - Health content is educational, never medical advice.
 
 ## Design: the Almanac lane

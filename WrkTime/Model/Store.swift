@@ -97,39 +97,11 @@ final class WeightEntry {
     var source: Source { Source(rawValue: sourceRaw) ?? .manual }
 }
 
-/// An eating window. Fasting is not a feature of this app so much as an input
-/// to it — this exists to feed the projection and to show one line on Today.
-@Model
-final class FastWindow {
-    var id: UUID = UUID()
-    var lastBite: Date = Date()
-    var windowOpensHour: Int = 12
-    var windowOpensMinute: Int = 30
-    var windowClosesHour: Int = 20
-    var windowClosesMinute: Int = 30
-
-    init(lastBite: Date = .now) {
-        self.lastBite = lastBite
-    }
-
-    var elapsed: TimeInterval { Date.now.timeIntervalSince(lastBite) }
-
-    var opensToday: Date? {
-        Calendar.current.date(bySettingHour: windowOpensHour, minute: windowOpensMinute, second: 0, of: .now)
-    }
-
-    var summaryLine: String {
-        let hours = Int(elapsed) / 3600
-        let minutes = (Int(elapsed) % 3600) / 60
-        return "\(hours)h \(String(format: "%02d", minutes))m fasted"
-    }
-}
-
 // MARK: - Container
 
 enum Store {
     static let schema = Schema([
-        Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self, FastWindow.self
+        Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self
     ])
 
     /// Local-first, synced through the user's own private CloudKit database.

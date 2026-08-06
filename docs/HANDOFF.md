@@ -37,8 +37,8 @@ asking.
 | Platforms | iPhone, Live Activity + Dynamic Island, and an Apple Watch standalone runner. |
 | AI scope | Adaptive multi-week program, re-planned weekly from weight trend and recovery. Not one-off workout generation. |
 | Persistence | SwiftData, synced through the user's private CloudKit database. |
-| Fasting | **Demoted.** Started as a headline feature with a functional-medicine lens; the user later cut it back. Stats stay visible, but it gets no tab and no hero screen — one cell on Today, one module on Progress, and an input to the projection. |
-| Functional-medicine lens | Circadian timing, sleep and recovery, stress load, minerals and hydration. Framed as education, never medical advice. |
+| Fasting | **Removed.** It began as a headline feature with a functional-medicine lens, was demoted to a supporting stat, and has now been cut from the app entirely. The model, the Today cell and the planner input are all gone. Do not reintroduce it. |
+| Functional-medicine lens | Narrowed to what survives without fasting: sleep, recovery and stress load, read from Health. Framed as education, never medical advice. |
 | Profile data | Placeholders only. The user enters real numbers in onboarding — **which does not exist yet.** |
 | Design lane | **G, "Almanac."** |
 
@@ -79,7 +79,8 @@ Four rules the code enforces, inherited from the mockups:
 2. **Sage never carries body text.** It does not clear 4.5:1 on oat.
 3. **One mark is one finished session.** A session started and abandoned earns
    nothing — `PlannedSession.completedAt` is the only thing that counts.
-4. **Fasting is an input, not a feature.** See the table above.
+4. **There is no fasting.** The design mockups in `docs/design/` still show a
+   fasting cell — they predate its removal. The code is the source of truth.
 
 ---
 
@@ -217,8 +218,8 @@ The largest remaining piece, and the one with the most ways to go wrong.
    be able to produce a sensible week with no network and no key. A workout app
    that is dead without an API call is a broken workout app.
 5. **Inputs to a weekly re-plan:** completed sessions, the weight trend
-   (`WeightTrend.weeklyRate`), the `RecoverySnapshot`, and the eating window.
-   Fasting is one input among several — do not let it drive.
+   (`WeightTrend.weeklyRate`), and the `RecoverySnapshot`. Nothing about
+   eating — the app does not ask and does not model it.
 6. **Explain every change.** When the plan changes, the app says why, in one
    sentence, in the app's voice. `RecoverySnapshot.explanation` is the model to
    follow: plain, warm, never exclamatory, and never implying the user failed.
@@ -251,5 +252,5 @@ No "Crush it!", no "Great job!", no exclamation marks.
 - Branch: `claude/ai-fitness-planner-ios-nh2obt`. Push there, not to the
   default branch.
 - No pull request unless the user asks for one.
-- Health and fasting content is educational, never medical advice. That framing
-  is both correct and what keeps a health app through App Store review.
+- Health content is educational, never medical advice. That framing is both
+  correct and what keeps a health app through App Store review.
