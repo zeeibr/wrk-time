@@ -2927,36 +2927,43 @@ struct LoadProgressionTests {
         MoveLibrary.all.first { $0.name == "Ring halo" }!
     }
 
-    /// A counted session: reps with the interval each was done in.
-    private func log(_ reps: [Int], seconds: Double = 40, pounds: Double = 5,
-                     daysAgo: Int = 1) -> SetLog {
+    /// A counted rep-mode session: reps, with the seconds each set ran.
+    private func log(_ reps: [Int], seconds: Double = 45, pounds: Double = 5,
+                     daysAgo: Int = 1, mode: SessionMode = .reps) -> SetLog {
         let log = SetLog(sourceID: UUID(), move: halo(), reps: reps,
                          date: Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now)!)
         log.loadPounds = pounds
         log.setSeconds = reps.map { _ in seconds }
+        log.modeRaw = mode == .intervals ? nil : mode.rawValue
         return log
     }
 
-    @Test("Two sessions at pace is ready — the ceiling is reps per minute, not a count")
-    func readyByPace() {
-        // Twelve in forty seconds is the pace; so is eighteen in sixty.
-        let forty = [log([12, 13], seconds: 40, daysAgo: 4),
-                     log([13, 12], seconds: 40, daysAgo: 1)]
-        #expect(LoadProgression.ready(move: halo(), history: forty))
-
-        let sixty = [log([18, 19], seconds: 60, daysAgo: 4),
-                     log([18, 18], seconds: 60, daysAgo: 1)]
-        #expect(LoadProgression.ready(move: halo(), history: sixty))
+    @Test("Two set sessions at the top of the range is ready")
+    func readyByReps() {
+        let history = [log([12, 13, 12], daysAgo: 4), log([12, 12, 14], daysAgo: 1)]
+        #expect(LoadProgression.ready(move: halo(), history: history))
         #expect(LoadProgression.nextLoad(for: halo()) == 8)
     }
 
-    @Test("A count that would pass at forty seconds fails at sixty")
-    func longIntervalsAreNotFlattered() {
-        // Twelve reps spread over a minute is a slower pace than the tempo
-        // asks — the load is still doing its job.
-        let history = [log([12, 13], seconds: 60, daysAgo: 4),
-                       log([13, 12], seconds: 60, daysAgo: 1)]
+    @Test("Pace is not a measure of anything any more")
+    func paceDoesNotCount() {
+        // Eighteen a minute with a light weight used to promote the load;
+        // eleven reps is under the range's top however fast they went.
+        let history = [log([11, 11], seconds: 30, daysAgo: 4), log([11, 11], seconds: 30, daysAgo: 1)]
         #expect(!LoadProgression.ready(move: halo(), history: history))
+    }
+
+    @Test("An interval session never qualifies")
+    func intervalsDoNotCount() {
+        // Sixteen reps in a forty-second interval is conditioning, not a set
+        // two short of failure.
+        let history = [log([16, 16], daysAgo: 4, mode: .intervals),
+                       log([16, 16], daysAgo: 1, mode: .intervals)]
+        #expect(!LoadProgression.ready(move: halo(), history: history))
+        // And a rep session between two interval ones is still only one.
+        let mixed = [log([12, 12], daysAgo: 4, mode: .intervals), log([12, 12], daysAgo: 2),
+                     log([12, 12], daysAgo: 1, mode: .intervals)]
+        #expect(!LoadProgression.ready(move: halo(), history: mixed))
     }
 
     @Test("One strong session is a good day, not a verdict")
@@ -2964,35 +2971,28 @@ struct LoadProgressionTests {
         #expect(!LoadProgression.ready(move: halo(), history: [log([14, 13])]))
     }
 
-    @Test("A slow set in the latest sessions holds the weight")
+    @Test("A short set in the latest sessions holds the weight")
     func fadingSetHolds() {
-        let history = [log([12, 12], daysAgo: 4),
-                       log([14, 9], daysAgo: 1)]
+        let history = [log([12, 12], daysAgo: 4), log([14, 9], daysAgo: 1)]
         #expect(!LoadProgression.ready(move: halo(), history: history))
     }
 
     @Test("Counts at the old load say nothing about the new one")
     func oldLoadDoesNotCarry() {
-        // She moved up to 8 lb; the history at 5 lb must not re-trigger.
         let moved = halo().applyingLoad(from: ["ring halo": 8])
         let history = [log([14, 14], daysAgo: 6), log([13, 12], daysAgo: 3)]
         #expect(!LoadProgression.ready(move: moved, history: history))
     }
 
-    @Test("A row without its interval lengths cannot qualify")
+    @Test("A row counted loosely cannot qualify")
     func noSecondsNoVerdict() {
-        // Rows from before the seconds were kept: the pace cannot be known,
-        // and it is not guessed.
-        let old = log([14, 14], daysAgo: 4)
-        old.setSeconds = nil
-        #expect(!LoadProgression.ready(move: halo(), history: [old, log([14, 13])]))
+        let loose = log([14, 14], daysAgo: 4)
+        loose.setSeconds = nil
+        #expect(!LoadProgression.ready(move: halo(), history: [loose, log([14, 13])]))
     }
 
     @Test("The heaviest load on the equipment has nowhere to go")
     func topOfTheKit() {
-        // The library's deadlift is written for the 18; since August 2026
-        // there is a 35 above it. Set the move to the top of its ladder and
-        // the offer must vanish rather than invent a weight.
         var bell = MoveLibrary.all.first { $0.name == "Kettlebell deadlift" }!
         #expect(LoadProgression.nextLoad(for: bell) == 35)
         bell.loadPounds = Equipment.kettlebell.availableLoadsPounds.max()
@@ -3005,6 +3005,21 @@ struct LoadProgressionTests {
         #expect(LoadProgression.nextLoad(for: press) == 3)
         #expect(LoadProgression.nextLoad(for: press.applyingLoad(from: ["dumbbell press": 3])) == 5)
         #expect(LoadProgression.nextLoad(for: press.applyingLoad(from: ["dumbbell press": 5])) == nil)
+    }
+
+    @Test("A large jump is bridged; a small one is taken directly")
+    func bridges() {
+        let bell = MoveLibrary.all.first { $0.name == "Kettlebell deadlift" }!
+        let big = LoadProgression.Suggestion(move: bell, currentPounds: 18, nextPounds: 35)
+        #expect(big.isBigJump)
+        #expect(big.bridge?.contains("94 percent") == true)
+        #expect(big.line == "Kettlebell deadlift has outgrown the 18 lb kettlebell — the 35 lb kettlebell is ready when you are.")
+        let small = LoadProgression.Suggestion(move: bell, currentPounds: 15, nextPounds: 18)
+        #expect(!small.isBigJump)
+        #expect(small.bridge == nil)
+        let pair = LoadProgression.Suggestion(move: MoveLibrary.all.first { $0.name == "Dumbbell press" }!,
+                                              currentPounds: 2, nextPounds: 3)
+        #expect(pair.line.contains("outgrown the two 2 lb dumbbells — the two 3 lb dumbbells"))
     }
 }
 

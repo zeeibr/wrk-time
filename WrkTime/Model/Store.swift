@@ -610,6 +610,13 @@ final class SetLog {
     /// because rows from before the key have no honest value to invent.
     var setSeconds: [Double]?
     var sidedRaw: String?
+    /// `SessionMode.rawValue` of the session these sets came from. Optional:
+    /// rows from before modes read as intervals, and only a rep-mode row
+    /// can earn a step up — an interval is conditioning, and a count made
+    /// against a clock says nothing about how near failure she was.
+    var modeRaw: String?
+
+    var mode: SessionMode { modeRaw.flatMap(SessionMode.init(rawValue:)) ?? .intervals }
 
     init(sourceID: UUID?, move: Move, reps: [Int], date: Date = .now) {
         self.sourceID = sourceID
@@ -643,6 +650,7 @@ enum SetLogs {
             let log = SetLog(sourceID: sourceID, move: entry.move,
                              reps: entry.reps, date: date)
             log.setSeconds = entry.seconds.map { Double($0) }
+            log.modeRaw = routine.mode == .intervals ? nil : routine.mode.rawValue
             context.insert(log)
         }
         try? context.save()

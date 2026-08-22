@@ -187,11 +187,18 @@ struct MoveSheet: View {
                     .foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
-                Text("Two sessions with every counted set quicker than the tempo wants — about 12 in a 40-second interval. Staying where you are is also a fine answer.")
+                Text("Two set sessions running with every counted set at twelve. Staying where you are is also a fine answer.")
                     .font(.almanacBodySmall)
                     .foregroundStyle(Palette.mute)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)
+                if let bridge = suggestion.bridge {
+                    Text(bridge)
+                        .font(.almanacBodySmall)
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                }
                 Button("Move to \(Int(suggestion.nextPounds)) lb") {
                     MoveOverrides.set(suggestion.nextPounds, for: move, in: context)
                     appliedLoad = suggestion.nextPounds

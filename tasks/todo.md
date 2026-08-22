@@ -135,15 +135,16 @@ Decisions proposed:
 - [ ] Copy: "Where you are", never a grade. Beginner framing throughout.
 
 ### Phase 5 — Progression that means "too light"
-- [ ] Replace the pace ceiling in `LoadProgression` with double progression:
+- [x] Replace the pace ceiling in `LoadProgression` with double progression:
       all sets ≥ 12 at the current load in two consecutive **rep-mode**
       sessions → offer next load on the ladder. Interval sessions never qualify.
-- [ ] Bridge rule for big jumps (>30 %): offer "same load, harder" first
+- [x] Bridge rule for big jumps (>30 %): offer "same load, harder" first
       (pause / slow lower / 1.5 reps / unilateral) — one intensifier per move per
       block — and the next load second. Both are still her tap.
-- [ ] Overrides: withhold the offer after 3 red Whoop days or loosely counted
-      sets (rows without `setSeconds`).
-- [ ] Tests replace `repsPerMinuteCeiling` cases.
+- [x] Loosely counted rows (no `setSeconds`) and interval rows never qualify.
+- [ ] Withhold after 3 red Whoop days — recovery history is not stored
+      (one snapshot a day); the planner sees both and may say so (Phase 6).
+- [x] Tests replace `repsPerMinuteCeiling` cases.
 
 ### Phase 6 — The planner learns the new vocabulary (needs your OK per call)
 - [x] `docs/COACH-BRIEF.md` drafted 22 Aug — the one coach every call reads.
