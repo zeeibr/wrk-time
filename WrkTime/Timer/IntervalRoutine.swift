@@ -256,7 +256,7 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
         switch mode {
         case .reps:
             let n = moves.count
-            return "\(setsPerMove) sets × \(n) \(n == 1 ? "move" : "moves") · \(length)"
+            return "\(setsPerMove) \(setsPerMove == 1 ? "set" : "sets") × \(n) \(n == 1 ? "move" : "moves") · \(length)"
         case .emom:
             return "\(rounds) minutes on the minute · \(length)"
         case .intervals:

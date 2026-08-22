@@ -51,6 +51,9 @@ struct ActiveSession: Codable, Equatable, Sendable {
         /// A second workout composed for a day whose plan was already done.
         /// Recorded like a saved routine — volume, not a mark.
         case extra
+        /// A baseline or weekly check. Volume, not a mark, and scored once
+        /// its rows are written.
+        case test
         /// Written before this was recorded. Treated as a session for
         /// continuity with what the old build would have done, but only ever
         /// against today's session — never a practice, so the worst case is
@@ -68,6 +71,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
             switch self {
             case .routine: .saved
             case .extra: .extra
+            case .test: .test
             case .session, .practice, .unknown: nil
             }
         }
@@ -79,6 +83,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
         case "practice": .practice
         case "routine": .routine
         case "extra": .extra
+        case "test": .test
         default: .unknown
         }
     }
@@ -89,6 +94,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
         case .practice: kindRaw = "practice"; sessionID = nil
         case .routine: kindRaw = "routine"; sessionID = nil
         case .extra: kindRaw = "extra"; sessionID = nil
+        case .test: kindRaw = "test"; sessionID = nil
         case .unknown: kindRaw = nil; sessionID = nil
         }
     }

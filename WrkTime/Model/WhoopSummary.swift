@@ -67,8 +67,12 @@ enum WhoopSummary {
     -> [(move: Move, reps: [Int], seconds: [TimeInterval])] {
         grouped(for: routine, reps: reps, durations: durations).compactMap { held in
             let done = held.sets.compactMap { set -> (Int, TimeInterval)? in
-                guard let reps = set.reps else { return nil }
-                return (reps, set.seconds)
+                // A counted set; or, in a set session, one she ended herself
+                // without a count — a hold, whose length *is* the score.
+                // Its reps are kept as zero, never guessed.
+                if let reps = set.reps { return (reps, set.seconds) }
+                if set.ended { return (0, set.seconds) }
+                return nil
             }
             guard !done.isEmpty else { return nil }
             return (held.move, done.map(\.0), done.map(\.1))
@@ -83,10 +87,10 @@ enum WhoopSummary {
     /// actually ran — a rep set is open-ended and its schedule is only a net.
     private static func grouped(for routine: IntervalRoutine, reps: [Int],
                                 durations: [Int: TimeInterval] = [:])
-    -> [(move: Move, sets: [(seconds: TimeInterval, reps: Int?)])] {
+    -> [(move: Move, sets: [(seconds: TimeInterval, reps: Int?, ended: Bool)])] {
         let work = routine.schedule.phases.filter(\.isWork)
         var order: [String] = []
-        var byName: [String: (move: Move, sets: [(seconds: TimeInterval, reps: Int?)])] = [:]
+        var byName: [String: (move: Move, sets: [(seconds: TimeInterval, reps: Int?, ended: Bool)])] = [:]
 
         for (set, phase) in work.enumerated() {
             guard let move = phase.move else { continue }
@@ -95,7 +99,8 @@ enum WhoopSummary {
                 byName[move.name] = (move, [])
             }
             let counted = set < reps.count && reps[set] > 0 ? reps[set] : nil
-            byName[move.name]?.sets.append((durations[set] ?? phase.duration, counted))
+            byName[move.name]?.sets.append((durations[set] ?? phase.duration, counted,
+                                            phase.openEnded && durations[set] != nil))
         }
         return order.compactMap { byName[$0] }
     }

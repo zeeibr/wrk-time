@@ -50,6 +50,7 @@ struct RootView: View {
     @AppStorage("renamedUntitledRows") private var renamedUntitled = false
     @AppStorage("seededPostureRoutine") private var seededPosture = false
     @AppStorage("seededCoreRoutine") private var seededCore = false
+    @AppStorage("seededAfterMealRoutine") private var seededAfterMeal = false
     @AppStorage("seededUpperRoutines") private var seededUpper = false
 
     var body: some View {
@@ -89,6 +90,7 @@ struct RootView: View {
             seedStatedEquipment()
             seedPostureRoutine()
             seedCoreRoutine()
+            seedAfterMealRoutine()
             seedUpperRoutines()
             await planCurrentWeekIfNeeded()
         }
@@ -221,6 +223,34 @@ struct RootView: View {
                                       work: 30, rest: 20, rounds: 6,
                                       moves: rotation)
             .warmingUp(with: warm)
+        context.insert(SavedRoutine(routine: routine))
+        try? context.save()
+    }
+
+    /// One-time seed: ten minutes after a meal, her ask on 22 August 2026
+    /// ("some sort of 10 min post meal routine in there to get things
+    /// moving"). A flow, not a workout: ten gentle standing movements held
+    /// a minute each, nothing on the floor and nothing inverted after
+    /// eating, built to get her walking about rather than working. Light
+    /// movement after a meal is a well-supported habit and the app says
+    /// only that — it earns no mark and is hers to edit or delete.
+    private func seedAfterMealRoutine() {
+        guard !seededAfterMeal else { return }
+        seededAfterMeal = true
+        let saved = (try? context.fetch(FetchDescriptor<SavedRoutine>())) ?? []
+        guard !saved.contains(where: { $0.routine?.name == "After a meal" }) else { return }
+
+        func move(_ name: String) -> Move? {
+            MoveLibrary.all.first { $0.name == name }
+        }
+        let flow = ["Standing march", "Shoulder rolls", "Arm swings", "Ankle rocking",
+                    "Hip circles", "Knee sways", "Standing twist", "Golf swings",
+                    "Arm circles", "Lymphatic bounce"].compactMap(move)
+        guard flow.count == 10 else { return }
+
+        let routine = IntervalRoutine(name: "After a meal",
+                                      work: 0, rest: 0, rounds: 0, moves: [])
+            .warmingUp(with: flow, seconds: 60)
         context.insert(SavedRoutine(routine: routine))
         try? context.save()
     }

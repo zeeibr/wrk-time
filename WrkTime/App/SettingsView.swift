@@ -405,6 +405,27 @@ struct SettingsView: View {
                                 .padding(.top, 12)
                         }
                     }
+
+                    // The app's words beside the gym's, for the day she walks
+                    // into one. Her ask, August 2026.
+                    IndexedSection(number: "07", label: "Words") {
+                        SectionHead(title: "What a gym calls it", note: "\(Glossary.terms.count) terms")
+                            .padding(.bottom, 4)
+                        ForEach(Glossary.terms) { term in
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Text(term.app).font(.almanacBody).foregroundStyle(Palette.ink)
+                                    Text("· \(term.gym)").almanacLabel(Palette.mute, small: true)
+                                }
+                                Text(term.line)
+                                    .font(.almanacBodySmall)
+                                    .foregroundStyle(Palette.mute)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.vertical, 9)
+                            Rule()
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 28)

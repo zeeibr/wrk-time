@@ -14,10 +14,24 @@ struct WorkoutTimerView: View {
     private enum Stage { case arriving, leadIn, running, ended }
 
     @State private var engine: IntervalEngine
+    /// Where the count's digits end and the move block begins, in the
+    /// field's own coordinate space, measured rather than assumed. The ride
+    /// used to stop at a fixed fraction of the screen, which was fine until
+    /// the block under it grew — a longer cue, the Form button, a sided
+    /// eyebrow — and the digits rode straight into it.
+    @State private var countRestBottom: CGFloat?
+    @State private var blockTop: CGFloat?
     /// The move whose form notes are open over the timer. The engine runs on
     /// wall-clock time, so reading them costs nothing but the rest she
     /// chooses to spend on it.
     @State private var formFor: Move?
+    /// Seconds left of the "get set" after the form notes close, or nil.
+    /// Her ask: reading the form pauses the clock, and closing it gives five
+    /// seconds to get back into position before it runs again.
+    @State private var readyIn: Int?
+    /// Whether the clock was running when the form notes opened, so closing
+    /// them resumes only what was running.
+    @State private var pausedForForm = false
     @State private var liveActivity = LiveActivityController()
     @State private var audio = SessionAudio()
     /// Persisted, because `.playback` sounds through the silent switch and the
@@ -198,8 +212,12 @@ struct WorkoutTimerView: View {
                 Palette.oat.ignoresSafeArea()
 
                 // Base layer: everything as it reads on oat.
+                // The base layer is the one that measures itself: the field
+                // layer is an identical copy shifted by the inset, and two
+                // readings of one layout would disagree by exactly that.
                 content(foreground: Palette.ink, secondary: Palette.mute,
-                        countOffset: countRide(in: fullHeight))
+                        countOffset: countRide(in: fullHeight), measures: true)
+                    .coordinateSpace(name: "field")
 
                 // Field layer: the same content, inverted, clipped to the
                 // draining block. Identical layout is what makes the knockout
@@ -230,6 +248,9 @@ struct WorkoutTimerView: View {
         }
         .statusBarHidden(false)
         .preferredColorScheme(.light)
+        .onChange(of: formFor) { _, move in
+            formOpened(move != nil)
+        }
         .sheet(item: $formFor) { move in
             NavigationStack {
                 ScrollView {
@@ -443,14 +464,20 @@ struct WorkoutTimerView: View {
         // the boundary about sixty points low and it sliced the caption instead
         // of the digits. Tuned against the rendered glyph.
         let opticalCentre: CGFloat = 88
-        let lowestCentre = total * 0.55
+        var lowestCentre = total * 0.55
+        // Never into the block below: the digits' resting bottom plus the
+        // ride must stay a clear margin above wherever the block starts.
+        if let countRestBottom, let blockTop {
+            let room = blockTop - 14 - countRestBottom
+            lowestCentre = min(lowestCentre, opticalCentre + max(room, 0))
+        }
         return min(max(boundary, opticalCentre), lowestCentre) - opticalCentre
     }
 
     // MARK: - Content
 
     private func content(foreground: Color, secondary: Color,
-                         countOffset: CGFloat) -> some View {
+                         countOffset: CGFloat, measures: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             header(foreground: foreground, secondary: secondary)
 
@@ -483,8 +510,23 @@ struct WorkoutTimerView: View {
                 }
             }
             .padding(.horizontal, 22)
+            .background {
+                if measures {
+                    GeometryReader { proxy in
+                        // The reader sits inside the offset, so what it sees
+                        // has already ridden; subtracting the ride gives the
+                        // resting position, which is the one the floor needs.
+                        let bottom = proxy.frame(in: .named("field")).maxY - countOffset
+                        Color.clear.onChange(of: bottom, initial: true) { _, value in
+                            if abs((countRestBottom ?? -1) - value) > 0.5 { countRestBottom = value }
+                        }
+                    }
+                }
+            }
             // Both layers take the same offset, so the two copies stay in the
-            // pixel agreement the knockout depends on.
+            // pixel agreement the knockout depends on. Measured above the
+            // offset, so the reading is where the digits rest, not where
+            // they have ridden to.
             .offset(y: countOffset)
 
             Spacer(minLength: 12)
@@ -493,19 +535,29 @@ struct WorkoutTimerView: View {
             // thing rest is for — knowing what to set up next — in a ten point
             // line at the very bottom. It gets the same billing as the current
             // move instead.
-            if let phase = engine.currentPhase, let move = phase.move {
-                // The side a sided move is on gets the eyebrow — the one line
-                // that has to be readable at a glance mid-set.
-                // The set is already in the header and the caption; the
-                // eyebrow keeps to the side, the one thing that has to be
-                // readable at a glance mid-set.
-                moveBlock(move, eyebrow: phase.isFlow ? phaseWord : phase.side,
-                          foreground: foreground, secondary: secondary)
-            } else if let next = engine.nextPhase, let move = next.move {
-                moveBlock(move, eyebrow: next.isFlow && engine.routine.roundCount > 0
-                                          ? "Warm-up next"
-                                          : next.side.map { "Next up · \($0.lowercased())" } ?? "Next up",
-                          foreground: foreground, secondary: secondary)
+            Group {
+                if let phase = engine.currentPhase, let move = phase.move {
+                    // The set is already in the header and the caption; the
+                    // eyebrow keeps to the side, the one thing that has to
+                    // be readable at a glance mid-set.
+                    moveBlock(move, eyebrow: phase.isFlow ? phaseWord : phase.side,
+                              foreground: foreground, secondary: secondary)
+                } else if let next = engine.nextPhase, let move = next.move {
+                    moveBlock(move, eyebrow: next.isFlow && engine.routine.roundCount > 0
+                                              ? "Warm-up next"
+                                              : next.side.map { "Next up · \($0.lowercased())" } ?? "Next up",
+                              foreground: foreground, secondary: secondary)
+                }
+            }
+            .background {
+                if measures {
+                    GeometryReader { proxy in
+                        let top = proxy.frame(in: .named("field")).minY
+                        Color.clear.onChange(of: top, initial: true) { _, value in
+                            if abs((blockTop ?? -1) - value) > 0.5 { blockTop = value }
+                        }
+                    }
+                }
             }
 
             // Counting the set she has just finished, during the rest that
@@ -762,6 +814,37 @@ struct WorkoutTimerView: View {
         .padding(.horizontal, 22)
     }
 
+    /// Opening the form notes pauses the clock; closing them counts her back
+    /// in. The pause is the engine's own, so a session that was already
+    /// paused stays paused, and the count-in is skipped if she ends the
+    /// session or opens the notes again before it finishes.
+    private func formOpened(_ open: Bool) {
+        if open {
+            readyIn = nil
+            pausedForForm = stage == .running && engine.status == .running
+            if pausedForForm { engine.pause() }
+            return
+        }
+        guard pausedForForm else { return }
+        pausedForForm = false
+        Task {
+            for count in stride(from: 5, through: 1, by: -1) {
+                guard stage == .running, formFor == nil, engine.status == .paused else {
+                    readyIn = nil; return
+                }
+                readyIn = count
+                Haptics.countdownTick()
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard stage == .running, formFor == nil, engine.status == .paused else {
+                readyIn = nil; return
+            }
+            readyIn = nil
+            engine.resume()
+            Haptics.resumed()
+        }
+    }
+
     /// The row `report()` wrote, so a count made after the ending lands on it
     /// rather than on a second record.
     @State private var recordedRun: RoutineRun?
@@ -979,6 +1062,7 @@ struct WorkoutTimerView: View {
 
     /// The lead-in counts in whole seconds; the session counts in its own clock.
     private var countString: String {
+        if let readyIn { return "\(readyIn)" }
         guard stage == .running else { return "\(leadIn)" }
         // An open set counts up: the number is how long she has been
         // lifting, which is the tempo check, not how long until something
@@ -993,6 +1077,7 @@ struct WorkoutTimerView: View {
     /// anything from ten seconds up to the ceiling, and a routine built at
     /// thirty used to announce "sixty" regardless.
     private var phaseCaption: String {
+        if readyIn != nil { return "get set" }
         guard stage == .running else { return "find your position" }
         guard let phase = engine.currentPhase else { return "Finished" }
         switch phase.kind {
@@ -1004,7 +1089,11 @@ struct WorkoutTimerView: View {
         case .rest: return "rest — walk it off"
         case .work:
             if phase.openEnded {
-                return "\(phase.setLabel?.lowercased() ?? "set") — eight to twelve, two short of failure"
+                // One set of a move is a test: the count is the point, so
+                // the instruction is the range's ceiling, not the range.
+                return engine.routine.setsPerMove == 1
+                    ? "one set — as many as you can, two short of failure"
+                    : "\(phase.setLabel?.lowercased() ?? "set") — eight to twelve, two short of failure"
             }
             if engine.routine.mode == .emom {
                 return "up to eight reps, then rest"
@@ -1049,7 +1138,9 @@ struct WorkoutTimerView: View {
     /// A move-less work phase is a plain interval, not a rest — a timer-only
     /// routine used to announce every one of its work intervals as "Rest".
     private func nextDescription(_ phase: Phase) -> String {
-        if let move = phase.move {
+        // A rest that knows what follows it is still a rest: naming the move
+        // against the rest's length reads as a ninety-second set.
+        if let move = phase.move, !phase.isRest {
             let side = phase.side.map { " · \($0.lowercased())" } ?? ""
             // An open set has no length to promise.
             if phase.openEnded { return "\(move.name)\(side) · \(phase.setLabel?.lowercased() ?? "set")" }

@@ -244,14 +244,17 @@ red recovery day:
 
 | Pattern | Move | Load | Score |
 |---|---|---|---|
-| Squat | Goblet squat | 10 lb single | reps at tempo |
+| Squat | Goblet squat | 13 lb kettlebell | reps at tempo |
 | Hinge | Kettlebell deadlift | 18 lb | reps at tempo |
 | Lunge | Reverse lunge | bodyweight | reps per side |
 | Push | Push-up at a fixed incline | bodyweight | reps, incline noted |
 | Pull | Single-arm kettlebell row | 18 lb | reps per side |
-| Core | Side plank · dead bug | — · 5 lb pair | seconds per side · reps |
+| Core | Side plank | — | seconds, the shorter side |
 
 Run once now, then every four weeks for the first block, then every six.
+One set per station; a hold is scored by how long she held it. The goblet
+is tested on the 13 lb bell rather than a 10 lb single because no goblet
+squat is written for the singles.
 
 **Scoring → working load.** A score of 8 to 15 means the test load is the
 working load for the block. Under 8, the next load down. Over 15, the next
@@ -340,3 +343,20 @@ No "Crush it", no "Great job", no exclamation marks, no emoji.
 - Advises on food, fasting, supplements, or medicine.
 - Invents a citation or dresses a guess as a measurement.
 - Uses a weekly full retest, a pace rule, or cardio as a fix.
+
+## 16. Words
+
+She means to walk into a gym at the end of the twelve weeks, so the coach
+uses the gym's words where they are the clearer ones and the app's where
+they are better on a phone on the floor — and keeps a glossary of both in
+Settings (`Glossary`). Sets, reps, reps in reserve, tempo, progressive
+overload, straight sets, AMRAP, EMOM, hinge and squat patterns, loaded
+carries, unilateral: all said the way a coach on the floor would say them.
+
+## 17. After a meal
+
+Ten minutes of gentle standing movement after eating — "After a meal", a
+seeded flow routine she can edit. The coach may suggest it and never
+prescribes it, says only that light movement after a meal is a
+well-supported habit, and never ties it to a number.
+

@@ -30,6 +30,12 @@ struct TodayView: View {
     @State private var copiedForWhoop = false
     /// The finished session's move list, folded by default — it is history.
     @State private var showFinishedMoves = false
+    /// Whether today's recovery guidance says to ease off. Read once per
+    /// appearance; a test is never offered on a measured bad day.
+    @State private var recoveryHolding = false
+    /// Results she has applied from today's test, so a verdict becomes an
+    /// acknowledgement rather than repeating its offer.
+    @State private var appliedVerdicts: Set<String> = []
 
     enum RunningWorkout: Identifiable, Equatable {
         static func == (a: Self, b: Self) -> Bool { a.id == b.id }
@@ -50,12 +56,15 @@ struct TodayView: View {
         case rerun(IntervalRoutine)
         /// One the process died under, picked up where it stopped.
         case resumed(ActiveSession)
+        /// The baseline or the weekly check — an extra, scored afterwards.
+        case test(IntervalRoutine)
 
         var id: String {
             switch self {
             case .session(let s, _): "session-\(s.id)"
             case .practice: "practice"
             case .extra: "extra"
+            case .test: "test"
             case .saved(let r, _): "saved-\(r.id)"
             case .rerun(let r): "rerun-\(r.id)"
             case .resumed: "resumed"
@@ -72,6 +81,7 @@ struct TodayView: View {
             case .saved(_, let r): r
             case .rerun(let r): r
             case .resumed(let a): a.routine
+            case .test(let r): r
             }
         }
 
@@ -84,6 +94,7 @@ struct TodayView: View {
             case .extra: .extra
             case .saved, .rerun: .routine
             case .resumed(let a): a.subject
+            case .test: .test
             }
         }
     }
@@ -320,7 +331,12 @@ struct TodayView: View {
         }
         .task {
             resumable = ActiveSessionStore.load()
-            await HealthSync(health: HealthKitService(), context: context).importWeights()
+            let health = HealthKitService()
+            await HealthSync(health: health, context: context).importWeights()
+            // A test is never offered on a day the numbers say to ease off.
+            // `.hold` is the neutral state — the plan as written — and
+            // missing data lands there too; only a measured bad day withholds.
+            recoveryHolding = await health.recoverySnapshot().guidance == .ease
         }
         // Cleared once the cover closes, so a second run does not silently
         // resume the session that was just finished or abandoned.
@@ -699,6 +715,7 @@ struct TodayView: View {
     ///    reach the planner. That split was her call when asked.
     @ViewBuilder
     private var moreToday: some View {
+        whereYouAre
         if let offer = offeredSession, let routine = offer.session.routine {
             Spacer(minLength: 16)
             SectionHead(title: "More today", note: "Still on the plan")
@@ -797,6 +814,113 @@ struct TodayView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue("\(note), \(detail)")
+    }
+
+    // MARK: - Where you are
+
+    /// The baseline and the weekly check, `docs/COACH-BRIEF.md` §11 and
+    /// `Baseline`. Offered after the day's session or on a rest day, never
+    /// on a day the recovery guidance holds, and never as a session: it is
+    /// an extra, and she said so.
+    ///
+    /// After a test, its results sit here as sentences with a button where
+    /// a verdict is a load change — through `MoveOverrides`, so it behaves
+    /// like any load change and reaches the sessions already written.
+    @ViewBuilder
+    private var whereYouAre: some View {
+        let todaysTest = routineRuns.first {
+            $0.source == .test && Calendar.current.isDateInToday($0.finishedAt)
+        }
+        let offer = Baseline.offer(runs: routineRuns, sessionDoneOrRestDay: true,
+                                   recoveryHolding: recoveryHolding)
+        if todaysTest != nil || offer != nil {
+            Spacer(minLength: 16)
+            SectionHead(title: "Where you are", note: "Extra · no mark")
+                .padding(.bottom, 8)
+
+            if let run = todaysTest {
+                let results = Baseline.results(for: run, in: context)
+                if results.isEmpty {
+                    Text("\(run.name) done. Nothing was counted, so there is nothing to read from it — next time, the number on the rest is the whole point.")
+                        .font(.almanacBodySmall)
+                        .foregroundStyle(Palette.mute)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(results) { result in
+                        resultRow(result)
+                    }
+                }
+            } else if let offer {
+                switch offer {
+                case .baseline:
+                    Text("Six moves, one set each, to two reps short of failure, after the warm-up. It gives every pattern a working load. About twenty minutes; it counts as an extra, not a session.")
+                        .font(.almanacBody)
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    let routine = Baseline.routine(warmUp: testWarmUp)
+                    PrimaryButton(title: "Take the baseline", subtitle: routine.shapeLine) {
+                        running = .test(routine)
+                    }
+                    .padding(.top, 14)
+                case .check(let turn):
+                    let routine = Baseline.check(turn: turn, warmUp: testWarmUp)
+                    Text("Two of the six, one set each, to two reps short of failure. Every pattern gets a fresh number every three weeks this way, and it never costs a session.")
+                        .font(.almanacBody)
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    PrimaryButton(title: "This week's check",
+                                  subtitle: routine.moves.map(\.name).joined(separator: " · ")) {
+                        running = .test(routine)
+                    }
+                    .padding(.top, 14)
+                }
+            }
+        }
+    }
+
+    private var testWarmUp: [Move] {
+        let refused = MovePreferences.lists(in: context)
+        let ruledOut = Set((refused.avoided + refused.disliked).map { MovePreference.key($0) })
+        return WarmUp.afterPractice(on: .now, avoiding: ruledOut,
+                                    library: MoveLibrary.flow + CustomMoves.flow(in: context))
+    }
+
+    private func resultRow(_ result: Baseline.Result) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(result.line)
+                .font(.almanacBody)
+                .foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 10)
+            if let move = result.station.move, result.verdict.isChange,
+               case let to? = newLoad(result.verdict) {
+                if appliedVerdicts.contains(result.id) {
+                    Text("\(move.name) now asks for \(Int(to)) lb — everywhere, including sessions already written.")
+                        .font(.almanacBodySmall)
+                        .foregroundStyle(Palette.saffronInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 10)
+                } else {
+                    Button("Move \(move.name) to \(Int(to)) lb") {
+                        MoveOverrides.set(to, for: move, in: context)
+                        appliedVerdicts.insert(result.id)
+                        Haptics.transport()
+                    }
+                    .font(.almanacBody)
+                    .foregroundStyle(Palette.moss)
+                    .padding(.bottom, 10)
+                }
+            }
+            Rule()
+        }
+    }
+
+    private func newLoad(_ verdict: Baseline.Verdict) -> Double? {
+        switch verdict {
+        case .hold: nil
+        case .down(let to): to
+        case .up(let to): to
+        }
     }
 
     /// Composed once per day rather than per redraw, so the offer does not
@@ -910,6 +1034,11 @@ struct TodayView: View {
                 record.lastRunAt = end
                 try? context.save()
             }
+        case .test:
+            // Recorded by `report()` like any extra; the scoring reads the
+            // rows it wrote and is shown on Today from the run itself, so
+            // there is nothing to write here and nothing that can be missed.
+            break
         case .unknown:
             // Written by a build before a run said what it was. Today's
             // session is the old behaviour and the only guess available; it is

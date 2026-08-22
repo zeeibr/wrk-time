@@ -125,14 +125,14 @@ Decisions proposed:
       Sets and On the minute for her own routines.
 
 ### Phase 4 — Baseline test and working loads
-- [ ] `BaselineTest`: six moves, one per pattern, fixed load, tempo reps to
+- [x] `Baseline`: six moves, one per pattern, fixed load, tempo reps to
       RIR 2, under 25 min, recorded as a `RoutineRun` + six `SetLog` rows (no
       mark — it is not the plan). Offered on Today when none exists or the last
       is 6 weeks old, never on a red recovery day.
-- [ ] Outcome → `WorkingLoad` per pattern (test load / down / up by the 8–15
+- [x] Outcome → verdict per pattern (test load / down / up by the 8–15
       rule), written through `MoveOverrides` so every surface already honours
       it. Retire-kit and unlock-35-lb prompts fall out of the same result.
-- [ ] Copy: "Where you are", never a grade. Beginner framing throughout.
+- [x] Copy: "Where you are", never a grade. Beginner framing throughout.
 
 ### Phase 5 — Progression that means "too light"
 - [x] Replace the pace ceiling in `LoadProgression` with double progression:
@@ -145,6 +145,15 @@ Decisions proposed:
 - [ ] Withhold after 3 red Whoop days — recovery history is not stored
       (one snapshot a day); the planner sees both and may say so (Phase 6).
 - [x] Tests replace `repsPerMinuteCeiling` cases.
+
+### Her asks, 22 Aug afternoon
+- [x] Form opens a sheet over the timer; pauses the clock; five-second
+      "get set" on closing.
+- [x] The count rides down to the title again (measured floor, not a fixed
+      fraction) after the Form button made the block taller.
+- [x] "After a meal" — ten gentle standing flow movements, a minute each,
+      seeded once and hers.
+- [x] Glossary in Settings: the app's word, the gym's word, one line each.
 
 ### Phase 6 — The planner learns the new vocabulary (needs your OK per call)
 - [x] `docs/COACH-BRIEF.md` drafted 22 Aug — the one coach every call reads.

@@ -277,11 +277,15 @@ enum RunSource: String, Codable, Sendable, CaseIterable {
     case saved
     /// A session the app composed for a day whose plan was already finished.
     case extra
+    /// A baseline or a weekly check (`Baseline`). An extra by her decision —
+    /// never a session, never a mark — and scored after it is recorded.
+    case test
 
     var label: String {
         switch self {
         case .saved: "Your own routine"
         case .extra: "Extra session"
+        case .test: "Where you are"
         }
     }
 }
@@ -661,7 +665,10 @@ enum SetLogs {
         let key = MovePreference.key(move.name)
         return ((try? context.fetch(FetchDescriptor<SetLog>(
             sortBy: [SortDescriptor(\.date)]))) ?? [])
-            .filter { MovePreference.key($0.moveName) == key && !$0.reps.isEmpty }
+            // A row of nothing but zeros is a hold she ended without a count
+            // — its seconds are its record, and it is read by `Baseline`, not
+            // here.
+            .filter { MovePreference.key($0.moveName) == key && ($0.reps.max() ?? 0) > 0 }
     }
 }
 
