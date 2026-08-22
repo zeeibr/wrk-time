@@ -64,12 +64,12 @@ Decisions proposed:
 ## 2. Phases
 
 ### Phase 0 — Stop the bleeding (no new design)
-- [ ] Build + test the uncommitted tree on the simulator; install on the phone.
+- [x] Build + test the uncommitted tree on the simulator; install on the phone.
       This alone restores the "what to pick up" line on the timer
       (`WorkoutTimerView.swift:693`).
-- [ ] Commit the August work in a few readable commits (kit, core set, reviewer,
+- [x] Commit the August work in a few readable commits (kit, core set, reviewer,
       widget, timer label). Three weeks uncommitted is the disorganization.
-- [ ] Equipment loads above (§1). Validator and pickers read the ladder, so no
+- [x] Equipment loads above (§1). Validator and pickers read the ladder, so no
       other code changes; tests cover `label(forLoad:)` and the new loads.
 
 ### Phase 1 — Give every move a shape (taxonomy, data only)
@@ -135,6 +135,11 @@ Decisions proposed:
 - [ ] Tests replace `repsPerMinuteCeiling` cases.
 
 ### Phase 6 — The planner learns the new vocabulary (needs your OK per call)
+- [x] `docs/COACH-BRIEF.md` drafted 22 Aug — the one coach every call reads.
+- [ ] Load the brief at build time as the shared system prompt for planner,
+      reviewer and chat; tests assert the prompt carries its rules (no API).
+- [ ] Phase 6b — Coach chat on Today: streaming, local history, tool cards
+      (swapMove, changeLoad, scheduleTest) applied through the guarded paths.
 - [ ] `PlanContext` carries pattern coverage, working loads, baseline age,
       mode split, and Whoop state. Schema gains `mode` per session; validator
       rejects a mode the week shape does not allow.
