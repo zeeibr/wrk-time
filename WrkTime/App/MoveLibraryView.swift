@@ -54,6 +54,10 @@ struct MoveLibraryView: View {
     /// Which sections are open. Collapsed by default — sixty-odd rows is a
     /// scroll of a list, and the headers are the overview.
     @State private var expandedSections: Set<String> = []
+    /// The pattern the library is narrowed to, or nil for all of it. A
+    /// filter on the list, not a section: the sections are where the body
+    /// is, and a hinge is a hinge whether she is holding the bell or the beam.
+    @State private var patternFilter: MovePattern?
     /// What the last change did to the plan, said once and then cleared.
     @State private var repairNote: String?
 
@@ -104,6 +108,12 @@ struct MoveLibraryView: View {
                     samplerSection
 
                     ForEach(sections, id: \.title) { section in
+                        // The chips sit above the first strength section,
+                        // in its column: they narrow the strength library
+                        // and say nothing about flow.
+                        if section.subheaded, section.title == sections.first(where: \.subheaded)?.title {
+                            patternChips
+                        }
                         IndexedSection(number: section.number, label: section.label) {
                             let open = expandedSections.contains(section.title)
                             Button {
@@ -127,7 +137,13 @@ struct MoveLibraryView: View {
                             .padding(.bottom, 4)
 
                             if open {
-                                ForEach(section.moves) { move in
+                                ForEach(Array(section.moves.enumerated()), id: \.element.id) { index, move in
+                                    if section.subheaded, let head = subhead(at: index, in: section.moves) {
+                                        Text(head)
+                                            .almanacLabel(Palette.mute, small: true)
+                                            .padding(.top, index == 0 ? 2 : 12)
+                                            .padding(.bottom, 2)
+                                    }
                                     row(move)
                                 }
                             }
@@ -795,29 +811,93 @@ struct MoveLibraryView: View {
 
     // MARK: - Grouping
 
-    private struct Group { let number, label, title: String; let moves: [Move] }
+    private struct Group {
+        let number, label, title: String
+        let moves: [Move]
+        /// Whether the rows carry pattern sub-heads. Flow has no patterns.
+        var subheaded = true
+    }
 
     /// Flow first, the way the picker does it: it is the thing she reaches for
-    /// daily, and burying it under five equipment headings would make the most
-    /// used part of the library the hardest to find.
+    /// daily, and burying it would make the most used part of the library the
+    /// hardest to find. Then the strength library by **position** — standing,
+    /// then the mat — because that is how a session is lived and where the
+    /// choppiness came from (`docs/COACH-BRIEF.md` §6, §8). Inside a
+    /// section the rows run in the coach's order, hinge to accessory, with a
+    /// sub-head where the pattern changes; the implement is a fact on the
+    /// row, no longer a heading. It used to be one section per drawer, which
+    /// listed four rows for one movement and said nothing about when in a
+    /// session any of them happened.
     private var sections: [Group] {
         // Numbering continues past "Yours" (01), "Target" (02) and
         // "Sampler" (03) above.
         let offset = 3 + numberOffset
         var out: [Group] = []
-        if !MoveLibrary.flow.isEmpty {
+        if !MoveLibrary.flow.isEmpty, patternFilter == nil {
             out.append(Group(number: String(format: "%02d", offset + 1), label: "Flow",
-                             title: "Flow", moves: MoveLibrary.flow))
+                             title: "Flow", moves: MoveLibrary.flow, subheaded: false))
         }
-        // Her kit only. A drawer she does not have is not a section to scroll
+        // Her kit only. A drawer she does not have is not a row to scroll
         // past — Settings is where it comes back.
-        for equipment in Equipment.owned {
-            let moves = MoveLibrary.moves(for: equipment)
+        let strength = MoveLibrary.available
+            .filter { $0.kind == .strength }
+            .filter { patternFilter == nil || MoveTaxonomy.pattern(for: $0.name) == patternFilter }
+        let blocks: [(String, String, (MovePosition) -> Bool)] = [
+            ("Standing", "Standing", { $0 == .standing }),
+            ("Mat", "On the mat", { $0 != .standing }),
+        ]
+        for (label, title, holds) in blocks {
+            let moves = strength.filter { holds(MoveTaxonomy.position(for: $0.name) ?? .standing) }
             guard !moves.isEmpty else { continue }
             out.append(Group(number: String(format: "%02d", offset + out.count + 1),
-                             label: equipment.shortLabel,
-                             title: equipment.label, moves: moves))
+                             label: label, title: title,
+                             moves: MoveLibrary.ordered(moves)))
         }
         return out
+    }
+
+    /// The pattern label to print above row `index`, when it begins a new
+    /// pattern. Kneeling moves open the mat section and say so.
+    private func subhead(at index: Int, in moves: [Move]) -> String? {
+        func head(_ move: Move) -> String {
+            let pattern = MoveTaxonomy.pattern(for: move.name)?.label ?? "Hers"
+            return MoveTaxonomy.position(for: move.name) == .kneeling ? "Kneeling · \(pattern)" : pattern
+        }
+        let now = head(moves[index])
+        guard index > 0 else { return now }
+        return head(moves[index - 1]) == now ? nil : now
+    }
+
+    /// One chip per pattern, the same shape as the muscle chips above. A
+    /// chip narrows every section to that pattern; tapping it again clears.
+    private var patternChips: some View {
+        // Indented to the content column: the marginal index is 18 wide
+        // with a 12 gap, the same as `IndexedSection` lays out.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MovePattern.allCases, id: \.self) { pattern in
+                    let on = patternFilter == pattern
+                    Button {
+                        patternFilter = on ? nil : pattern
+                        // Narrowing to a pattern is asking to see it.
+                        if !on { expandedSections.formUnion(["Standing", "On the mat"]) }
+                    } label: {
+                        Text(pattern.label)
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(on ? Palette.oat : Palette.ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(on ? Palette.ink : Color.clear)
+                            .overlay(Rectangle().strokeBorder(on ? Palette.ink : Palette.ruleFirm,
+                                                              lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .padding(.leading, 30)
+        .padding(.bottom, -4)
     }
 }
