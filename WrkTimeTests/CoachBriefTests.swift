@@ -88,3 +88,30 @@ struct CoachBriefTests {
         }
     }
 }
+
+@Suite("The 35 is for the hinge")
+struct HeavyBellTests {
+    private func named(_ n: String) -> Move { MoveLibrary.all.first { $0.name == n }! }
+
+    @Test("The hinge may take the 35; nothing else on the bell may")
+    func hingeOnly() {
+        #expect(Equipment.loads(for: named("Kettlebell deadlift")).contains(35))
+        #expect(!Equipment.loads(for: named("Kettlebell goblet squat")).contains(35))
+        #expect(!Equipment.loads(for: named("Kettlebell row")).contains(35))
+        #expect(LoadProgression.nextLoad(for: named("Kettlebell goblet squat")) == nil,
+                "the goblet parks on the 18")
+        #expect(LoadProgression.nextLoad(for: named("Kettlebell deadlift")) == 35)
+    }
+
+    @Test("A written week that puts the 35 under a squat is rejected whole")
+    func validatorRefuses() {
+        let squat = DraftMove(name: "Kettlebell goblet squat", equipment: Equipment.kettlebell.rawValue,
+                              cue: "", loadPounds: 35)
+        let draft = PlanDraft(explanation: "", sessions: [
+            DraftSession(dayOffset: 0, title: "T", work: 40, rest: 20, rounds: 8, moves: [squat])
+        ], walkMinutes: 90)
+        // The draft's load is ignored for a library move — the library's 18
+        // is used — so this passes; the rule bites where a load is *set*.
+        #expect(throws: Never.self) { try PlanValidator.routines(from: draft) }
+    }
+}

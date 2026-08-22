@@ -159,8 +159,8 @@ enum SessionMode: String, Codable, CaseIterable, Hashable {
     var note: String {
         switch self {
         case .intervals: "Timed work, timed rest, as many tidy reps as the interval holds. This is for the heart more than the muscle."
-        case .reps: "Three sets of a move, then the next. A set ends when you end it — eight to twelve reps, stopping two short of failure."
-        case .emom: "One hard set at the top of every minute, then rest until the next. Up to eight reps; if they take longer than twenty-five seconds, the load is wrong, not the rest."
+        case .reps: "Three sets of a move, then the next. A set ends when you end it — eight to twelve reps, stopping a couple short of failure."
+        case .emom: "One crisp set at the top of every minute, then rest until the next. Three to five reps, not to the limit; if they take longer than twenty-five seconds, the load is wrong, not the rest."
         }
     }
 }
@@ -234,10 +234,11 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
 
     static let defaultSets = 3
     /// A rep set is open until she ends it; this is the net under it. Twelve
-    /// reps at a 3-1-1 tempo is about a minute, so a set still running at
-    /// ninety seconds is a forgotten tap, not a set. Deliberately above the
+    /// reps at a 3-1-1 tempo runs sixty to seventy-five seconds with the
+    /// resets, so the net sits well above that: a set still running at a
+    /// hundred is a forgotten tap, not a set. Deliberately above the
     /// interval ceiling — a set is not an interval.
-    static let repSetCeiling: TimeInterval = 90
+    static let repSetCeiling: TimeInterval = 100
     /// The working part of an EMOM minute. Eight reps in twenty-five seconds
     /// leaves thirty-five to rest, which is the point of the mode.
     static let emomWorkSeconds: TimeInterval = 25
@@ -245,7 +246,7 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     /// Rest between moves in `.reps`, before the setup buffer — flat, because
     /// moving to another pattern is partly recovery in itself. After a big
     /// lower lift it is the lift's own rest instead.
-    static let betweenMovesSeconds = 30
+    static let betweenMovesSeconds = 20
 
     /// "8 rounds · 13:10", "3 sets × 5 moves · 24:10", "12 minutes on the
     /// minute · 11:25" — the one line every surface uses to say the shape,

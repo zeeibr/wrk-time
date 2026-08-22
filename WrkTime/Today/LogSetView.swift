@@ -19,7 +19,7 @@ struct LogSetView: View {
     /// from zero, and not a number field that would let you record a weight you
     /// do not own.
     private var loadOptions: [Double] {
-        move?.equipment.availableLoadsPounds ?? []
+        move.map { Equipment.loads(for: $0) } ?? []
     }
 
     var body: some View {
@@ -127,7 +127,7 @@ struct LogSetView: View {
                 // The weight the move is actually written for, so the chip and
                 // the cue agree. A load carried over from a different implement
                 // would be a lie.
-                load = picked.loadPounds ?? picked.equipment.availableLoadsPounds.first
+                load = picked.loadPounds ?? Equipment.loads(for: picked).first
             }
         }
         .onAppear { if move == nil { picking = true } }

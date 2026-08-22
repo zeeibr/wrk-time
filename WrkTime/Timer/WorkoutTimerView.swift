@@ -1092,11 +1092,11 @@ struct WorkoutTimerView: View {
                 // One set of a move is a test: the count is the point, so
                 // the instruction is the range's ceiling, not the range.
                 return engine.routine.setsPerMove == 1
-                    ? "one set — as many as you can, two short of failure"
-                    : "\(phase.setLabel?.lowercased() ?? "set") — eight to twelve, two short of failure"
+                    ? "one set — as many as you can, a couple short of failure"
+                    : "\(phase.setLabel?.lowercased() ?? "set") — eight to twelve, a couple short of failure"
             }
             if engine.routine.mode == .emom {
-                return "up to eight reps, then rest"
+                return "three to five crisp reps, then rest"
             }
             return "left of \(Int(phase.duration.rounded())) seconds"
         }

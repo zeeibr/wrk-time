@@ -58,15 +58,16 @@ enum MovePattern: String, CaseIterable, Codable {
 
     enum Family: CaseIterable { case lower, push, pull, core, accessory }
 
-    /// Rest between sets in reps mode, from the coach brief §7. A big lower
-    /// lift gets 90 s and never under 75; upper compound 75; isolation 45
-    /// to 60; core 45.
+    /// Rest between sets in reps mode, from the coach brief §7: about 75 s
+    /// after a big lower lift, 60 after an upper compound, 45 for isolation
+    /// and core. Shorter than a gym's barbell numbers because the loads are
+    /// light; enough for form to come back, which is what rest is for here.
     var restSeconds: Int {
         switch family {
-        case .lower: 90
-        case .push, .pull: 75
+        case .lower: 75
+        case .push, .pull: 60
         case .core: 45
-        case .accessory: 60
+        case .accessory: 45
         }
     }
 

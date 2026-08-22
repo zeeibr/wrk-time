@@ -127,6 +127,22 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
     /// Bodyweight and the pad are excluded because they are not hers to lose.
     static var switchable: [Equipment] { allCases.filter { !alwaysOwned.contains($0) } }
 
+    /// The loads this move may actually be set to: the equipment's ladder,
+    /// less the one rule the brief makes about a specific bell. The 35 lb
+    /// kettlebell is for the hinge until her counts say otherwise — and the
+    /// app refuses it elsewhere whatever a prompt or a proposal says, so the
+    /// rule is enforced here, where every load change passes, rather than
+    /// trusted to prose. `docs/COACH-BRIEF.md` §10, §15.
+    static func loads(for move: Move) -> [Double] {
+        let ladder = move.equipment.availableLoadsPounds
+        guard move.equipment == .kettlebell else { return ladder }
+        let pattern = MoveTaxonomy.pattern(for: move.name)
+        return pattern == .hinge ? ladder : ladder.filter { $0 < heavyBellPounds }
+    }
+
+    /// The bell the brief reserves for the hinge.
+    static let heavyBellPounds: Double = 35
+
     var availableLoadsPounds: [Double] {
         switch self {
         case .beam: [15]

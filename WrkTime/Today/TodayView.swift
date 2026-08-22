@@ -851,7 +851,9 @@ struct TodayView: View {
         let todaysTest = routineRuns.first {
             $0.source == .test && Calendar.current.isDateInToday($0.finishedAt)
         }
-        let offer = Baseline.offer(runs: routineRuns, sessionDoneOrRestDay: true,
+        let offer = Baseline.offer(runs: routineRuns,
+                                   sessionDone: finishedToday != nil,
+                                   restDay: todaysSession == nil,
                                    recoveryHolding: recoveryHolding)
         if todaysTest != nil || offer != nil {
             Spacer(minLength: 16)
@@ -873,7 +875,7 @@ struct TodayView: View {
             } else if let offer {
                 switch offer {
                 case .baseline:
-                    Text("Six moves, one set each, to two reps short of failure, after the warm-up. It gives every pattern a working load. About twenty minutes; it counts as an extra, not a session.")
+                    Text("Six moves, one set each, to a couple of reps short of failure, after the warm-up. It gives every pattern a working load. About twenty minutes; it counts as an extra, not a session.")
                         .font(.almanacBody)
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -884,7 +886,7 @@ struct TodayView: View {
                     .padding(.top, 14)
                 case .check(let turn):
                     let routine = Baseline.check(turn: turn, warmUp: testWarmUp)
-                    Text("Two of the six, one set each, to two reps short of failure. Every pattern gets a fresh number every three weeks this way, and it never costs a session.")
+                    Text("Two of the six, one set each, to a couple of reps short of failure. Every pattern gets a fresh number every three weeks this way, and it never costs a session.")
                         .font(.almanacBody)
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)

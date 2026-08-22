@@ -569,7 +569,7 @@ enum MoveOverrides {
         let existing = (try? context.fetch(FetchDescriptor<MoveOverride>()))?
             .filter { MovePreference.key($0.moveName) == key } ?? []
         existing.forEach(context.delete)
-        if pounds != move.loadPounds, move.equipment.availableLoadsPounds.contains(pounds) {
+        if pounds != move.loadPounds, Equipment.loads(for: move).contains(pounds) {
             context.insert(MoveOverride(moveName: move.name, loadPounds: pounds))
         }
         try? context.save()

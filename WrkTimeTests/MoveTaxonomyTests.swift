@@ -81,10 +81,10 @@ struct MoveTaxonomyTests {
 
     @Test("Rest between sets follows the brief")
     func rest() {
-        #expect(MovePattern.hinge.restSeconds == 90)
-        #expect(MovePattern.pullHorizontal.restSeconds == 75)
+        #expect(MovePattern.hinge.restSeconds == 75)
+        #expect(MovePattern.pullHorizontal.restSeconds == 60)
         #expect(MovePattern.coreAntiRotation.restSeconds == 45)
-        #expect(MovePattern.accessory.restSeconds == 60)
+        #expect(MovePattern.accessory.restSeconds == 45)
         #expect(MovePattern.lunge.isBigLift)
         #expect(!MovePattern.pushVertical.isBigLift)
     }

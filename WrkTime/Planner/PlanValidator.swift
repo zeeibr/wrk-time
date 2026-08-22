@@ -117,6 +117,13 @@ enum PlanValidator {
             guard implements <= 2 else {
                 throw Failure.tooManyImplements(session.title, implements)
             }
+            // The 35 is for the hinge, whatever was written. Checked against
+            // the move's own permitted loads, not the equipment's ladder.
+            for move in moves {
+                if let load = move.loadPounds, !Equipment.loads(for: move).contains(load) {
+                    throw Failure.impossibleLoad(move: move.name, equipment: move.equipment, pounds: load)
+                }
+            }
             return (session.dayOffset,
                     IntervalRoutine(name: session.title,
                                     work: TimeInterval(session.work),

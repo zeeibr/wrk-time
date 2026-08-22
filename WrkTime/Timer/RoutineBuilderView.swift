@@ -373,7 +373,7 @@ struct RoutineBuilderView: View {
                                         note: moves.isEmpty ? "add moves below"
                                             : draft.totalDuration.durationString)
                                 .padding(.bottom, 4)
-                            Text("Every set of a move, then the next. A set is open until you end it. Rest is the move's own — 90 seconds after a big lift, 75 after an upper-body lift, 45 to 60 for the rest — and the timer adds time to fetch the next thing.")
+                            Text("Every set of a move, then the next. A set is open until you end it. Rest is the move's own — about 75 seconds after a big lift, 60 after an upper-body lift, 45 for the rest — and the timer adds time to fetch the next thing.")
                                 .font(.almanacBodySmall)
                                 .foregroundStyle(Palette.mute)
                                 .fixedSize(horizontal: false, vertical: true)

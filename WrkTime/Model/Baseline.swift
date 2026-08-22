@@ -54,7 +54,9 @@ enum Baseline {
         Station(pattern: .squat, moveName: "Kettlebell goblet squat", loadPounds: 13, isHold: false),
         Station(pattern: .lunge, moveName: "Reverse lunge", loadPounds: nil, isHold: false),
         Station(pattern: .pullHorizontal, moveName: "Kettlebell row", loadPounds: 18, isHold: false),
-        Station(pattern: .pushHorizontal, moveName: "Incline push-up", loadPounds: nil, isHold: false),
+        // The floor press, not a push-up: the push-up family is on her
+        // list of refusals, and a refusal is final.
+        Station(pattern: .pushHorizontal, moveName: "Beam floor press", loadPounds: 15, isHold: false),
         Station(pattern: .coreAntiRotation, moveName: "Side plank", loadPounds: nil, isHold: true),
     ]
 
@@ -112,10 +114,8 @@ enum Baseline {
         let station: Station
         /// Reps, or seconds for a hold.
         let score: Int
+        /// Scores set the load only; the working range is always 8 to 12.
         let verdict: Verdict
-        /// The working rep target for the block: two thirds of the score,
-        /// rounded down, floored at the bottom of the range.
-        var repTarget: Int { max(LoadProgression.repTarget - 4, score * 2 / 3) }
 
         var line: String {
             let what = station.isHold ? "\(score) s" : "\(score) reps"
@@ -179,15 +179,17 @@ enum Baseline {
 
     // MARK: - When
 
-    /// Which test, if any, Today should offer. Never on a day the recovery
-    /// guidance says to hold, never before the day's session, and never
-    /// more often than the cadence — a test that displaces training is the
-    /// thing the coach argued against.
+    /// Which test, if any, Today should offer. Never on a measured bad day,
+    /// never before the day's session, never more often than the cadence —
+    /// a test that displaces training is the thing the coach argued
+    /// against. The weekly check comes only after a session is done, never
+    /// on a rest day, which it would turn into a sixth hard day; the full
+    /// baseline may sit on a rest day, since it replaces nothing.
     enum Offer: Equatable { case baseline, check(turn: Int) }
 
-    static func offer(runs: [RoutineRun], sessionDoneOrRestDay: Bool,
+    static func offer(runs: [RoutineRun], sessionDone: Bool, restDay: Bool,
                       recoveryHolding: Bool, now: Date = .now) -> Offer? {
-        guard sessionDoneOrRestDay, !recoveryHolding else { return nil }
+        guard sessionDone || restDay, !recoveryHolding else { return nil }
         let tests = runs.filter { $0.source == .test }
         let baselines = tests.filter { $0.name == name }.sorted { $0.finishedAt < $1.finishedAt }
         guard let last = baselines.last else { return .baseline }
@@ -196,7 +198,7 @@ enum Baseline {
         let checks = tests.filter { $0.name == checkName }
         let latest = checks.map(\.finishedAt).max() ?? last.finishedAt
         let sinceCheck = Calendar.current.dateComponents([.day], from: latest, to: now).day ?? 0
-        guard sinceCheck >= checkAfterDays else { return nil }
+        guard sinceCheck >= checkAfterDays, sessionDone else { return nil }
         return .check(turn: checks.count)
     }
 }

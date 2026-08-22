@@ -50,35 +50,44 @@ struct BaselineTests {
         #expect(Baseline.verdict(for: hinge, score: 6) == .down(to: 13))
         #expect(Baseline.verdict(for: hinge, score: 16) == .up(to: 35))
         let push = Baseline.stations.first { $0.pattern == .pushHorizontal }!
+        // The beam has one load; over the band there is nothing above it.
         #expect(Baseline.verdict(for: push, score: 20) == .up(to: nil))
+        let lunge = Baseline.stations.first { $0.pattern == .lunge }!
+        #expect(Baseline.verdict(for: lunge, score: 20) == .up(to: nil))
         let plank = Baseline.stations.first { $0.isHold }!
         #expect(Baseline.verdict(for: plank, score: 45) == .hold)
         #expect(Baseline.verdict(for: plank, score: 20) == .down(to: nil))
     }
 
-    @Test("Never before a session, never on a held day, then every four weeks and weekly between")
+    @Test("Never before a session, never on a bad day; the check only after a session")
     func cadence() {
         func run(_ name: String, daysAgo: Int) -> RoutineRun {
-            let run = RoutineRun(name: name, roundsCompleted: 6, seconds: 900, moveNames: [],
-                                 source: .test,
-                                 finishedAt: Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now)!)
-            return run
+            RoutineRun(name: name, roundsCompleted: 6, seconds: 900, moveNames: [],
+                       source: .test,
+                       finishedAt: Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now)!)
         }
-        #expect(Baseline.offer(runs: [], sessionDoneOrRestDay: false, recoveryHolding: false) == nil)
-        #expect(Baseline.offer(runs: [], sessionDoneOrRestDay: true, recoveryHolding: true) == nil)
-        #expect(Baseline.offer(runs: [], sessionDoneOrRestDay: true, recoveryHolding: false) == .baseline)
+        func offer(_ runs: [RoutineRun], done: Bool = true, rest: Bool = false, bad: Bool = false) -> Baseline.Offer? {
+            Baseline.offer(runs: runs, sessionDone: done, restDay: rest, recoveryHolding: bad)
+        }
+        #expect(offer([], done: false) == nil)
+        #expect(offer([], bad: true) == nil)
+        #expect(offer([]) == .baseline)
+        // The baseline may sit on a rest day; it replaces nothing.
+        #expect(offer([], done: false, rest: true) == .baseline)
 
         let fresh = [run(Baseline.name, daysAgo: 2)]
-        #expect(Baseline.offer(runs: fresh, sessionDoneOrRestDay: true, recoveryHolding: false) == nil)
+        #expect(offer(fresh) == nil)
 
         let weekOn = [run(Baseline.name, daysAgo: 8)]
-        #expect(Baseline.offer(runs: weekOn, sessionDoneOrRestDay: true, recoveryHolding: false) == .check(turn: 0))
+        #expect(offer(weekOn) == .check(turn: 0))
+        // The weekly check never lands on a rest day — a sixth hard day.
+        #expect(offer(weekOn, done: false, rest: true) == nil)
 
         let checked = [run(Baseline.name, daysAgo: 15), run(Baseline.checkName, daysAgo: 8)]
-        #expect(Baseline.offer(runs: checked, sessionDoneOrRestDay: true, recoveryHolding: false) == .check(turn: 1))
+        #expect(offer(checked) == .check(turn: 1))
 
         let month = [run(Baseline.name, daysAgo: 29), run(Baseline.checkName, daysAgo: 3)]
-        #expect(Baseline.offer(runs: month, sessionDoneOrRestDay: true, recoveryHolding: false) == .baseline)
+        #expect(offer(month) == .baseline)
     }
 
     @Test("Scoring reads the rows the run wrote; a hold is its shortest side")
@@ -88,7 +97,7 @@ struct BaselineTests {
         let context = ModelContext(container)
         let routine = Baseline.routine()
         let run = RoutineRuns.record(routine, source: .test, seconds: 900, in: context)
-        // Deadlift 10, goblet 7, lunge 12/12, row 9/9, push-up 16, plank 40 s / 35 s.
+        // Deadlift 10, goblet 7, lunge 12/12, row 9/9, floor press 16, plank 40 s / 35 s.
         let reps = [10, 7, 12, 12, 9, 9, 16, 0, 0]
         let durations: [Int: TimeInterval] = [7: 40, 8: 35]
         SetLogs.record(routine, reps: reps, durations: durations, sourceID: run.id, in: context)

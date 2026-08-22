@@ -723,7 +723,7 @@ struct MoveLibraryView: View {
                 // her load on the same move, never a duplicate in the library.
                 if selection.count == 1, let name = selection.first,
                    let move = workingMove(named: name),
-                   move.equipment.availableLoadsPounds.count > 1 {
+                   Equipment.loads(for: move).count > 1 {
                     loadBar(for: move)
                         .padding(.horizontal, 20)
                         .padding(.top, 10)
@@ -766,7 +766,7 @@ struct MoveLibraryView: View {
         return HStack(spacing: 8) {
             Text("Load")
                 .almanacLabel(Palette.mute, small: true)
-            ForEach(move.equipment.availableLoadsPounds, id: \.self) { pounds in
+            ForEach(Equipment.loads(for: move), id: \.self) { pounds in
                 let chosen = current == pounds
                 Button {
                     MoveOverrides.set(pounds, for: move, in: context)

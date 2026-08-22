@@ -66,7 +66,7 @@ enum LoadProgression {
     /// The next load up on this move's own equipment, if it has one.
     static func nextLoad(for move: Move) -> Double? {
         guard let current = move.loadPounds else { return nil }
-        return move.equipment.availableLoadsPounds.sorted().first { $0 > current }
+        return Equipment.loads(for: move).sorted().first { $0 > current }
     }
 
     /// The pure rule, over history rows for this move. `history` is oldest

@@ -47,17 +47,17 @@ struct SessionModeTests {
     func restTable() {
         let phases = reps.schedule.phases
         let rests = phases.filter(\.isRest)
-        // deadlift: 2 set rests at 90; then to the row: big lift keeps 90, no
-        // implement change, no position change → 90.
-        #expect(rests[0].duration == 90)
-        #expect(rests[1].duration == 90)
-        #expect(rests[2].duration == 90)
+        // deadlift: 2 set rests at 75; then to the row: big lift keeps 75, no
+        // implement change, no position change → 75.
+        #expect(rests[0].duration == 75)
+        #expect(rests[1].duration == 75)
+        #expect(rests[2].duration == 75)
         #expect(rests[2].move?.name == "Kettlebell row", "the between-moves rest says what is next")
-        // row: 2 set rests at 75; then to the dead bug: flat 30 + position
-        // change 20 (bodyweight is not a fetch) = 50.
-        #expect(rests[3].duration == 75)
-        #expect(rests[4].duration == 75)
-        #expect(rests[5].duration == 50)
+        // row: 2 set rests at 60; then to the dead bug: flat 20 + position
+        // change 20 (bodyweight is not a fetch) = 40.
+        #expect(rests[3].duration == 60)
+        #expect(rests[4].duration == 60)
+        #expect(rests[5].duration == 40)
         #expect(rests[5].move?.name == "Dead bug")
         // dead bug: 2 set rests at 45, and no rest after the last set.
         #expect(rests[6].duration == 45)
@@ -78,7 +78,7 @@ struct SessionModeTests {
         #expect(engine.currentPhase?.isRest == true)
         #expect(engine.setDurations[0] == 42)
         #expect(engine.skippedMoves.isEmpty, "a set she ended is not a set she skipped")
-        #expect(engine.remainingInPhase == 90)
+        #expect(engine.remainingInPhase == 75)
     }
 
     @Test("The net: a forgotten tap ends the set at the ceiling")
