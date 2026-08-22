@@ -1274,10 +1274,15 @@ struct TodayView: View {
             Rectangle()
                 .fill(Palette.rule)
                 .frame(height: 1 / displayScale)
+            // The value holds its line too — "168.4 lb" broke across two —
+            // and the leader, which is the only thing here with nothing to
+            // say, is what gives.
             Text(value)
                 .font(Face.ui(14))
                 .tabular()
                 .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+                .fixedSize()
         }
         .accessibilityElement(children: .combine)
     }

@@ -53,6 +53,20 @@ reason in), and `MoveForm` (five lines of form per strength move, her ask
 as a beginner). Every strength move must have an entry in all three; tests
 enforce it.
 
+**A session has a mode** (`SessionMode`, Optional on the routine; nil is
+intervals): sets — an open set she ends, capped at 90 s, rest from the
+pattern, the setup buffer between moves; on the minute — 25 s to work in
+each minute, the clock never shifts; intervals — the old shape. Only a sets
+session can earn a step up (`LoadProgression`, double progression: twelve
+on every set, twice, at the current load). The baseline and the weekly
+check (`Baseline`) are sets routines of one set per station, recorded as
+`RoutineRun` with source `.test` — extras by her decision, never a mark.
+
+**The coach chat** (`CoachChat`, `CoachView`) proposes and never applies:
+a tool call is a card she taps, and the tap goes through `MoveOverrides`
+or `MovePreferences` like any other. Every send is one request she
+presses herself.
+
 ## Model usage
 
 **The model is for adaptation, not arithmetic.** Progression — rest shortening,

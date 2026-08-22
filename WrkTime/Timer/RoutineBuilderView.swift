@@ -861,6 +861,25 @@ struct MovePicker: View {
     /// actually uses.
     private var loads: [String: Double] { MoveOverrides.table(in: context) }
 
+    /// The owned strength library in running order, one section per
+    /// pattern, the mat's patterns after the standing ones.
+    private var patternGroups: [(title: String, moves: [Move])] {
+        let strength = MoveLibrary.ordered(
+            MoveLibrary.available.filter { $0.kind == .strength }.map { $0.applyingLoad(from: loads) })
+        var out: [(title: String, moves: [Move])] = []
+        for move in strength {
+            let position = MoveTaxonomy.position(for: move.name) ?? .standing
+            let pattern = MoveTaxonomy.pattern(for: move.name)?.label ?? "Other"
+            let title = position == .standing ? pattern : "On the mat · \(pattern)"
+            if let index = out.firstIndex(where: { $0.title == title }) {
+                out[index].moves.append(move)
+            } else {
+                out.append((title, [move]))
+            }
+        }
+        return out
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -887,22 +906,23 @@ struct MovePicker: View {
                     }
                 }
 
-                ForEach(Equipment.owned) { equipment in
-                    let moves = MoveLibrary.moves(for: equipment).map { $0.applyingLoad(from: loads) }
-                    if !moves.isEmpty {
-                        SwiftUI.Section {
-                            ForEach(moves) { move in
-                                Button {
-                                    onPick(move)
-                                    dismiss()
-                                } label: { row(move) }
-                                .buttonStyle(.plain)
-                                .listRowBackground(Palette.oat)
-                                .listRowSeparatorTint(Palette.rule)
-                            }
-                        } header: {
-                            Text(equipment.label).almanacLabel(small: true)
+                // The strength library the way the Moves tab lists it now:
+                // by pattern, standing before the mat, the implement a fact
+                // on the row. Picking "a hinge" is the question a routine
+                // asks; which drawer it came from is not.
+                ForEach(patternGroups, id: \.title) { group in
+                    SwiftUI.Section {
+                        ForEach(group.moves) { move in
+                            Button {
+                                onPick(move)
+                                dismiss()
+                            } label: { row(move) }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Palette.oat)
+                            .listRowSeparatorTint(Palette.rule)
                         }
+                    } header: {
+                        Text(group.title).almanacLabel(small: true)
                     }
                 }
 
@@ -946,6 +966,11 @@ struct MovePicker: View {
                 .frame(width: 66, height: 66)
             VStack(alignment: .leading, spacing: 2) {
                 Text(move.name).font(.almanacBody).foregroundStyle(Palette.ink)
+                // The implement was the section heading; now the sections
+                // are patterns, so the row says what to pick up.
+                if move.kind == .strength {
+                    Text(move.equipmentLabel).almanacLabel(Palette.mute, small: true)
+                }
                 Text(move.cue).font(.almanacBodySmall).foregroundStyle(Palette.mute)
             }
         }

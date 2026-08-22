@@ -171,10 +171,11 @@ Decisions proposed:
       approval, usage reported. Nothing has been sent.
 
 ### Phase 7 — Aesthetics
-- [ ] Moves tab by position with a compact row: name · pattern · load line ·
+- [x] Moves tab by position with a compact row: name · pattern · load line ·
       small strip. Section numerals stay (Almanac).
-- [ ] Timer `.reps` field (set-count rise), EMOM minute ticks on the field edge.
-- [ ] Today card states the mode in one line of the existing voice.
+- [x] Timer sets field (held still, count up, Done).
+- [ ] EMOM minute ticks on the field edge.
+- [x] Today card states the mode in one line of the existing voice.
 - [ ] Drawings for the deferred kettlebell/core moves remain deferred unless
       you want them prioritized.
 
@@ -205,5 +206,14 @@ Decisions proposed:
 4. Do you want the rename (drop the implement prefix from move names)? It is
    the biggest data-migration risk in the plan and is separable.
 
-## Review
-(filled in as phases complete)
+## Review — 22 August 2026
+
+Everything above Phase 7's last item is built, tested (333 tests, no API
+reached) and verified by hand in the simulator where a screen changed.
+Nothing has been sent to the model. The week on her phone runs in the new
+order without a rewrite; the weight value no longer wraps; the move picker
+lists by pattern.
+
+Open, and why: EMOM ticks on the field are a design pass; three-red-days
+withholding needs recovery history the app does not keep; the first live
+calls need her key on the device and her approval, each time.

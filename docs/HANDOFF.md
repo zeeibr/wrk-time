@@ -750,10 +750,28 @@ Done today, in order, each committed and tested:
 6. `MoveForm` — five lines of form per strength move; a card on the move
    sheet and a Form button on the timer.
 
-Not done, in `tasks/todo.md`: session modes (reps / EMOM / AMRAP), the
-baseline test and weekly check, double progression replacing the pace
-rule, the setup buffer in the schedule, the two-implement validator rule
-(waits for the prompt to say it), the coach brief as the shared system
-prompt, the coach chat, aesthetics. Known small thing seen on Today: the
-"Weight · 7-day mean" value wraps at 168.4 lb.
+Then, the same day, the rest of the roadmap:
+
+7. Session modes — sets (open set, Done, rest from the pattern, setup
+   buffer), on the minute, intervals; the offline week reps · EMOM · reps
+   · intervals · reps; the builder offers both new shapes.
+8. Double progression replaces the pace rule; `SetLog.modeRaw` so an
+   interval can never earn a step up.
+9. `Baseline` — six stations and the two-station weekly check, extras by
+   her decision, scored from the rows a test wrote; "Where you are" on
+   Today after the day's session.
+10. Form pauses the clock and counts her back in; the count's floor is
+    measured so it rides down to the title again; "After a meal" flow
+    routine seeded; the gym's words in Settings.
+11. The brief ships in the bundle and is the body of the planner's and the
+    reviewer's prompt; kit and library generated from the enums; `mode` in
+    the schema; three implements rejected; the reviewer asks for form.
+12. The coach chat on Today: two proposal cards, outcomes returned as tool
+    results. **Nothing has been sent live** — no key on the simulator and
+    no say-so from her. The first live planner, reviewer and chat calls
+    are the open item, and each needs her explicit approval.
+
+Still open: EMOM minute ticks on the field edge (design), withholding a
+step-up after three red days (no recovery history is stored), custom
+moves in the sampler's tried count, and the first live calls above.
 
