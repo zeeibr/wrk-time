@@ -109,19 +109,20 @@ Decisions proposed:
 - [ ] First time a move appears in a session, the timer shows the card once.
 
 ### Phase 3 — Two session modes (plus EMOM)
-- [ ] `SessionMode` on `IntervalRoutine` — Optional, like every stored
+- [x] `SessionMode` on `IntervalRoutine` — Optional, like every stored
       addition: `.interval` (today's AMRAP-style, default for old data),
       `.reps` (sets × reps, rest is the timed phase, work is untimed "until you
       hit the target at RIR 2"), `.emom` (60 s slots, alternating two moves).
-- [ ] Engine: `.reps` work phases are open-ended (tap to end set, counts
+- [x] Engine: `.reps` work phases are open-ended (tap to end set, counts
       during the rest as now — `setEnding(before:)` already exists);
       `.emom` is a written-out sequence the builder can already express.
-- [ ] Field register on the timer for `.reps`: the dark field rises with the
-      *set count*, not a clock. One design decision to review with you.
-- [ ] Whoop summary, `SetLog`, Live Activity each get the mode's honest line
+- [x] Field register on the timer for `.reps`: the field holds still (as
+      through rest), the count runs up, the centre control is Done.
+- [x] Whoop summary, `SetLog`, Live Activity each get the mode's honest line
       ("3 × 10 at 13 lb", not "3 × 40 s").
-- [ ] Week shape (offline, arithmetic): Mon/Wed/Fri reps, one EMOM, one AMRAP.
-      `OfflinePlanner` writes it; nothing asks the model.
+- [x] Week shape (offline, arithmetic): reps · EMOM · reps · AMRAP · reps.
+      `OfflinePlanner` writes it; nothing asks the model. Builder offers
+      Sets and On the minute for her own routines.
 
 ### Phase 4 — Baseline test and working loads
 - [ ] `BaselineTest`: six moves, one per pattern, fixed load, tempo reps to

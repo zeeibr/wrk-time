@@ -146,7 +146,12 @@ struct RoutineListView: View {
             return routine.sequenceRepeats > 1
                 ? written + " × \(routine.sequenceRepeats)" : written
         }
-        return "\(routine.roundCount) × \(Int(routine.clampedWork))/\(Int(routine.rest))"
+        switch routine.mode {
+        case .reps: return "\(routine.setsPerMove) sets each"
+        case .emom: return "\(routine.rounds) min on the minute"
+        case .intervals:
+            return "\(routine.roundCount) × \(Int(routine.clampedWork))/\(Int(routine.rest))"
+        }
     }
 
     private func savedRow(_ routine: IntervalRoutine, lastRun: Date?) -> some View {
@@ -192,19 +197,23 @@ struct RoutineBuilderView: View {
     /// sequence exists. So the builder showed three live steppers that changed
     /// nothing, which is the screen lying about what it does.
     enum Shape: String, CaseIterable, Identifiable {
-        case fixed, written, flow
+        case sets, fixed, minute, written, flow
         var id: String { rawValue }
 
         var title: String {
             switch self {
+            case .sets: "Sets, then the next move"
             case .fixed: "Every round the same"
+            case .minute: "On the minute"
             case .written: "Write out each interval"
             case .flow: "All flow, no rounds"
             }
         }
         var note: String {
             switch self {
-            case .fixed: "One work length, one rest length, so many rounds."
+            case .sets: SessionMode.reps.note + " Rest comes from the move."
+            case .fixed: "One work length, one rest length, so many rounds. " + SessionMode.intervals.note
+            case .minute: SessionMode.emom.note
             case .written: "30 on, 30 rest, 20 on, 15 rest, 10 on, 10 on — each its own length, in the order you write them. Rests are optional."
             case .flow: "A warm-up, or a flow of your own. Movements held one after another with no work intervals and no rests — the field holds still and nothing counts down at you."
             }
@@ -222,6 +231,10 @@ struct RoutineBuilderView: View {
     @State private var steps: [IntervalStep] = []
     /// How many times the written-out cadence runs. One is a single pass.
     @State private var repeats = 1
+    /// Sets per move, for the sets shape.
+    @State private var sets = IntervalRoutine.defaultSets
+    /// Minutes, for the on-the-minute shape.
+    @State private var minutes = 12
     /// How long each movement is held in a flow routine.
     @State private var flowSeconds = Int(WarmUp.seconds)
     @State private var picking = false
@@ -241,7 +254,11 @@ struct RoutineBuilderView: View {
         _moves = State(initialValue: routine.moves)
         _warmUp = State(initialValue: routine.warmUp)
         _steps = State(initialValue: routine.sequence)
-        _shape = State(initialValue: routine.isSequence ? .written : .fixed)
+        _shape = State(initialValue: routine.isSequence ? .written
+                                     : routine.mode == .reps ? .sets
+                                     : routine.mode == .emom ? .minute : .fixed)
+        _sets = State(initialValue: routine.setsPerMove)
+        if routine.mode == .emom { _minutes = State(initialValue: routine.rounds) }
         _repeats = State(initialValue: routine.sequenceRepeats)
         _flowSeconds = State(initialValue: Int(routine.warmUpSeconds))
         // A routine with movements and no rounds is a flow, which is exactly
@@ -258,8 +275,15 @@ struct RoutineBuilderView: View {
         guard shape != .flow else { return flowDraft }
         var routine = IntervalRoutine(id: editing?.id ?? UUID(),
                                       name: name.isEmpty ? defaultName : name,
-                                      work: work, rest: rest, rounds: rounds, moves: moves)
+                                      work: work, rest: rest,
+                                      rounds: shape == .minute ? minutes : rounds,
+                                      moves: moves)
             .warmingUp(with: warmUp)
+        switch shape {
+        case .sets: routine = routine.inMode(.reps, sets: sets)
+        case .minute: routine = routine.inMode(.emom)
+        default: break
+        }
         // Steps are kept in state while she is on the fixed shape, so switching
         // back and forth does not throw away what she wrote — but only the
         // chosen shape reaches the routine.
@@ -293,9 +317,13 @@ struct RoutineBuilderView: View {
         if shape == .flow {
             return warmUp.count == 1 ? "Flow · 1 movement" : "Flow · \(warmUp.count) movements"
         }
-        let shapeText = shape == .fixed
-            ? "\(rounds) × \(Int(work))/\(Int(rest))"
-            : "\(steps.count) \(steps.count == 1 ? "interval" : "intervals")"
+        let shapeText: String
+        switch shape {
+        case .sets: shapeText = "\(sets) sets × \(moves.count)"
+        case .minute: shapeText = "EMOM \(minutes)"
+        case .fixed: shapeText = "\(rounds) × \(Int(work))/\(Int(rest))"
+        default: shapeText = "\(steps.count) \(steps.count == 1 ? "interval" : "intervals")"
+        }
         guard let kit = moves.first?.equipment else { return "Timer · \(shapeText)" }
         let single = moves.allSatisfy { $0.equipment == kit }
         return "\(single ? kit.shortLabel : "Mixed") · \(shapeText)"
@@ -339,6 +367,34 @@ struct RoutineBuilderView: View {
                                     note: "5 s steps",
                                     decrement: { flowSeconds = max(15, flowSeconds - 5) },
                                     increment: { flowSeconds = min(120, flowSeconds + 5) })
+                            Rule().padding(.top, 12)
+                        } else if shape == .sets {
+                            SectionHead(title: "The sets",
+                                        note: moves.isEmpty ? "add moves below"
+                                            : draft.totalDuration.durationString)
+                                .padding(.bottom, 4)
+                            Text("Every set of a move, then the next. A set is open until you end it. Rest is the move's own — 90 seconds after a big lift, 75 after an upper-body lift, 45 to 60 for the rest — and the timer adds time to fetch the next thing.")
+                                .font(.almanacBodySmall)
+                                .foregroundStyle(Palette.mute)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 10)
+                            stepper(title: "Sets per move", value: sets, unit: nil, note: "2 – 5",
+                                    decrement: { sets = max(2, sets - 1) },
+                                    increment: { sets = min(5, sets + 1) })
+                            Rule().padding(.top, 12)
+                        } else if shape == .minute {
+                            SectionHead(title: "The minutes",
+                                        note: moves.isEmpty ? "add moves below"
+                                            : draft.totalDuration.durationString)
+                                .padding(.bottom, 4)
+                            Text("One move at the top of each minute, the rotation in turn. Twenty-five seconds to work, the rest of the minute to rest.")
+                                .font(.almanacBodySmall)
+                                .foregroundStyle(Palette.mute)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 10)
+                            stepper(title: "Minutes", value: minutes, unit: nil, note: "6 – 20",
+                                    decrement: { minutes = max(6, minutes - 1) },
+                                    increment: { minutes = min(20, minutes + 1) })
                             Rule().padding(.top, 12)
                         } else if shape == .fixed {
                             HStack(spacing: 0) {
@@ -432,7 +488,7 @@ struct RoutineBuilderView: View {
                         // copy about work intervals taking moves in turn, none
                         // of which is true in this mode. The same class of
                         // untruth as printing the 40-second constant.
-                        SectionHead(title: shape == .flow ? "In order" : "In rotation",
+                        SectionHead(title: shape == .flow || shape == .sets ? "In order" : "In rotation",
                                     note: flowHeadNote)
                             .padding(.bottom, 4)
 
@@ -509,8 +565,7 @@ struct RoutineBuilderView: View {
                             onSave(draft)
                             dismiss()
                         }
-                        .disabled((shape == .written && steps.isEmpty)
-                  || (shape == .flow && warmUp.isEmpty))
+                        .disabled(isUnwritten)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -549,11 +604,18 @@ struct RoutineBuilderView: View {
         if shape == .flow {
             return warmUp.isEmpty ? "required" : "\(warmUp.count) movements"
         }
+        if shape == .sets || shape == .minute {
+            return moves.isEmpty ? "required" : "\(moves.count) in order"
+        }
         return moves.isEmpty ? "optional" : "\(moves.count) in cycle"
     }
 
     private var rotationExplainer: String {
         switch shape {
+        case .sets:
+            "Add the moves in the order you want them — standing first, then the mat, so you go down once. Each gets all its sets before the next begins."
+        case .minute:
+            "Add moves and each minute takes the next one in the list, back to the top when it runs out."
         case .fixed:
             "Leave this empty for a plain interval timer — just work, rest and rounds. Add moves and each round takes the next one in the list."
         case .written:
@@ -565,6 +627,8 @@ struct RoutineBuilderView: View {
 
     private var sectionTwoLabel: String {
         switch shape {
+        case .sets: "Sets"
+        case .minute: "Minutes"
         case .fixed: "Shape"
         case .written: "Sequence"
         case .flow: "Flow"
@@ -574,13 +638,16 @@ struct RoutineBuilderView: View {
     /// Chosen to write it out, and not written it yet.
     private var isUnwritten: Bool {
         (shape == .written && steps.isEmpty) || (shape == .flow && warmUp.isEmpty)
+            || (shape == .sets && moves.isEmpty) || (shape == .minute && moves.isEmpty)
     }
 
     private var totalNote: String {
         guard !isUnwritten else {
-            return shape == .flow
-                ? "Add a movement to give this a length"
-                : "Add an interval to give this a length"
+            switch shape {
+            case .flow: return "Add a movement to give this a length"
+            case .sets, .minute: return "Add a move to give this a length"
+            default: return "Add an interval to give this a length"
+            }
         }
         if shape == .flow {
             return "\(warmUp.count) \(warmUp.count == 1 ? "movement" : "movements") · \(flowSeconds)s each"
@@ -588,11 +655,20 @@ struct RoutineBuilderView: View {
         // `draft.roundCount`, never the `rounds` stepper: a sided move doubles
         // its turns, and this line must agree with the saved list and the
         // timer about how many work intervals that is.
-        let body = shape == .fixed
-            ? "\(draft.roundCount) × \(Int(work))/\(Int(rest)) · final rest dropped"
-            : "\(draft.roundCount) work \(draft.roundCount == 1 ? "interval" : "intervals")"
+        let body: String
+        switch shape {
+        case .sets:
+            body = moves.isEmpty ? "Add a move to give this a length"
+                 : "\(draft.roundCount) \(draft.roundCount == 1 ? "set" : "sets") over \(moves.count) \(moves.count == 1 ? "move" : "moves")"
+        case .minute:
+            body = "\(minutes) minutes on the minute"
+        case .fixed:
+            body = "\(draft.roundCount) × \(Int(work))/\(Int(rest)) · final rest dropped"
+        default:
+            body = "\(draft.roundCount) work \(draft.roundCount == 1 ? "interval" : "intervals")"
                 + " in \(steps.count) \(steps.count == 1 ? "step" : "steps")"
                 + (repeats > 1 ? " × \(repeats)" : "")
+        }
         guard !warmUp.isEmpty else { return body }
         return "\(warmUp.count) to warm up, then \(body)"
     }
@@ -610,6 +686,8 @@ struct RoutineBuilderView: View {
         let sided = moves.indices.contains(index)
             ? moves[index].sided.map { $0 == .directions ? " · both ways" : " · each side" }
             : nil
+        if shape == .sets { return "\(sets) sets × 8–12" + (sided ?? "") }
+        if shape == .minute { return "\(Int(IntervalRoutine.emomWorkSeconds))s a minute" + (sided ?? "") }
         guard shape == .written, !steps.isEmpty else {
             return "\(Int(work))s" + (sided ?? "")
         }

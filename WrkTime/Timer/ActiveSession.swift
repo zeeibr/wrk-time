@@ -134,7 +134,7 @@ struct ActiveSession: Codable, Equatable, Sendable {
         // this read "Round 4 of 0", and a written-out sequence keeps its count
         // in `roundCount`. `position` also knows a flow movement is not a round.
         return schedule.phases[index]
-            .position(rounds: routine.roundCount, flowCount: schedule.flowPhaseCount)
+            .position(rounds: routine.roundCount, flowCount: schedule.flowPhaseCount, word: routine.roundWord)
             + " · \(remaining.durationString) left"
     }
 }

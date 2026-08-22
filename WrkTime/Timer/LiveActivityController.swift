@@ -93,7 +93,8 @@ final class LiveActivityController {
             phase: kind,
             round: phase.round,
             position: phase.position(rounds: engine.routine.roundCount,
-                                     flowCount: engine.schedule.flowPhaseCount),
+                                     flowCount: engine.schedule.flowPhaseCount,
+                                     word: engine.routine.roundWord),
             // "Split squat · Left side" — the side is part of what the lock
             // screen has to say, or both intervals read as the same set twice.
             moveName: phase.move.map { move in

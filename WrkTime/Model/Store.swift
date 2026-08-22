@@ -632,13 +632,14 @@ enum SetLogs {
     /// Writes this session's counted sets, replacing anything already written
     /// for the same session so a late count corrects rather than duplicates.
     static func record(_ routine: IntervalRoutine, reps: [Int],
+                       durations: [Int: TimeInterval] = [:],
                        sourceID: UUID?, date: Date = .now,
                        in context: ModelContext) {
         let existing = ((try? context.fetch(FetchDescriptor<SetLog>())) ?? [])
             .filter { $0.sourceID == sourceID && sourceID != nil }
         existing.forEach(context.delete)
 
-        for entry in WhoopSummary.counted(for: routine, reps: reps) {
+        for entry in WhoopSummary.counted(for: routine, reps: reps, durations: durations) {
             let log = SetLog(sourceID: sourceID, move: entry.move,
                              reps: entry.reps, date: date)
             log.setSeconds = entry.seconds.map { Double($0) }

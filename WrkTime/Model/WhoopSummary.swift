@@ -16,13 +16,14 @@ enum WhoopSummary {
     static func text(for routine: IntervalRoutine,
                      finishedAt: Date = .now,
                      seconds: TimeInterval? = nil,
-                     reps: [Int] = []) -> String {
+                     reps: [Int] = [],
+                     durations: [Int: TimeInterval] = [:]) -> String {
         let length = seconds ?? routine.schedule.total
         var lines = [
             "\(routine.name) · \(finishedAt.formatted(.dateTime.day().month(.abbreviated))) · \(Int((length / 60).rounded())) min"
         ]
 
-        for entry in entries(for: routine, reps: reps) {
+        for entry in entries(for: routine, reps: reps, durations: durations) {
             lines.append("\(entry.name) — \(entry.equipment), \(entry.measure)")
         }
 
@@ -44,13 +45,15 @@ enum WhoopSummary {
     /// `reps` is counted per set in the order the sets were worked — the same
     /// order `RoutineSchedule.setOrdinal` files them under. A zero is a set
     /// she did not count, and is left out rather than reported as none.
-    static func entries(for routine: IntervalRoutine, reps: [Int] = []) -> [Entry] {
-        grouped(for: routine, reps: reps).map { held in
+    static func entries(for routine: IntervalRoutine, reps: [Int] = [],
+                        durations: [Int: TimeInterval] = [:]) -> [Entry] {
+        grouped(for: routine, reps: reps, durations: durations).map { held in
             Entry(name: held.move.name,
                   equipment: held.move.equipmentLabel,
                   measure: measure(for: held.move,
                                    durations: held.sets.map(\.seconds),
-                                   reps: held.sets.compactMap(\.reps)))
+                                   reps: held.sets.compactMap(\.reps),
+                                   asSets: routine.mode == .reps))
         }
     }
 
@@ -59,9 +62,10 @@ enum WhoopSummary {
     /// travel with the reps because she lifts to time: nine reps means one
     /// thing in a forty-second interval and another in sixty, and the
     /// progression rule reads the pace, not the raw count.
-    static func counted(for routine: IntervalRoutine, reps: [Int])
+    static func counted(for routine: IntervalRoutine, reps: [Int],
+                        durations: [Int: TimeInterval] = [:])
     -> [(move: Move, reps: [Int], seconds: [TimeInterval])] {
-        grouped(for: routine, reps: reps).compactMap { held in
+        grouped(for: routine, reps: reps, durations: durations).compactMap { held in
             let done = held.sets.compactMap { set -> (Int, TimeInterval)? in
                 guard let reps = set.reps else { return nil }
                 return (reps, set.seconds)
@@ -75,7 +79,10 @@ enum WhoopSummary {
     /// entry per work interval with its length and any count against it. One
     /// walk of the schedule, because the summary and the history must agree
     /// about which set belonged to which move.
-    private static func grouped(for routine: IntervalRoutine, reps: [Int])
+    /// `durations` overrides a set's scheduled length with the seconds it
+    /// actually ran — a rep set is open-ended and its schedule is only a net.
+    private static func grouped(for routine: IntervalRoutine, reps: [Int],
+                                durations: [Int: TimeInterval] = [:])
     -> [(move: Move, sets: [(seconds: TimeInterval, reps: Int?)])] {
         let work = routine.schedule.phases.filter(\.isWork)
         var order: [String] = []
@@ -88,7 +95,7 @@ enum WhoopSummary {
                 byName[move.name] = (move, [])
             }
             let counted = set < reps.count && reps[set] > 0 ? reps[set] : nil
-            byName[move.name]?.sets.append((phase.duration, counted))
+            byName[move.name]?.sets.append((durations[set] ?? phase.duration, counted))
         }
         return order.compactMap { byName[$0] }
     }
@@ -103,7 +110,8 @@ enum WhoopSummary {
     /// not do.
     private static func measure(for move: Move,
                                 durations: [TimeInterval],
-                                reps: [Int]) -> String {
+                                reps: [Int],
+                                asSets: Bool = false) -> String {
         var count = durations.count
         var suffix = ""
         if let sided = move.sided {
@@ -111,6 +119,13 @@ enum WhoopSummary {
             // turns, on both sides.
             count = max(count / 2, 1)
             suffix = sided == .directions ? " each way" : " each side"
+        }
+
+        // A rep set she did not count is a set, not an interval: its length
+        // was whatever she took, and reporting it by the clock would describe
+        // a session she did not do.
+        if asSets, reps.isEmpty {
+            return "\(count) \(count == 1 ? "set" : "sets"), reps not counted\(suffix)"
         }
 
         if !reps.isEmpty {

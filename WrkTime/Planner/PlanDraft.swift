@@ -252,18 +252,25 @@ struct DraftSession: Codable, Sendable, Equatable {
     var rest: Int
     var rounds: Int
     var moves: [DraftMove]
+    /// `SessionMode.rawValue`. Optional so a draft from before modes decodes
+    /// as intervals; the schema will ask for it by name (Phase 6).
+    var mode: String?
 
-    init(dayOffset: Int, title: String, work: Int, rest: Int, rounds: Int, moves: [DraftMove]) {
+    var sessionMode: SessionMode { mode.flatMap(SessionMode.init(rawValue:)) ?? .intervals }
+
+    init(dayOffset: Int, title: String, work: Int, rest: Int, rounds: Int,
+         moves: [DraftMove], mode: SessionMode = .intervals) {
         self.dayOffset = dayOffset
         self.title = title
         self.work = work
         self.rest = rest
         self.rounds = rounds
         self.moves = moves
+        self.mode = mode == .intervals ? nil : mode.rawValue
     }
 
     private enum Key: String, CodingKey {
-        case dayOffset, title, work, rest, rounds, moves
+        case dayOffset, title, work, rest, rounds, moves, mode
     }
 
     /// Named slots rather than a list.
@@ -300,6 +307,7 @@ struct DraftSession: Codable, Sendable, Equatable {
         work = try container.decode(Int.self, forKey: .work)
         rest = try container.decode(Int.self, forKey: .rest)
         rounds = try container.decode(Int.self, forKey: .rounds)
+        mode = try container.decodeIfPresent(String.self, forKey: .mode)
 
         // The object form is what the schema asks for; the array form is still
         // accepted so a hand-written fixture or an older stored draft decodes.
@@ -327,6 +335,7 @@ struct DraftSession: Codable, Sendable, Equatable {
         try container.encode(work, forKey: .work)
         try container.encode(rest, forKey: .rest)
         try container.encode(rounds, forKey: .rounds)
+        try container.encodeIfPresent(mode, forKey: .mode)
         try container.encode(moves, forKey: .moves)
     }
 }

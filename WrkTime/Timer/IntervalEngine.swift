@@ -226,6 +226,29 @@ final class IntervalEngine {
         refresh()
     }
 
+    /// How long each open-ended set actually ran, by set ordinal
+    /// (`RoutineSchedule.setOrdinal`). A rep set's scheduled length is only
+    /// the net under it; the seconds the record keeps are the ones she lifted.
+    private(set) var setDurations: [Int: TimeInterval] = [:]
+
+    /// She has finished the set. The rest begins now.
+    ///
+    /// Distinct from `skip`: a set she ended is a set she did, so it is not
+    /// written down as skipped, and its real length is kept for the record.
+    /// On a phase that is not open-ended this is a plain skip — the one
+    /// control can sit in the same place in every mode.
+    func endSet() {
+        guard let index = currentIndex else { return }
+        let phase = schedule.phases[index]
+        guard phase.openEnded else { skip(); return }
+        if let ordinal = schedule.setOrdinal(of: index) {
+            setDurations[ordinal] = max(1, (elapsed - phase.start).rounded())
+        }
+        let target = schedule.start(of: index + 1)
+        skipOffset += target - elapsed
+        refresh()
+    }
+
     /// Stop the session. The reason travels with it, because ending early and
     /// running to the end are not the same event and must not be cued alike.
     func end(reason: EndReason = .abandoned) {

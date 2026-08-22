@@ -128,6 +128,43 @@ struct IntervalStep: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+/// How a session is worked, from `docs/COACH-BRIEF.md` §5. Three, and they
+/// are not interchangeable.
+enum SessionMode: String, Codable, CaseIterable, Hashable {
+    /// Timed work against timed rest, every turn through the rotation a
+    /// round. Conditioning, in the brief's word — the heart more than the
+    /// muscle. The default, and what every routine stored before the mode
+    /// existed is.
+    case intervals
+    /// Straight sets: every set of a move, then the next move. A set is open
+    /// until she ends it, capped as a safety net; rest between sets comes
+    /// from the move's pattern, rest between moves is flat plus the setup
+    /// buffer. The base of the week, and the only mode a step-up can be
+    /// earned in.
+    case reps
+    /// Every minute on the minute, one hard set of one move, the rotation in
+    /// turn. The set has the first part of the minute and the rest is rest;
+    /// the clock never shifts, so the minute stays on the minute.
+    case emom
+
+    var label: String {
+        switch self {
+        case .intervals: "Intervals"
+        case .reps: "Sets"
+        case .emom: "EMOM"
+        }
+    }
+
+    /// One line of what the mode is for, said honestly.
+    var note: String {
+        switch self {
+        case .intervals: "Timed work, timed rest, as many tidy reps as the interval holds. This is for the heart more than the muscle."
+        case .reps: "Three sets of a move, then the next. A set ends when you end it — eight to twelve reps, stopping two short of failure."
+        case .emom: "One hard set at the top of every minute, then rest until the next. Up to eight reps; if they take longer than twenty-five seconds, the load is wrong, not the rest."
+        }
+    }
+}
+
 /// A self-guided interval routine: fixed work and rest, a rotation of moves,
 /// and a number of rounds. This is also the shape the planner emits, so a
 /// generated session and a hand-built one run through the same engine.
@@ -175,6 +212,83 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     /// already saved undecodable. Nil reads as one pass.
     var sequenceRepeatsRaw: Int?
 
+    /// The session mode. Optional, like every field added to a stored
+    /// routine: the decoder throws on a missing non-optional key. Nil reads
+    /// as `.intervals`, which is what every routine on disk before the mode
+    /// existed was.
+    var modeRaw: String?
+    /// Sets per move in `.reps`; nil reads as `Self.defaultSets`.
+    var setsPerMoveRaw: Int?
+
+    var mode: SessionMode { modeRaw.flatMap(SessionMode.init(rawValue:)) ?? .intervals }
+    /// What a work interval is called in this mode — the header's "Round 3 /
+    /// 8" is "Set 3 / 12" in reps mode and "Minute 3 / 12" on the minute.
+    var roundWord: String {
+        switch mode {
+        case .intervals: "Round"
+        case .reps: "Set"
+        case .emom: "Minute"
+        }
+    }
+    var setsPerMove: Int { max(setsPerMoveRaw ?? Self.defaultSets, 1) }
+
+    static let defaultSets = 3
+    /// A rep set is open until she ends it; this is the net under it. Twelve
+    /// reps at a 3-1-1 tempo is about a minute, so a set still running at
+    /// ninety seconds is a forgotten tap, not a set. Deliberately above the
+    /// interval ceiling — a set is not an interval.
+    static let repSetCeiling: TimeInterval = 90
+    /// The working part of an EMOM minute. Eight reps in twenty-five seconds
+    /// leaves thirty-five to rest, which is the point of the mode.
+    static let emomWorkSeconds: TimeInterval = 25
+    static let emomMinute: TimeInterval = 60
+    /// Rest between moves in `.reps`, before the setup buffer — flat, because
+    /// moving to another pattern is partly recovery in itself. After a big
+    /// lower lift it is the lift's own rest instead.
+    static let betweenMovesSeconds = 30
+
+    /// "8 rounds · 13:10", "3 sets × 5 moves · 24:10", "12 minutes on the
+    /// minute · 11:25" — the one line every surface uses to say the shape,
+    /// so Today, the extras and the builder cannot describe a set session
+    /// in rounds.
+    var shapeLine: String {
+        let length = totalDuration.durationString
+        switch mode {
+        case .reps:
+            let n = moves.count
+            return "\(setsPerMove) sets × \(n) \(n == 1 ? "move" : "moves") · \(length)"
+        case .emom:
+            return "\(rounds) minutes on the minute · \(length)"
+        case .intervals:
+            return "\(roundCount) \(roundCount == 1 ? "round" : "rounds") · \(length)"
+        }
+    }
+
+    /// What a rotation row says a move will take: "40s ×3", "3 sets × 8–12",
+    /// "25s ×2" on the minute — with "each side" where the move is sided.
+    func rowMeasure(for move: Move) -> String {
+        let base: String
+        switch mode {
+        case .reps: base = "\(setsPerMove) sets × 8–12"
+        case .emom:
+            let turns = max(rounds / max(RoutineSchedule.sidedCycle(of: moves).count, 1), 1)
+            base = "\(Int(Self.emomWorkSeconds))s ×\(turns)"
+        case .intervals:
+            let turns = rounds / max(moves.count, 1)
+            base = "\(Int(clampedWork))s ×\(turns)"
+        }
+        guard let sided = move.sided else { return base }
+        return base + (sided == .directions ? " each way" : " each side")
+    }
+
+    /// The same routine in another mode.
+    func inMode(_ mode: SessionMode, sets: Int? = nil) -> IntervalRoutine {
+        var copy = self
+        copy.modeRaw = mode == .intervals ? nil : mode.rawValue
+        copy.setsPerMoveRaw = mode == .reps ? sets ?? setsPerMoveRaw : nil
+        return copy
+    }
+
     var sequence: [IntervalStep] { steps ?? [] }
     var isSequence: Bool { !sequence.isEmpty }
     /// At least one, however the stored value got there.
@@ -189,6 +303,13 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
     /// agree with the schedule about how many there are.
     var roundCount: Int {
         if isSequence { return sequence.filter(\.isWork).count * sequenceRepeats }
+        // Every set of every move, sides counted, is a work interval.
+        if mode == .reps {
+            return RoutineSchedule.sidedCycle(of: moves).count * setsPerMove
+        }
+        // A minute is a minute: a sided move takes one minute per side, and
+        // `rounds` already counts minutes.
+        if mode == .emom { return rounds }
         guard rounds > 0, !moves.isEmpty else { return rounds }
         return (1...rounds).reduce(0) { count, turn in
             count + (moves[(turn - 1) % moves.count].sided != nil ? 2 : 1)
@@ -222,9 +343,15 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
         if rounds == 0, moves.isEmpty, !warmUp.isEmpty {
             return warmUp.count == 1 ? "Flow · 1 movement" : "Flow · \(warmUp.count) movements"
         }
-        let shape = isSequence
-            ? "\(sequence.count) \(sequence.count == 1 ? "interval" : "intervals")"
-            : "\(rounds) × \(Int(clampedWork))/\(Int(rest))"
+        let shape: String
+        switch mode {
+        case .reps: shape = "\(setsPerMove) sets × \(moves.count)"
+        case .emom: shape = "EMOM \(rounds)"
+        case .intervals:
+            shape = isSequence
+                ? "\(sequence.count) \(sequence.count == 1 ? "interval" : "intervals")"
+                : "\(rounds) × \(Int(clampedWork))/\(Int(rest))"
+        }
         guard let kit = moves.first?.equipment else { return "Timer · \(shape)" }
         let single = moves.allSatisfy { $0.equipment == kit }
         return "\(single ? kit.shortLabel : "Mixed") · \(shape)"
@@ -292,6 +419,13 @@ struct Phase: Equatable {
     /// "Left side", "Other way" — set on the work intervals of a sided move,
     /// so every surface reading this phase says which side it is.
     var side: String? = nil
+    /// A rep set: the phase runs to `duration` only as a net, and she is
+    /// expected to end it herself. The field holds still rather than rising
+    /// with a clock that means nothing.
+    var openEnded: Bool = false
+    /// "Set 2 of 3" on a work phase in `.reps`, so the screen and the lock
+    /// screen say the same thing about where in the move she is.
+    var setLabel: String? = nil
     let duration: TimeInterval
     /// Seconds from routine start at which this phase begins and ends.
     let start: TimeInterval
@@ -306,8 +440,8 @@ struct Phase: Equatable {
     /// Lives on the phase rather than in each view because the screen and the
     /// lock screen must never be able to disagree about where the session is —
     /// they are the same session read in two places.
-    func position(rounds: Int, flowCount: Int) -> String {
-        guard isFlow else { return "Round \(round) / \(rounds)" }
+    func position(rounds: Int, flowCount: Int, word: String = "Round") -> String {
+        guard isFlow else { return "\(word) \(round) / \(rounds)" }
         // A routine with no rounds is the morning practice, not a warm-up for
         // something else. Calling it a warm-up would name it after work that is
         // not coming.
@@ -350,7 +484,7 @@ struct RoutineSchedule: Equatable {
         // one: all flow, nothing to set up for.
         let opensWork = routine.isSequence
             ? routine.sequence.contains { $0.isWork && $0.clamped > 0 }
-            : routine.rounds > 0
+            : routine.mode == .reps ? !moves.isEmpty : routine.rounds > 0
         if !built.isEmpty, opensWork {
             let setup = WarmUp.setupSeconds
             built.append(Phase(kind: .rest, round: 1, move: nil,
@@ -387,6 +521,79 @@ struct RoutineSchedule: Equatable {
                     }
                     cursor += length
                 }
+            }
+            phases = built
+            total = cursor
+            return
+        }
+
+        // Straight sets, `docs/COACH-BRIEF.md` §5 and §7. Every set of a move
+        // in turn, sides back to back; the move's own rest between its sets;
+        // then the flat rest plus the setup buffer before the next move,
+        // shown as "Next up" so she knows what to fetch. The final rest is
+        // dropped as in every shape — she has finished.
+        if routine.mode == .reps {
+            // Sets of nothing are nothing: a set routine without moves has
+            // no work, not a timer-only shape borrowed from intervals.
+            guard !moves.isEmpty else { phases = built; total = cursor; return }
+            var round = 0
+            for (position, move) in moves.enumerated() {
+                let pattern = MoveTaxonomy.pattern(for: move.name)
+                let setRest = TimeInterval(pattern?.restSeconds ?? MovePattern.accessory.restSeconds)
+                let sides: [String?] = move.sided.map { [$0.labels.first, $0.labels.second] } ?? [nil]
+                for set in 1...routine.setsPerMove {
+                    for side in sides {
+                        round += 1
+                        let cap = IntervalRoutine.repSetCeiling
+                        built.append(Phase(kind: .work, round: round, move: move, side: side,
+                                           openEnded: true,
+                                           setLabel: "Set \(set) of \(routine.setsPerMove)",
+                                           duration: cap, start: cursor, end: cursor + cap))
+                        cursor += cap
+                    }
+                    let lastSet = set == routine.setsPerMove
+                    let lastMove = position == moves.count - 1
+                    if lastSet && lastMove { break }
+                    let next = lastSet ? moves[position + 1] : nil
+                    var rest: TimeInterval
+                    if let next {
+                        // Between moves: the big lift keeps its own rest,
+                        // everything else the flat thirty, and the setup
+                        // buffer on top — separate numbers, added here.
+                        let between = (pattern?.isBigLift ?? false)
+                            ? setRest : TimeInterval(IntervalRoutine.betweenMovesSeconds)
+                        rest = between + TimeInterval(MoveTaxonomy.setupSeconds(from: move, to: next))
+                    } else {
+                        rest = setRest
+                    }
+                    built.append(Phase(kind: .rest, round: round, move: next,
+                                       duration: rest, start: cursor, end: cursor + rest))
+                    cursor += rest
+                }
+            }
+            phases = built
+            total = cursor
+            return
+        }
+
+        // Every minute on the minute: `rounds` minutes, the rotation in turn,
+        // one set in the first part of each minute and the remainder to rest.
+        // No phase is open-ended — the clock is the whole idea — and the last
+        // minute's rest is dropped like every final rest.
+        if routine.mode == .emom, routine.rounds > 0 {
+            let cycle = Self.sidedCycle(of: moves)
+            for minute in 1...routine.rounds {
+                let slot = cycle.isEmpty ? nil : cycle[(minute - 1) % cycle.count]
+                let work = IntervalRoutine.emomWorkSeconds
+                built.append(Phase(kind: .work, round: minute, move: slot?.move, side: slot?.side,
+                                   duration: work, start: cursor, end: cursor + work))
+                cursor += work
+                guard minute < routine.rounds else { break }
+                let rest = IntervalRoutine.emomMinute - work
+                let next = cycle.isEmpty ? nil : cycle[minute % cycle.count].move
+                built.append(Phase(kind: .rest, round: minute, move: next,
+                                   duration: rest, start: cursor, end: cursor + rest))
+                cursor += rest
             }
             phases = built
             total = cursor

@@ -401,6 +401,11 @@ struct WorkoutTimerView: View {
         guard stage == .running else { return total * entryProgress }
         guard let phase = engine.currentPhase else { return total }
         guard phase.isWork else { return total }
+        // A rep set is open until she ends it. The field holds still, as it
+        // does through rest: a boundary sweeping toward a ninety-second net
+        // would be a clock that means nothing, chasing her through a set
+        // that is supposed to be slow.
+        guard !phase.openEnded else { return total }
         // Under Reduce Motion the field holds still through work, exactly as it
         // already does through rest. A full-height hard edge sweeping the whole
         // screen for sixty seconds at a stretch is a textbook vestibular
@@ -491,6 +496,9 @@ struct WorkoutTimerView: View {
             if let phase = engine.currentPhase, let move = phase.move {
                 // The side a sided move is on gets the eyebrow — the one line
                 // that has to be readable at a glance mid-set.
+                // The set is already in the header and the caption; the
+                // eyebrow keeps to the side, the one thing that has to be
+                // readable at a glance mid-set.
                 moveBlock(move, eyebrow: phase.isFlow ? phaseWord : phase.side,
                           foreground: foreground, secondary: secondary)
             } else if let next = engine.nextPhase, let move = next.move {
@@ -608,7 +616,8 @@ struct WorkoutTimerView: View {
                     UIPasteboard.general.string = WhoopSummary.text(
                         for: engine.routine,
                         seconds: engine.schedule.total,
-                        reps: countedReps)
+                        reps: countedReps,
+                        durations: engine.setDurations)
                     Haptics.transport()
                     copiedForWhoop = true
                     Task {
@@ -786,7 +795,8 @@ struct WorkoutTimerView: View {
         // And per move, which is the shape the history is read in. Rewritten
         // rather than appended, so counting the last set corrects this
         // session's rows instead of adding a second set of them.
-        SetLogs.record(routine, reps: counts, sourceID: source, in: context)
+        SetLogs.record(routine, reps: counts, durations: engine.setDurations,
+                       sourceID: source, in: context)
     }
 
     /// Her counts laid out by set, zero where a set went uncounted — the shape
@@ -931,10 +941,21 @@ struct WorkoutTimerView: View {
                     engine.toggle()
                     wasRunning ? Haptics.paused() : Haptics.resumed()
                 }
-                FieldButton(systemName: "forward.end", label: "Skip this interval",
-                            foreground: foreground) {
-                    engine.skip()
-                    Haptics.skipped()
+                if engine.currentPhase?.openEnded == true {
+                    // Ending a set is the one thing she does during a rep
+                    // session, so it is the prominent control while a set
+                    // is open. Not a skip: the set she ended is a set she did.
+                    FieldButton(systemName: "checkmark", prominent: true,
+                                label: "Set done", foreground: foreground) {
+                        engine.endSet()
+                        Haptics.transport()
+                    }
+                } else {
+                    FieldButton(systemName: "forward.end", label: "Skip this interval",
+                                foreground: foreground) {
+                        engine.skip()
+                        Haptics.skipped()
+                    }
                 }
             }
         }
@@ -958,7 +979,14 @@ struct WorkoutTimerView: View {
 
     /// The lead-in counts in whole seconds; the session counts in its own clock.
     private var countString: String {
-        stage == .running ? engine.remainingInPhase.clockString : "\(leadIn)"
+        guard stage == .running else { return "\(leadIn)" }
+        // An open set counts up: the number is how long she has been
+        // lifting, which is the tempo check, not how long until something
+        // happens to her.
+        if let phase = engine.currentPhase, phase.openEnded {
+            return (engine.elapsed - phase.start).clockString
+        }
+        return engine.remainingInPhase.clockString
     }
 
     /// The work length is read from the phase, not assumed. The builder allows
@@ -974,7 +1002,14 @@ struct WorkoutTimerView: View {
         case .flow: return engine.routine.roundCount > 0 ? "warm-up — take your time"
                                                      : "the practice — take your time"
         case .rest: return "rest — walk it off"
-        case .work: return "left of \(Int(phase.duration.rounded())) seconds"
+        case .work:
+            if phase.openEnded {
+                return "\(phase.setLabel?.lowercased() ?? "set") — eight to twelve, two short of failure"
+            }
+            if engine.routine.mode == .emom {
+                return "up to eight reps, then rest"
+            }
+            return "left of \(Int(phase.duration.rounded())) seconds"
         }
     }
 
@@ -990,10 +1025,11 @@ struct WorkoutTimerView: View {
 
     private var positionLine: String {
         guard let phase = engine.currentPhase else {
-            return "Round \(engine.routine.roundCount) / \(engine.routine.roundCount)"
+            return "\(engine.routine.roundWord) \(engine.routine.roundCount) / \(engine.routine.roundCount)"
         }
         return phase.position(rounds: engine.routine.roundCount,
-                              flowCount: engine.schedule.flowPhaseCount)
+                              flowCount: engine.schedule.flowPhaseCount,
+                              word: engine.routine.roundWord)
     }
 
     private var phaseWord: String {
@@ -1015,6 +1051,8 @@ struct WorkoutTimerView: View {
     private func nextDescription(_ phase: Phase) -> String {
         if let move = phase.move {
             let side = phase.side.map { " · \($0.lowercased())" } ?? ""
+            // An open set has no length to promise.
+            if phase.openEnded { return "\(move.name)\(side) · \(phase.setLabel?.lowercased() ?? "set")" }
             return "\(move.name)\(side) · \(phase.duration.clockString)"
         }
         return phase.isRest ? "Rest \(phase.duration.clockString)"

@@ -172,7 +172,7 @@ struct TodayView: View {
                         Rule()
 
                         PrimaryButton(title: "Begin session",
-                                      subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
+                                      subtitle: routine.shapeLine) {
                             running = .session(session, routine)
                         }
                         .padding(.top, 14)
@@ -360,9 +360,20 @@ struct TodayView: View {
             // screen besides.
             counter("\(Int((routine.totalDuration / 60).rounded()))", "Minutes")
             divider
-            counter("\(routine.roundCount)", "Rounds")
-            divider
-            counter("\(Int(routine.clampedWork))/\(Int(routine.rest))", "Work / rest")
+            switch routine.mode {
+            case .reps:
+                counter("\(routine.setsPerMove)", "Sets per move")
+                divider
+                counter("8–12", "Reps, 2 in reserve")
+            case .emom:
+                counter("\(routine.rounds)", "Minutes")
+                divider
+                counter("\(Int(IntervalRoutine.emomWorkSeconds))/\(Int(IntervalRoutine.emomMinute - IntervalRoutine.emomWorkSeconds))", "Work / rest")
+            case .intervals:
+                counter("\(routine.roundCount)", "Rounds")
+                divider
+                counter("\(Int(routine.clampedWork))/\(Int(routine.rest))", "Work / rest")
+            }
         }
         // Padding first, then the rules — so the rules sit outside the breathing
         // room rather than flush against the type. Applied the other way round
@@ -582,7 +593,7 @@ struct TodayView: View {
                     ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
                         BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
                                  equipment: move.equipmentLabel,
-                                 measure: "\(Int(routine.clampedWork))s")
+                                 measure: routine.mode == .reps ? "\(routine.setsPerMove) sets" : "\(Int(routine.clampedWork))s")
                             .onTapGesture { inspecting = move }
                     }
                 }
@@ -697,7 +708,7 @@ struct TodayView: View {
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             PrimaryButton(title: offer.action,
-                          subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
+                          subtitle: routine.shapeLine) {
                 running = .session(offer.session, routine)
             }
             .padding(.top, 14)
@@ -719,7 +730,7 @@ struct TodayView: View {
             let extra = extraSession
             Button { running = .extra(extra) } label: {
                 offerRow(title: extra.name,
-                         detail: "\(extra.roundCount) rounds · \(extra.totalDuration.durationString)",
+                         detail: extra.shapeLine,
                          note: extra.moves.map(\.name).joined(separator: ", "))
             }
             .buttonStyle(.plain)
@@ -754,7 +765,7 @@ struct TodayView: View {
         if let done = finishedToday, let routine = done.routine {
             Button { running = .extra(routine) } label: {
                 offerRow(title: "\(routine.name) · again",
-                         detail: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)",
+                         detail: routine.shapeLine,
                          note: "The session you finished today, one more time. No mark — the first pass earned it.")
             }
             .buttonStyle(.plain)
@@ -845,7 +856,7 @@ struct TodayView: View {
                 Rule()
 
                 PrimaryButton(title: offer.action,
-                              subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
+                              subtitle: routine.shapeLine) {
                     running = .session(offer.session, routine)
                 }
                 .padding(.top, 14)
@@ -999,9 +1010,7 @@ struct TodayView: View {
     /// "40s ×3", or "40s ×3 each side" when the move runs once per side — the
     /// row says up front that this one takes two intervals a turn.
     private func rotationMeasure(for move: Move, in routine: IntervalRoutine) -> String {
-        let turns = routine.rounds / max(routine.moves.count, 1)
-        let base = "\(Int(routine.clampedWork))s ×\(turns)"
-        return move.sided != nil ? base + " each side" : base
+        routine.rowMeasure(for: move)
     }
 
     /// States the count, and says plainly that it is not a mark — so the number

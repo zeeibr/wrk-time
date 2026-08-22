@@ -67,17 +67,25 @@ enum OfflinePlanner {
         let work = Int(shape.work)
 
         let days = dayPattern(for: pace)
+        let modes = modePattern(for: pace)
         let sessions = days.enumerated().map { position, day in
             let template = Template.rotation[position % Template.rotation.count]
+            let mode = modes[position % modes.count]
+            let moves = substituting(
+                template.rotation(of: rotation, avoiding: excluded, varying: position),
+                avoiding: excluded)
+            // A loaded hinge for forty seconds loses spine position around
+            // second twenty-five: with any bell above 13 lb in the round the
+            // interval is 30 on, 30 off (brief §5).
+            let heavy = moves.contains { $0.equipment == Equipment.kettlebell.rawValue && $0.loadPounds > 13 }
+            let (w, r) = mode == .intervals && heavy ? (30, 30) : (work, rest)
             return DraftSession(dayOffset: day,
-                                title: template.title,
-                                work: work,
-                                rest: rest,
-                                rounds: rounds,
-                                moves: substituting(
-                                    template.rotation(of: rotation, avoiding: excluded,
-                                                      varying: position),
-                                    avoiding: excluded))
+                                title: "\(template.title) · \(mode.label.lowercased())",
+                                work: w,
+                                rest: r,
+                                rounds: mode == .emom ? emomMinutes : rounds,
+                                moves: moves,
+                                mode: mode)
         }
 
         return PlanDraft(explanation: explanation(week: weekNumber, step: step,
@@ -128,6 +136,23 @@ enum OfflinePlanner {
 
     static func walkMinutes(week: Int) -> Int {
         min(walkCap, baseWalkMinutes + walkStep * max(week - 1, 0))
+    }
+
+    /// Minutes on an EMOM day. Twelve, inside the brief's ten to sixteen and
+    /// short enough that a first one is finished.
+    static let emomMinutes = 12
+
+    /// The week's modes, `docs/COACH-BRIEF.md` §6: rep strength is the base,
+    /// one EMOM day for the heavy bells, one interval day for conditioning,
+    /// and never two conditioning days. Three sessions keep two of strength
+    /// and one of conditioning; four add the EMOM; five add a third strength.
+    static func modePattern(for pace: Pace) -> [SessionMode] {
+        switch pace.sessionsPerWeek {
+        case 3: [.reps, .reps, .intervals]
+        case 4: [.reps, .emom, .reps, .intervals]
+        case 5: [.reps, .emom, .reps, .intervals, .reps]
+        default: [.reps, .reps, .intervals]
+        }
     }
 
     /// Rest days spread rather than stacked, which the brief asks for by name.

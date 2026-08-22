@@ -112,7 +112,8 @@ enum PlanValidator {
                                     work: TimeInterval(session.work),
                                     rest: TimeInterval(session.rest),
                                     rounds: session.rounds,
-                                    moves: moves))
+                                    moves: moves)
+                        .inMode(session.sessionMode))
         }
     }
 
