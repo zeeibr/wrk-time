@@ -33,8 +33,44 @@ enum PlannerError: LocalizedError {
             "Claude's answer came back unusable. This week was drawn from the plan's own rules."
         case .rejected(let why):
             "Claude's week did not hold up: \(why) This week was drawn from the plan's own rules."
-        case .transport:
-            "No connection to Claude. This week was drawn from the plan's own rules."
+        case .transport(let error):
+            Self.transportSentence(error)
+        }
+    }
+
+    /// The same reasoning as the HTTP case above, one layer lower down.
+    ///
+    /// "No connection to Claude" was one sentence covering four different
+    /// failures, and three of them are not a connection problem. A timeout
+    /// means Claude was answering and ran past the clock — the phone is
+    /// online and asking again works. Offline means the request never left
+    /// the phone. A cancellation means this app stopped its own request,
+    /// which is a bug here rather than anything about the network. Printing
+    /// the same shrug for all four is what made this unfalsifiable from the
+    /// screen, with no log on a phone to go and check.
+    private static func transportSentence(_ error: Error) -> String {
+        "\(transportPhrase(error)) This week was drawn from the plan's own rules."
+    }
+
+    /// The same judgement without the sentence about where the week came from.
+    /// The move reviewer has no fallback to name and needs this distinction
+    /// just as much — it was telling her to come back when she was online
+    /// about a request that had gone out fine and run long.
+    static func transportPhrase(_ error: Error) -> String {
+        guard let url = error as? URLError else {
+            return "The request to Claude failed: \(error.localizedDescription)"
+        }
+        switch url.code {
+        case .timedOut:
+            return "Claude did not answer within \(Int(ClaudePlanner.timeout)) seconds."
+        case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost,
+             .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed,
+             .internationalRoamingOff:
+            return "No connection to Claude."
+        case .cancelled:
+            return "The request to Claude was cancelled before it finished."
+        default:
+            return "The request to Claude failed: \(url.localizedDescription) (\(url.code.rawValue))."
         }
     }
 }
@@ -121,10 +157,11 @@ struct ClaudePlanner: Sendable {
             let (draft, raw) = try await send(messages: messages, key: key,
                                               sessionCount: context.pace.sessionsPerWeek,
                                               moveCount: moveCount,
+                                              extraNames: context.customMoves.map(\.name),
                                               usage: &usage)
 
             do {
-                _ = try PlanValidator.routines(from: draft)
+                _ = try PlanValidator.routines(from: draft, extras: context.customMoves)
                 guard draft.sessions.count == context.pace.sessionsPerWeek else {
                     throw PlanValidator.Failure.nonsenseTiming(
                         "The week has \(draft.sessions.count) sessions; it needs \(context.pace.sessionsPerWeek).")
@@ -161,19 +198,30 @@ struct ClaudePlanner: Sendable {
     /// How many times to ask before giving the week to the offline planner.
     static let attempts = 2
 
+    /// How long to wait for one answer.
+    ///
+    /// This is `URLRequest.timeoutInterval`, which measures the gap between
+    /// packets — and a non-streamed request sends nothing at all until the
+    /// model has finished generating. So this is not "a slow connection"
+    /// headroom, as it was once commented: it is a ceiling on how long Claude
+    /// is allowed to think. A week under adaptive thinking at high effort is
+    /// minutes of generation, not seconds, and 120 was cutting it off
+    /// mid-answer — reported to her as "No connection to Claude", which is
+    /// the one thing it was not.
+    static let timeout: TimeInterval = 300
+
     // MARK: - Request
 
     private func send(messages: [[String: Any]], key: String,
                       sessionCount: Int, moveCount: Int,
+                      extraNames: [String] = [],
                       usage: inout Usage) async throws -> (PlanDraft, String) {
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue(key, forHTTPHeaderField: "x-api-key")
         request.setValue(Self.version, forHTTPHeaderField: "anthropic-version")
-        // A week is a small answer, but the model is generating on a phone that
-        // may be on a slow connection.
-        request.timeoutInterval = 120
+        request.timeoutInterval = Self.timeout
 
         var body: [String: Any] = [
             "model": Self.model,
@@ -201,7 +249,8 @@ struct ClaudePlanner: Sendable {
                 // the plan still came from the offline planner.
                 "effort": "high",
                 "format": ["type": "json_schema",
-                           "schema": Self.schema(sessions: sessionCount, moves: moveCount)]
+                           "schema": Self.schema(sessions: sessionCount, moves: moveCount,
+                                                 extraNames: extraNames)]
             ],
             "messages": messages
         ]
@@ -372,7 +421,7 @@ struct ClaudePlanner: Sendable {
     /// Built on each call rather than stored: a `[String: Any]` is not
     /// `Sendable`, and this runs once a week — there is nothing to cache.
     /// One move. Repeated three times per session, as named slots.
-    static var moveSchema: [String: Any] {[
+    static func moveSchema(extraNames: [String] = []) -> [String: Any] {[
         "type": "object",
         "additionalProperties": false,
         // Only the name. Equipment, cue and load were all facts the closed
@@ -398,7 +447,11 @@ struct ClaudePlanner: Sendable {
             // density and volume — the kit tops out at 15 lb — so the planner's
             // job is which moves and in what order, not inventing a
             // thirty-eighth for a drawer with four things in it.
-            "name": ["type": "string", "enum": MoveLibrary.names]
+            //
+            // Her own approved additions extend the enum rather than reopening
+            // it: they earned their place through `MoveReviewer`, so they are
+            // as closed as anything built in.
+            "name": ["type": "string", "enum": MoveLibrary.names + extraNames]
         ]
     ]}
 
@@ -418,7 +471,8 @@ struct ClaudePlanner: Sendable {
     /// The move and session shapes live in `$defs` and are referenced. Inlining
     /// them instead put twelve copies of the move object in one grammar and the
     /// API rejected it outright: "The compiled grammar is too large."
-    static func schema(sessions: Int, moves: Int = Tuning.movesPerSession) -> [String: Any] {
+    static func schema(sessions: Int, moves: Int = Tuning.movesPerSession,
+                       extraNames: [String] = []) -> [String: Any] {
         let names = Array(slots.prefix(max(sessions, 1)))
         var slotProperties: [String: Any] = [:]
         for name in names { slotProperties[name] = ["$ref": "#/$defs/session"] }
@@ -428,7 +482,7 @@ struct ClaudePlanner: Sendable {
             "additionalProperties": false,
             "required": ["explanation", "sessions", "walkMinutes"],
             "$defs": [
-                "move": moveSchema,
+                "move": moveSchema(extraNames: extraNames),
                 "session": sessionSchema(moves: moves)
             ],
             "properties": [
@@ -521,10 +575,12 @@ struct ClaudePlanner: Sendable {
     WHO THIS IS FOR
     A 34-year-old woman, new to fitness. She is the only user. Three things follow.
 
-    Progression cannot come from load. The kit tops out at 15 lb. Progress comes \
-    from tempo (slower eccentrics), range, density (shorter rests), volume (more \
-    rounds), and unilateral variants. Reaching for "add weight" has nowhere to go \
-    and will stall by week three.
+    Progression barely comes from load. The kit tops out at 35 lb, and the steps \
+    between loads are few and coarse. Progress comes from tempo (slower \
+    eccentrics), range, density (shorter rests), volume (more rounds), and \
+    unilateral variants — with an occasional step up a load when her own counted \
+    reps say a weight has stopped being work. Reaching for "add weight" every \
+    week has nowhere to go and will stall by week three.
 
     Resistance work is the point and must not drift to cardio. Loading matters for \
     bone density and lean mass from the mid-thirties onward. The walking pad is for \
@@ -535,11 +591,22 @@ struct ClaudePlanner: Sendable {
     week she completes is worth more than a week she abandons.
 
     THE KIT — nothing else exists
-    - Two 2 lb Peloton dumbbells
+    - Dumbbell pairs at 2, 3 and 5 lb
+    - Single dumbbells at 10 and 15 lb, held in both hands — bought for core \
+      work: Russian twists, side bends. There is exactly one of each; never \
+      write a move that assumes a 10 or 15 lb pair.
     - One 15 lb Bala Beam
     - Bala Power Rings at 5, 8 and 10 lb. Three DIFFERENT weights, not a matched \
       set. "One in each hand" is only true for a pair she chooses, and any move \
       that assumes a uniform ring load is wrong.
+    - Kettlebells at 9, 13, 18 and 35 lb — the 35 is the heaviest thing she \
+      owns and is for the hinge only until her counts say otherwise. They \
+      belong under the big patterns: hinges, squats, carries.
+    - A light resistance band, bought for posture work against tech neck: \
+      pull-aparts, face pulls, W raises, external rotations. Sprinkle these \
+      into upper-body days freely — they are exactly the pull-side volume this \
+      push-heavy kit is short of — but the dedicated posture routine is hers \
+      and not yours to program.
     - A walking pad
     - Bodyweight
 
@@ -551,13 +618,15 @@ struct ClaudePlanner: Sendable {
       the end of the week.
 
     PROGRAMMING
-    - Heaviest implement to the biggest muscles: the beam for squat, hinge and hip \
-      thrust; the rings for deadlift and row patterns. The three rings are used \
-      one at a time unless a move genuinely calls for two — name the one you mean.
-    - She has said she likes the 2 lb dumbbells. Use them freely for shoulder and \
-      arm work, where a long lever held slowly makes two pounds a real load: \
-      raises in every direction, presses, curls, kickbacks, flys. They stay close \
-      to pointless for lower body — do not program them there just to use them.
+    - Heaviest implement to the biggest muscles: the kettlebell and the beam for \
+      squat, hinge, carry and hip thrust; the rings for deadlift and row \
+      patterns. The three rings are used one at a time unless a move genuinely \
+      calls for two — name the one you mean.
+    - She has said she likes the light dumbbells. Use them freely for shoulder \
+      and arm work, where a long lever held slowly makes a small pair a real \
+      load: raises in every direction, presses, curls, kickbacks, flys. They \
+      stay close to pointless for lower body — do not program them there just \
+      to use them.
     - Push and pull want balancing across the week, and this kit is push-heavy. \
       Hinge patterns and ring rows carry the pull side.
     - Rest is programmed, not leftover. 45 seconds is the standing default; \
@@ -595,7 +664,7 @@ struct ClaudePlanner: Sendable {
       second job, and adherence collapses.
     - With no goal set, hold it steady at whatever she is already doing.
     - Never present walking as making up for a missed session, and never imply \
-      that eating or fasting is something you are programming. You are not.
+      that eating is something you are programming. You are not.
 
     VOICE — applies to every string you emit
     Plain, warm, specific. Name real numbers and real equipment. Never exclaim. \

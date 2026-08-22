@@ -9,6 +9,13 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
     case beam
     case rings
     case dumbbells
+    // One dumbbell, not a pair — held in both hands, bought for core work
+    // (August 2026, Russian twists were the ask). Its own case so nothing
+    // that says "two X lb dumbbells" about the pairs can ever say it about
+    // this one.
+    case singleDumbbell
+    case kettlebell
+    case band
     case walkingPad
     case bodyweight
 
@@ -18,7 +25,18 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .beam: "15 lb Bala Beam"
         case .rings: "Bala power rings · 5, 8, 10 lb"
-        case .dumbbells: "Two 2 lb Peloton dumbbells"
+        // Pairs, not singles — "two 3 lb dumbbells" is the unit she lifts.
+        // The 2 lb Pelotons were the whole set until August 2026; the 3s and
+        // 5s arrived when the 2s stopped being a challenge on the big levers.
+        case .dumbbells: "Dumbbell pairs · 2, 3, 5 lb"
+        // A single, and the label says so — next to the pairs above, a bare
+        // "10 lb dumbbell" would read as one more pair.
+        case .singleDumbbell: "Single dumbbells · 10, 15 lb"
+        case .kettlebell: "Kettlebells · 9, 13, 18, 35 lb"
+        // Bought for one job (August 2026), in her words: a routine "that
+        // will get rid of my tech neck/slouch hump". The posture moves and
+        // the seeded Posture reset routine are why it exists.
+        case .band: "Resistance band"
         case .walkingPad: "Walking pad"
         case .bodyweight: "Bodyweight"
         }
@@ -36,8 +54,12 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .rings: return "\(weight) lb Bala power ring"
         case .beam: return "\(weight) lb Bala Beam"
-        case .dumbbells: return "Two \(weight) lb Peloton dumbbells"
-        case .walkingPad, .bodyweight: return label
+        case .dumbbells: return "Two \(weight) lb dumbbells"
+        // "One", where the pairs say "Two" — the same sentence shape making
+        // the opposite promise about what to pick up.
+        case .singleDumbbell: return "One \(weight) lb dumbbell"
+        case .kettlebell: return "\(weight) lb kettlebell"
+        case .band, .walkingPad, .bodyweight: return label
         }
     }
 
@@ -47,6 +69,9 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         case .beam: "Beam"
         case .rings: "Rings"
         case .dumbbells: "Dumbbells"
+        case .singleDumbbell: "Single dumbbell"
+        case .kettlebell: "Kettlebell"
+        case .band: "Band"
         case .walkingPad: "Pad"
         case .bodyweight: "Bodyweight"
         }
@@ -57,6 +82,9 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         case .beam: "dumbbell"
         case .rings: "circle.circle"
         case .dumbbells: "dumbbell.fill"
+        case .singleDumbbell: "dumbbell"
+        case .kettlebell: "figure.strengthtraining.traditional"
+        case .band: "figure.flexibility"
         case .walkingPad: "figure.walk.motion"
         case .bodyweight: "figure.strengthtraining.functional"
         }
@@ -67,7 +95,10 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .beam: "15 lb"
         case .rings: "5, 8 or 10 lb"
-        case .dumbbells: "2 lb each"
+        case .dumbbells: "2, 3 or 5 lb pairs"
+        case .singleDumbbell: "10 or 15 lb, one dumbbell held in both hands"
+        case .kettlebell: "9, 13, 18 or 35 lb"
+        case .band: "band tension, no set load"
         case .walkingPad: "incline and pace"
         case .bodyweight: "no load"
         }
@@ -79,11 +110,31 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
     /// — not a matched set — so "one in each hand" is only true for a pair you
     /// choose, and a generated move that assumes a uniform load is wrong. The
     /// planner validates against these numbers, not against a description.
+    /// Kit that cannot be switched off. Her own body is not optional, and the
+    /// pad carries no moves — only the weekly walking target, which lives on
+    /// Signals and is not the planner's to withhold.
+    static let alwaysOwned: Set<Equipment> = [.bodyweight, .walkingPad]
+
+    /// Whether she actually has this to hand. The one predicate for it, so a
+    /// rotation, a picker, the planner's schema and the reviewer cannot come
+    /// to different conclusions about the same drawer.
+    var isOwned: Bool { Tuning.ownedEquipment.contains(self) }
+
+    /// The kit she has, in the enum's own order.
+    static var owned: [Equipment] { allCases.filter(\.isOwned) }
+
+    /// Everything that can honestly be switched off — what Settings lists.
+    /// Bodyweight and the pad are excluded because they are not hers to lose.
+    static var switchable: [Equipment] { allCases.filter { !alwaysOwned.contains($0) } }
+
     var availableLoadsPounds: [Double] {
         switch self {
         case .beam: [15]
         case .rings: [5, 8, 10]
-        case .dumbbells: [2]
+        case .dumbbells: [2, 3, 5]
+        case .singleDumbbell: [10, 15]
+        case .kettlebell: [9, 13, 18, 35]
+        case .band: []
         case .walkingPad: []
         case .bodyweight: []
         }
@@ -100,11 +151,16 @@ enum MoveLibrary {
         Move(name: "Beam deadlift", equipment: .beam,
              cue: "Hinge from the hips. The beam stays close to your shins.",
              loadPounds: 15),
+        // Cue rewritten on the August 2026 coach audit: placement is the
+        // entire safety of a good morning, and the old cue never said it.
         Move(name: "Beam good morning", equipment: .beam,
-             cue: "Soft knees, flat back. Stop when your hamstrings say so.",
+             cue: "The beam rests across the back of the shoulders, never the neck. Soft knees, flat back, stop when your hamstrings say so.",
              loadPounds: 15),
+        // Rewritten on the same audit: "shoulders on the sofa edge" was
+        // furniture-as-equipment, and an edge that slides mid-set is exactly
+        // the training-alone injury the library screens for.
         Move(name: "Beam hip thrust", equipment: .beam,
-             cue: "Shoulders on the sofa edge, beam across the hips.",
+             cue: "On your back on the mat, beam across the hips. Press through the heels and hold a beat at the top.",
              loadPounds: 15),
         Move(name: "Beam overhead press", equipment: .beam,
              cue: "From the collarbones to straight overhead. Ribs stay down as the arms go up.",
@@ -114,13 +170,43 @@ enum MoveLibrary {
              loadPounds: 15),
         Move(name: "Beam reverse lunge", equipment: .beam,
              cue: "Beam across the chest. Step back, and the front knee stays over the ankle.",
-             loadPounds: 15),
+             loadPounds: 15, sided: .sides),
         Move(name: "Beam floor press", equipment: .beam,
              cue: "On your back, beam at the chest, press straight up. The floor stops your elbows.",
              loadPounds: 15),
+        // Core on the kit (August 2026, her ask): one loaded core pattern per
+        // implement, so core work is not confined to the mat. Holds and slow
+        // carries rather than loaded flexion — the honest way to load a core
+        // that is still learning to brace. Drawings deferred like every
+        // recent add. The band has none of these on purpose: band core work
+        // is a Pallof press, and a Pallof press needs an anchor the kit does
+        // not have.
+        Move(name: "Beam overhead hold", equipment: .beam,
+             cue: "The beam pressed overhead, arms by the ears. Ribs down over the hips, and hold.",
+             loadPounds: 15),
+        // The audit set (August 2026): a coach's pass over the whole catalog
+        // found the gaps — pull volume trailing the presses, no lateral or
+        // single-leg lower-body work, no calves, no grip, triceps stuck on
+        // the 2 lb pairs — and these additions, across every implement, are
+        // the answer. Every one is a recognised movement a trainer would
+        // actually program; drawings deferred like every recent add.
+        Move(name: "Beam curl", equipment: .beam,
+             cue: "Both hands under the beam, elbows pinned to your sides. Curl to the collarbones, three counts down.",
+             loadPounds: 15),
+        Move(name: "Beam triceps extension", equipment: .beam,
+             cue: "On your back, the beam pressed over the chest. Bend only the elbows, lower it toward your forehead, press back up.",
+             loadPounds: 15),
+        Move(name: "Beam lateral lunge", equipment: .beam,
+             cue: "Beam across the collarbones. Step wide to one side, sit into that hip, and push back to standing.",
+             loadPounds: 15, sided: .sides),
+        Move(name: "Beam curtsy lunge", equipment: .beam,
+             cue: "Beam across the collarbones. Step back and across, sink straight down; the front knee stays steady.",
+             loadPounds: 15, sided: .sides),
+        // Sided: the circles go one way, then the other, and each direction
+        // gets its own full work interval.
         Move(name: "Ring halo", equipment: .rings,
              cue: "The 5 lb ring in both hands, slow circles around the head.",
-             loadPounds: 5),
+             loadPounds: 5, sided: .directions),
         Move(name: "Ring press-out", equipment: .rings,
              cue: "Hold the 8 lb ring at the chest and press straight out.",
              loadPounds: 8),
@@ -139,10 +225,91 @@ enum MoveLibrary {
         Move(name: "Ring front raise", equipment: .rings,
              cue: "The 5 lb ring in both hands, straight out to eye height.",
              loadPounds: 5),
+        // Her additions to the defaults (August 2026), asked for by name. All
+        // one arm at a time except the behind-back raise, which takes both
+        // hands. Diagrams deliberately deferred — `MovePlates.deferred` keeps
+        // the containment matcher from handing these the dumbbell drawings.
+        Move(name: "Ring bicep curl", equipment: .rings,
+             cue: "The 5 lb ring in one hand, elbow pinned to your side. Three counts down.",
+             loadPounds: 5, sided: .sides),
+        Move(name: "Ring hammer curl", equipment: .rings,
+             cue: "One hand through the 5 lb ring, thumb up the whole way. The elbow stays pinned.",
+             loadPounds: 5, sided: .sides),
+        Move(name: "Ring Arnold press", equipment: .rings,
+             cue: "The 5 lb ring at the chin, palm in. Rotate out as you press overhead.",
+             loadPounds: 5, sided: .sides),
+        Move(name: "Ring behind-back raise", equipment: .rings,
+             cue: "Both hands on the 5 lb ring behind your back. Hinge, then lift it up and away.",
+             loadPounds: 5),
+        // Core on the kit — see the beam overhead hold.
+        Move(name: "Ring half-kneeling overhead hold", equipment: .rings,
+             cue: "Half kneeling, the 5 lb ring held straight overhead in one hand. Shoulders square, ribs stacked.",
+             loadPounds: 5, sided: .sides),
+        // The audit set — see the beam curl.
+        Move(name: "Ring triceps extension", equipment: .rings,
+             cue: "The 8 lb ring in both hands behind the head, elbows pointing at the ceiling. Only the forearms move.",
+             loadPounds: 8),
+        Move(name: "Ring bus driver", equipment: .rings,
+             cue: "The 5 lb ring held straight out at shoulder height. Turn it like a steering wheel, left and right, slowly.",
+             loadPounds: 5),
+        Move(name: "Ring wrist curl", equipment: .rings,
+             cue: "Seated, forearm resting along the thigh, the 5 lb ring in that hand. Curl just the wrist, slow both ways.",
+             loadPounds: 5, sided: .sides),
+        Move(name: "Ring bridge", equipment: .rings,
+             cue: "On your back, the 10 lb ring resting on the hip bones. Press up through the heels and hold a beat at the top.",
+             loadPounds: 10),
+        Move(name: "Ring chop", equipment: .rings,
+             cue: "Half kneeling, the 5 lb ring at the outside hip. Sweep it slowly up across to the far shoulder, and back down the same line.",
+             loadPounds: 5, sided: .sides),
+        Move(name: "Ring kickback", equipment: .rings,
+             cue: "Hinge, the 5 lb ring in one hand, upper arm parallel to the floor. Straighten the elbow and hold a beat.",
+             loadPounds: 5, sided: .sides),
+        // The 18 lb kettlebell (August 2026) is the heaviest thing in the kit,
+        // so it takes the patterns that want weight: hinges, squats, carries.
+        // Deliberately no swing — a ballistic hinge is exactly the "needs a
+        // coach's eye" line the move review draws, and the library holds
+        // itself to the same rule. Diagrams deferred, like the late ring
+        // moves; `MovePlates.deferred` keeps the containment matcher from
+        // handing these the beam and ring strips.
+        Move(name: "Kettlebell deadlift", equipment: .kettlebell,
+             cue: "The bell between the feet. Hinge, flat back, stand all the way up.",
+             loadPounds: 18),
+        Move(name: "Kettlebell goblet squat", equipment: .kettlebell,
+             cue: "Held by the horns at the chest. Sit between the hips, elbows inside the knees.",
+             loadPounds: 18),
+        Move(name: "Kettlebell carry", equipment: .kettlebell,
+             cue: "One hand, ribs stacked over hips, shoulders level. Walk slowly and do not lean.",
+             loadPounds: 18, sided: .sides),
+        // Core on the kit — see the beam overhead hold.
+        Move(name: "Kettlebell around the body", equipment: .kettlebell,
+             cue: "Pass the bell around your waist, hand to hand. The hips stay still; only the arms travel.",
+             loadPounds: 18, sided: .directions),
+        // The audit set — see the beam curl. The audit's sharpest line: the
+        // heaviest implement was not pointed at the biggest gap, the pull
+        // side. The row fixes that.
+        Move(name: "Kettlebell row", equipment: .kettlebell,
+             cue: "Hinge, free hand braced on your thigh. Pull the bell to your hip; the elbow goes back, not out.",
+             loadPounds: 18, sided: .sides),
+        Move(name: "Kettlebell sumo squat", equipment: .kettlebell,
+             cue: "Feet wide, toes out, the bell hanging in both hands. Sit straight down between the heels, chest tall.",
+             loadPounds: 18),
+        Move(name: "Kettlebell rack hold", equipment: .kettlebell,
+             cue: "The bell resting on the forearm, fist at the collarbone, elbow tucked. Stand tall and breathe; ribs stay down.",
+             loadPounds: 18, sided: .sides),
+        Move(name: "Kickstand deadlift", equipment: .kettlebell,
+             cue: "The bell inside the front foot, back toes down just for balance. Hinge over the front leg, flat back.",
+             loadPounds: 18, sided: .sides),
+        Move(name: "Kettlebell suitcase hold", equipment: .kettlebell,
+             cue: "The bell in one hand at your side. Stand level — no lean — and let the grip do the work.",
+             loadPounds: 18, sided: .sides),
+        Move(name: "Kettlebell calf raise", equipment: .kettlebell,
+             cue: "The bell in one hand, the other hand on the wall. Rise to the balls of the feet, pause, lower slowly.",
+             loadPounds: 18),
         // Two pounds is a real load on a long lever held slowly, which is why
         // these are all shoulder and arm work. The weight never changes here —
         // tempo, range and rest do — so the library carries enough variety to
-        // make a whole session out of them.
+        // make a whole session out of them. Since August 2026 the pairs go up
+        // to 5 lb, and the load bar in the library is how a move steps up.
         Move(name: "Dumbbell press", equipment: .dumbbells,
              cue: "Two pounds is enough when you go slowly.",
              loadPounds: 2),
@@ -173,18 +340,109 @@ enum MoveLibrary {
         Move(name: "Dumbbell shrug", equipment: .dumbbells,
              cue: "Shoulders straight up toward the ears, hold a beat, then let them go.",
              loadPounds: 2),
+        // Cue tightened on the audit: a narrow, high pull is the classic
+        // novice-shoulder impingement recipe, and the old cue permitted it.
         Move(name: "Upright row", equipment: .dumbbells,
-             cue: "Elbows lead, up to chest height. Stop before the shoulders shrug.",
+             cue: "Hands apart, elbows lead wide, no higher than the chest. Stop before the shoulders shrug.",
              loadPounds: 2),
         Move(name: "Overhead extension", equipment: .dumbbells,
              cue: "Both hands on one weight behind the head. Only the forearms move.",
              loadPounds: 2),
+        // Audit: the shape wants one weight in both hands, and the old cue
+        // never said how many to hold.
         Move(name: "Pullover", equipment: .dumbbells,
-             cue: "On your back, arms straight. Take them back past your head and return.",
+             cue: "On your back, one weight held in both hands, arms straight. Take it back past your head only as far as the ribs stay down.",
              loadPounds: 2),
         Move(name: "Boxer punches", equipment: .dumbbells,
              cue: "Alternating, chest height, controlled. The shoulders do the work.",
              loadPounds: 2),
+        // Arm work she asked for by name (August 2026) — "raise the
+        // platters", the barre serve-a-platter move, kept under her own name
+        // for it, and a straight-arm press-back for the triceps. Framed as
+        // arm strength, like everything here: no move decides where anything
+        // comes off.
+        Move(name: "Raise the platters", equipment: .dumbbells,
+             cue: "Palms up at the waist, as if carrying two platters. Extend the arms forward, lift to shoulder height, and lower over three counts.",
+             loadPounds: 2),
+        Move(name: "Tricep press-back", equipment: .dumbbells,
+             cue: "Arms straight at your sides, palms facing behind you. Press the weights back and up, and hold a beat at the top.",
+             loadPounds: 2),
+        // The audit set — see the beam curl. The 5s go where the audit
+        // pointed them: at the chest and back work the 2s cannot load.
+        Move(name: "Dumbbell floor press", equipment: .dumbbells,
+             cue: "On your back, a 5 lb dumbbell in each hand. Press straight up; the floor catches your elbows between reps.",
+             loadPounds: 5),
+        Move(name: "Dumbbell row", equipment: .dumbbells,
+             cue: "Hinge and hold it there. Pull both 5 lb dumbbells to your hips, blades together at the top.",
+             loadPounds: 5),
+        Move(name: "Zottman curl", equipment: .dumbbells,
+             cue: "Curl palms up, turn palms down at the top, lower over three counts. The way down is the point.",
+             loadPounds: 3),
+        Move(name: "Scaption raise", equipment: .dumbbells,
+             cue: "Straight arms, thumbs up, lifted halfway between front and side. To shoulder height and no higher.",
+             loadPounds: 2),
+        Move(name: "Squeeze press", equipment: .dumbbells,
+             cue: "Press the two weights together hard at the chest, then press them to the ceiling without letting them part.",
+             loadPounds: 3),
+        // Core on the kit — see the beam overhead hold.
+        Move(name: "Dumbbell dead bug press", equipment: .dumbbells,
+             cue: "A dead bug with the dumbbells pressed to the ceiling. Low back flat, arms straight the whole time.",
+             loadPounds: 2),
+        // The single 10 lb dumbbell (August 2026), bought for core work by
+        // name — Russian twists were the ask. One dumbbell in both hands,
+        // never a pair; `Equipment.singleDumbbell` exists so nothing can
+        // read it as one. Drawings deferred like every recent add.
+        // Cue tightened on the audit: loaded rotation in a rounded seated
+        // spine is the core move most often done badly alone, and "chest
+        // lifted" is the one line that prevents it.
+        Move(name: "Russian twist", equipment: .singleDumbbell,
+             cue: "Seated tall, knees bent, the dumbbell in both hands. Turn from the ribs, side to side, slowly — the chest stays lifted the whole time.",
+             loadPounds: 10),
+        Move(name: "Standing side bend", equipment: .singleDumbbell,
+             cue: "The dumbbell in one hand, slide it down the outside of the thigh and stand tall again.",
+             loadPounds: 10, sided: .sides),
+        // Core on the kit — see the beam overhead hold.
+        Move(name: "Dumbbell march", equipment: .singleDumbbell,
+             cue: "The dumbbell in both hands at your chest. March slowly; the ribs stay stacked over the hips.",
+             loadPounds: 10),
+        // The audit set — see the beam curl.
+        Move(name: "Suitcase deadlift", equipment: .singleDumbbell,
+             cue: "The dumbbell beside one foot. Hinge, take a firm grip, and stand tall — no lean toward the load.",
+             loadPounds: 10, sided: .sides),
+        Move(name: "Tall-kneeling press", equipment: .singleDumbbell,
+             cue: "Kneeling tall, the dumbbell in both hands at the chest. Press it overhead; ribs down, hips under you.",
+             loadPounds: 10),
+        Move(name: "Plank pull-through", equipment: .singleDumbbell,
+             cue: "From a high plank, drag the dumbbell under your chest to the other side, hand by hand. The hips stay quiet.",
+             loadPounds: 10),
+        // The posture set (August 2026). The band was bought for one job — her
+        // words: a routine "that will get rid of my tech neck/slouch hump" —
+        // and these six are the standard prescription for it: wake the deep
+        // neck flexors, strengthen the upper back and rotator cuff, open the
+        // chest. Strength, not flow, deliberately: they are sets and holds,
+        // and keeping them out of `.flow` keeps them out of the morning
+        // practice's qi gong pool. Drawings deferred like every recent add.
+        Move(name: "Band pull-apart", equipment: .band,
+             cue: "Arms straight at shoulder height, pull the band to your chest. Blades together, then let it close slowly."),
+        Move(name: "Band face pull", equipment: .band,
+             cue: "Pull the band toward your eyes, elbows high and wide, thumbs turning back. The shoulder blades finish it."),
+        Move(name: "Band W raise", equipment: .band,
+             cue: "Elbows bent to a W, band between the hands. Draw the elbows down and back until the blades meet."),
+        Move(name: "Band external rotation", equipment: .band,
+             cue: "Elbow pinned at your side, forearm swings out against the band. Slow out, slower back.",
+             sided: .sides),
+        // The audit set — see the beam curl. Only the moves a long band with
+        // no anchor can honestly do: the audit also proposed lateral walks
+        // and clamshells, which want a mini loop around the thighs, and they
+        // were left out rather than adapted into something the kit is not.
+        Move(name: "Band seated row", equipment: .band,
+             cue: "Seated, legs long, the band looped around both feet. Pull to the ribs, blades together, let it return slowly."),
+        Move(name: "Band overhead press", equipment: .band,
+             cue: "Stand on the middle of the band, an end in each hand at the shoulders. Press up against it, slower on the way down."),
+        Move(name: "Chin tuck", equipment: .bodyweight,
+             cue: "Draw the chin straight back — yes, a double chin. Hold two counts, release. Eyes level the whole time."),
+        Move(name: "Wall angel", equipment: .bodyweight,
+             cue: "Back, head and arms against the wall. Slide the arms up and down; ribs down, nothing leaves the wall."),
         // Bodyweight is equipment. It needs no load and it is always to hand,
         // which makes it the one part of the kit that never runs out of
         // progressions — and the library had exactly one of them, so a
@@ -194,15 +452,54 @@ enum MoveLibrary {
         Move(name: "Incline push-up", equipment: .bodyweight,
              cue: "Hands on the counter. The higher the hands, the easier it is."),
         Move(name: "Reverse lunge", equipment: .bodyweight,
-             cue: "Step back, not forward. The front knee stays over the ankle."),
+             cue: "Step back, not forward. The front knee stays over the ankle.",
+             sided: .sides),
         Move(name: "Glute bridge", equipment: .bodyweight,
              cue: "Heels close, press through them, hold a beat at the top."),
         Move(name: "Split squat", equipment: .bodyweight,
-             cue: "Back knee straight down. Most of the weight on the front foot."),
+             cue: "Back knee straight down. Most of the weight on the front foot.",
+             sided: .sides),
         Move(name: "Bird dog", equipment: .bodyweight,
              cue: "Opposite arm and leg, slowly. The hips do not tip."),
         Move(name: "Wall sit", equipment: .bodyweight,
              cue: "Thighs parallel if you can, higher if you cannot. Breathe."),
+        // The core set (August 2026). She asked for more core work, so these
+        // five join the dead bug and bird dog already here: holds and slow
+        // patterns a careful beginner can do alone on a mat. Framed as core
+        // strength, which is what they are — nothing in this app claims a
+        // move burns fat from anywhere in particular, because none does.
+        // Drawings deferred like every recent add.
+        Move(name: "Forearm plank", equipment: .bodyweight,
+             cue: "Elbows under the shoulders, one straight line from head to heels. Breathe, don't sag."),
+        Move(name: "Side plank", equipment: .bodyweight,
+             cue: "On one forearm, feet stacked or staggered. Lift the hips and hold them still.",
+             sided: .sides),
+        Move(name: "Lying leg raise", equipment: .bodyweight,
+             cue: "Low back pressed into the floor. Lower the legs only as far as it stays there."),
+        Move(name: "Bicycle crunch", equipment: .bodyweight,
+             cue: "Slow. Opposite elbow toward opposite knee, and the straight leg reaches long."),
+        Move(name: "Plank shoulder tap", equipment: .bodyweight,
+             cue: "From a high plank, tap the opposite shoulder. The hips stay square to the floor."),
+        // The audit set — see the beam curl. The bodyweight half of the
+        // answer to "every leg move is sagittal": abduction, single-leg
+        // work, calves, and the posterior chain from the floor.
+        Move(name: "Superman", equipment: .bodyweight,
+             cue: "On your belly, arms reaching long. Float the arms and legs an inch off the mat and hold; keep looking down."),
+        Move(name: "One-leg bridge", equipment: .bodyweight,
+             cue: "One foot planted, the other leg held long or hugged in. Press through the heel; the hips stay level.",
+             sided: .sides),
+        Move(name: "Single-leg calf raise", equipment: .bodyweight,
+             cue: "All your weight on one foot, fingertips on the wall. Rise to the ball of the foot, pause, lower with control.",
+             sided: .sides),
+        Move(name: "Side leg lift", equipment: .bodyweight,
+             cue: "Side lying, bottom knee bent, top leg long. Lift to hip height, no higher, and lower slowly.",
+             sided: .sides),
+        Move(name: "Bear hold", equipment: .bodyweight,
+             cue: "On all fours, toes tucked, knees hovering an inch off the mat. Flat back, and breathe."),
+        Move(name: "Air squat", equipment: .bodyweight,
+             cue: "Feet under the hips, sit down and back, chest tall. Stand all the way up every time."),
+        Move(name: "Reverse tabletop hold", equipment: .bodyweight,
+             cue: "Seated, hands behind you, fingers toward your heels. Press the hips up level with the knees and hold, chest broad."),
 
         // Flow work: qi gong and lymphatic movement she already does in the
         // morning. These are the long-established generic movements, not a
@@ -266,7 +563,19 @@ enum MoveLibrary {
         Move(name: "Golf swings", equipment: .bodyweight, kind: .flow,
              cue: "Hands together, swing low across the body and up over the far shoulder. Both directions."),
         Move(name: "High knee circles", equipment: .bodyweight, kind: .flow,
-             cue: "One knee up to hip height, then circle it out and away. Slow, and both legs.")
+             cue: "One knee up to hip height, then circle it out and away. Slow, and both legs."),
+        // The audit's flow additions (August 2026): floor-based release work
+        // the pool had none of — everything above is done standing.
+        Move(name: "Thread the needle", equipment: .bodyweight, kind: .flow,
+             cue: "On all fours, slide one arm beneath the other and let that shoulder rest toward the floor. Unwind slowly, then the other side."),
+        Move(name: "Child's pose reach", equipment: .bodyweight, kind: .flow,
+             cue: "Kneel back toward the heels, arms long on the mat. Walk the hands to one side, breathe there, then the other."),
+        Move(name: "Knee sways", equipment: .bodyweight, kind: .flow,
+             cue: "On your back, knees bent, feet a little wide. Let both knees fall to one side, then the other, at the pace of the breath."),
+        Move(name: "Sun breath", equipment: .bodyweight, kind: .flow,
+             cue: "Sweep the arms wide and overhead on the breath in, float them down on the breath out. Nothing to hurry."),
+        Move(name: "Pelvic rocks", equipment: .bodyweight, kind: .flow,
+             cue: "On your back, knees bent. Tip the pelvis toward you and away, small and slow; the low back presses and releases.")
     ]
 
     /// Every move by name, for the places that need the whole closed set:
@@ -280,7 +589,22 @@ enum MoveLibrary {
     /// thing `MoveKind` exists to prevent. The flow movements reach a session
     /// through `WarmUp` and the morning practice, neither of which asks the
     /// model for anything.
-    static let names: [String] = all.filter { $0.kind == .strength }.map(\.name)
+    /// The strength names the planner may choose from — **her kit only**.
+    ///
+    /// Computed rather than stored, because it now depends on what she owns
+    /// and she can change that from Settings while the app is running. It was
+    /// a `let`, and a stored copy would have gone on offering the band the
+    /// evening she switched it off.
+    static var names: [String] { available.filter { $0.kind == .strength }.map(\.name) }
+
+    /// Every move whose kit she actually has.
+    ///
+    /// The distinction this draws is the important one: `available` is what
+    /// may be **offered or generated**, and `all` stays what things are
+    /// **read back** against — drawings, the sidedness repair, a name in a
+    /// stored routine. A week written when she had the band must still draw
+    /// and still run; it simply will not be written again.
+    static var available: [Move] { all.filter { $0.equipment.isOwned } }
 
     static func moves(for equipment: Equipment) -> [Move] {
         all.filter { $0.equipment == equipment && $0.kind == .strength }
@@ -307,21 +631,65 @@ enum MoveLibrary {
     ///
     /// `preferring` keeps a beam day from filling up with dumbbells; it is a
     /// sort, not a filter, so a short library still fills the rotation.
+    /// `plus` is her own approved additions — the working library where the
+    /// caller has a store to read them from.
+    /// `varying` is which turn this is — a session's place in the week, a day
+    /// index, whatever the caller has that ought to make one rotation differ
+    /// from the next. Without it this took the **first** `count` moves of the
+    /// library and did nothing else, so every offline session in every week
+    /// was topped up with the same two movements, in the order they happen to
+    /// be typed into this file. See `Rotation`, which is the same fix the
+    /// morning practice needed.
     static func rotation(of count: Int,
                          preferring kit: Set<Equipment> = [],
                          avoiding ruledOut: Set<String> = [],
-                         excluding used: Set<String> = []) -> [Move] {
+                         excluding used: Set<String> = [],
+                         plus extras: [Move] = [],
+                         varying turn: Int = 0) -> [Move] {
+        // `available`, not `all`: this is the one builder for "pick N moves",
+        // so filtering here is what keeps a rotation, an extra session and a
+        // repaired week from ever reaching for kit she does not have.
+        //
+        // Filtered up front rather than while walking, because the walk needs
+        // to know how big the pool actually is: a step is chosen to be coprime
+        // with it, and skipping entries mid-walk would break the one property
+        // that stops a rotation naming the same move twice.
         var taken = used
-        var out: [Move] = []
-        let pool = all.filter { $0.kind == .strength }
-            .sorted { kit.contains($0.equipment) && !kit.contains($1.equipment) }
-
-        for move in pool where out.count < count {
+        var offered: [Move] = []
+        for move in (available + extras) where move.kind == .strength {
             let key = MovePreference.key(move.name)
             guard !taken.contains(key), !MovePreference.anyCovers(ruledOut, move.name)
             else { continue }
             taken.insert(key)
-            out.append(move)
+            offered.append(move)
+        }
+
+        // Two preferences, and both are **sorts rather than filters** — neither
+        // may make a move unreachable:
+        //
+        // - the session's own kit, so a beam day does not fill with dumbbells;
+        // - a move that has a drawing ahead of one that does not, so a written
+        //   week is one she can look at and see the shapes in.
+        //
+        // The second has to be a preference. Her own approved additions never
+        // have drawings, by decision, and neither do the four ring moves she
+        // took without them — filtering on it would quietly undo the review
+        // queue. They sort last and are still reached once the drawn moves on
+        // the right kit run out.
+        //
+        // Partitioned rather than `sorted`: `sorted(by:)` is not documented as
+        // stable, and now that position inside a group decides what the walk
+        // lands on, "near enough to declaration order" is not good enough.
+        func rank(_ move: Move) -> Int {
+            (kit.contains(move.equipment) ? 0 : 2) + (MovePlates.strip(for: move) == nil ? 1 : 0)
+        }
+
+        // The walk varies *within* a group and never across two, or the
+        // preferences would be the first thing it broke.
+        var out: [Move] = []
+        for group in 0...3 where out.count < count {
+            out += Rotation.walk(offered.filter { rank($0) == group },
+                                 taking: count - out.count, varying: turn)
         }
         return out
     }
@@ -332,7 +700,11 @@ enum MoveLibrary {
     /// week would hand back the exact move she had just rejected — which would
     /// read as the app not listening, and be right.
     static func substitute(for move: Move, avoiding excluded: Set<String>) -> Move? {
-        moves(for: move.equipment).first {
+        // Nothing to swap to when the equipment itself is what she no longer
+        // has — the caller then leaves the slot alone and says so, rather than
+        // quietly offering the same kit under another name.
+        guard move.equipment.isOwned else { return nil }
+        return moves(for: move.equipment).first {
             // Containment, not equality — see `MovePreference.anyCovers`. This
             // line used to be `excluded.contains($0.name.lowercased())`, which
             // is why the first replacement offered for any bodyweight move was

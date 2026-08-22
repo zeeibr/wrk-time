@@ -3,6 +3,35 @@ import Foundation
 import SwiftData
 @testable import WrkTime
 
+// MARK: - Never the network
+
+/// Fails every request, so a test can exercise the planner's fallback without
+/// ever reaching the API.
+///
+/// This exists because the tests *were* reaching it. Ten call sites used
+/// `PlannerService.planWeek`'s default `ClaudePlanner()`, which reads her key
+/// out of the Keychain and calls Anthropic for real — so a full suite run on a
+/// machine with a key spent her money, once per call site, every run. That is
+/// where the simulator's 485 requests and $37 came from, not from the app.
+/// A test must never be able to spend.
+final class BlockedProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
+}
+
+extension ClaudePlanner {
+    /// A planner wired to a session that cannot leave the machine.
+    static var blocked: ClaudePlanner {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BlockedProtocol.self]
+        return ClaudePlanner(session: URLSession(configuration: configuration))
+    }
+}
+
 private func draft(_ moves: [DraftMove],
                    work: Int = 40, rest: Int = 45, rounds: Int = 8, day: Int = 0) -> PlanDraft {
     PlanDraft(explanation: "x",
@@ -46,6 +75,20 @@ struct PlanValidatorTests {
         let ring = try #require(routines.first?.routine.moves.first)
         #expect(ring.loadPounds == 5, "took the draft's load instead of the library's")
         #expect(Equipment.rings.availableLoadsPounds.contains(ring.loadPounds ?? 0))
+    }
+
+    // The ladder after the August 2026 purchases. Each line is something in
+    // the house; the test exists so a load cannot be quietly dropped or
+    // invented without this file noticing.
+    @Test("The kit's ladder matches what is in the house")
+    func ladder() {
+        #expect(Equipment.dumbbells.availableLoadsPounds == [2, 3, 5])
+        #expect(Equipment.singleDumbbell.availableLoadsPounds == [10, 15])
+        #expect(Equipment.rings.availableLoadsPounds == [5, 8, 10])
+        #expect(Equipment.beam.availableLoadsPounds == [15])
+        #expect(Equipment.kettlebell.availableLoadsPounds == [9, 13, 18, 35])
+        #expect(Equipment.singleDumbbell.label(forLoad: 15) == "One 15 lb dumbbell")
+        #expect(Equipment.kettlebell.label(forLoad: 35) == "35 lb kettlebell")
     }
 
     @Test("The beam is fifteen pounds whatever a draft says")
@@ -256,6 +299,36 @@ struct ClaudePlannerTests {
     func modelIdentifier() {
         #expect(ClaudePlanner.model == "claude-opus-5")
     }
+
+    @Test("A timeout does not report itself as being offline")
+    func transportFailuresAreToldApart() throws {
+        // These four arrived at the same sentence for a long time, and the
+        // one that actually happens — the model thinking past the clock on a
+        // phone that is perfectly online — read as "No connection to Claude".
+        let timedOut = try #require(PlannerError.transport(URLError(.timedOut)).errorDescription)
+        #expect(timedOut.contains("did not answer within"))
+        #expect(!timedOut.contains("No connection"))
+
+        let offline = try #require(
+            PlannerError.transport(URLError(.notConnectedToInternet)).errorDescription)
+        #expect(offline.contains("No connection to Claude"))
+
+        let stopped = try #require(PlannerError.transport(URLError(.cancelled)).errorDescription)
+        #expect(stopped.contains("cancelled"))
+
+        // Every one of them still says where the week came from.
+        for sentence in [timedOut, offline, stopped] {
+            #expect(sentence.contains("drawn from the plan's own rules"))
+        }
+    }
+
+    @Test("Allows the model longer to think than one answer takes to arrive")
+    func timeoutHasRoomForThinking() {
+        // `timeoutInterval` is the gap between packets, and a non-streamed
+        // request sends nothing until generation finishes — so this is a
+        // ceiling on thinking, not on the network.
+        #expect(ClaudePlanner.timeout >= 300)
+    }
 }
 
 @Suite("Weekly re-planning")
@@ -297,7 +370,7 @@ struct RePlanningTests {
         #expect(block.currentWeek == 3)
         #expect(!PlannerService.isPlanned(3, of: block, in: context))
 
-        let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
         let written = try! #require(outcome)
         #expect(written.sessionsWritten == block.pace.sessionsPerWeek)
         #expect(PlannerService.isPlanned(3, of: block, in: context))
@@ -306,10 +379,10 @@ struct RePlanningTests {
     @Test("Planning an already-planned week does nothing")
     func idempotent() async {
         let (block, context) = block(daysAgo: 0)
-        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
         let sessionCount = block.sessions?.count ?? 0
 
-        let second = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        let second = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
         #expect(second == nil, "a second pass must not rewrite the week")
         #expect(block.sessions?.count == sessionCount)
     }
@@ -317,7 +390,7 @@ struct RePlanningTests {
     @Test("A finished block is not extended")
     func doesNotExtendPastTheEnd() async {
         let (block, context) = block(daysAgo: 90)
-        let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        let outcome = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
         #expect(outcome == nil)
         #expect(block.sessions?.isEmpty ?? true)
     }
@@ -325,7 +398,7 @@ struct RePlanningTests {
     @Test("Sessions land inside the week they were planned for")
     func sessionsLandInTheirWeek() async {
         let (block, context) = block(daysAgo: 21)   // week 4
-        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
 
         let start = PlannerService.weekStart(4, of: block)
         let end = Calendar.current.date(byAdding: .day, value: 7, to: start)!
@@ -340,14 +413,14 @@ struct RePlanningTests {
     @Test("Re-planning a week never touches a finished session")
     func keepsCompletedSessions() async {
         let (block, context) = block(daysAgo: 0)
-        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context)
+        _ = await PlannerService.planCurrentWeekIfNeeded(for: block, in: context, planner: .blocked)
 
         let done = try! #require(block.sessions?.first)
         done.completedAt = .now
         let doneID = done.id
 
         // Force a rewrite of the same week.
-        _ = await PlannerService.planWeek(1, of: block, in: context)
+        _ = await PlannerService.planWeek(1, of: block, in: context, planner: .blocked)
 
         #expect(block.sessions?.contains { $0.id == doneID && $0.isComplete } == true,
                 "the finished session must survive a re-plan")
@@ -833,10 +906,33 @@ struct WarmUpTests {
         let schedule = session(warmUp: 4).schedule
         #expect(schedule.phases.prefix(4).allSatisfy { $0.isFlow })
         // No rest between one movement and the next — a flow is not intervals.
-        #expect(schedule.phases[4].isWork)
+        // After the last movement, the setup pause, then round one.
+        #expect(schedule.phases[4].isRest)
+        #expect(schedule.phases[5].isWork)
         #expect(schedule.flowPhaseCount == 4)
         #expect(schedule.workPhaseCount == 4)
         #expect(Array(schedule.phases.map(\.round).prefix(4)) == [1, 2, 3, 4])
+    }
+
+    @Test("A setup pause sits between the practice and round one — time to get the kit out")
+    func setupPause() {
+        let schedule = session(warmUp: 4).schedule
+        #expect(schedule.phases[4].isRest)
+        #expect(schedule.phases[4].duration == WarmUp.setupSeconds)
+        // No set precedes it, so it asks for no reps.
+        #expect(schedule.setEnding(before: 4) == nil)
+
+        // The morning practice never gets one: all flow, no work coming, and
+        // a pause at the end would count down at the ritual it closes.
+        let practice = IntervalRoutine(name: "Practice", work: 0, rest: 0, rounds: 0, moves: [])
+            .warmingUp(with: Array(MoveLibrary.flow.prefix(3)), seconds: 60)
+        #expect(practice.schedule.phases.allSatisfy { $0.isFlow })
+
+        // A session with no warm-up starts when she presses start — the pause
+        // belongs to the seam between flow and work, not to every routine.
+        let bare = IntervalRoutine(name: "Bare", work: 40, rest: 30, rounds: 4,
+                                   moves: [MoveLibrary.all[0]])
+        #expect(bare.schedule.phases.first?.isWork == true)
     }
 
     @Test("The practice is additive — it never costs a round or a second of work")
@@ -846,7 +942,8 @@ struct WarmUpTests {
         let warmed = session(warmUp: 4)
         #expect(warmed.rounds == bare.rounds)
         #expect(warmed.clampedWork == bare.clampedWork)
-        #expect(warmed.totalDuration == bare.totalDuration + 4 * WarmUp.seconds)
+        #expect(warmed.totalDuration
+                == bare.totalDuration + 4 * WarmUp.seconds + WarmUp.setupSeconds)
     }
 
     @Test("An empty practice leaves the routine exactly as it was")
@@ -865,8 +962,9 @@ struct WarmUpTests {
         var ticks = 0
         engine.onCountdownTick = { ticks += 1 }
         engine.start()
-        // Straight through both flow movements, second by second.
-        for _ in 0..<Int(WarmUp.seconds * 2) {
+        // Straight through both flow movements and the setup pause, second by
+        // second.
+        for _ in 0..<Int(WarmUp.seconds * 2 + WarmUp.setupSeconds) {
             clock.advance(1)
             engine.refresh()
         }
@@ -975,12 +1073,18 @@ struct TimerOnlyTests {
 @Suite("Move plates")
 struct MovePlateTests {
 
-    // The point of closing the library: no exception list, no fallback, no
-    // matching. Every move the app can be asked to draw has a drawing.
-    @Test("Every move in the library has a strip")
+    // The point of closing the library: no fallback, no matching. Every move
+    // the app can be asked to draw has a drawing — except the ones her call
+    // deferred, which must have *none* rather than a borrowed one.
+    @Test("Every move in the library has a strip, unless deferred — then none")
     func libraryIsCovered() {
         for move in MoveLibrary.all {
-            #expect(MovePlates.strip(for: move) != nil, "no strip for \(move.name)")
+            if MovePlates.deferred.contains(MovePreference.key(move.name)) {
+                #expect(MovePlates.strip(for: move) == nil,
+                        "\(move.name) is deferred but resolved to a plate")
+            } else {
+                #expect(MovePlates.strip(for: move) != nil, "no strip for \(move.name)")
+            }
         }
     }
 
@@ -1138,7 +1242,11 @@ struct MovePlateTests {
     /// foreshortened leg drawn at full length is wrong, not right.
     private func isFloorBound(_ strip: Strip) -> Bool {
         ["hip thrust", "glute bridge", "dead bug", "floor fly", "cat cow", "bird dog",
-         "floor press", "pullover"].contains(strip.key)
+         "floor press", "pullover",
+         // Supine additions (August 2026): each places its knee rather than
+         // solving it, exactly as the glute bridge does.
+         "beam triceps extension", "ring bridge", "dead bug press",
+         "dumbbell floor press"].contains(strip.key)
     }
 }
 
@@ -1317,6 +1425,48 @@ struct MorningPracticeTests {
         #expect(Set(days).count >= 8)
     }
 
+    @Test("The library's declaration order is not welded into the practice")
+    func neighboursVary() {
+        // The window used to be a contiguous run, so whatever sat on the next
+        // line of `Equipment.swift` sat next to it in every practice it ever
+        // appeared in. Corkscrew followed Arm circles every time, for no
+        // reason but the order they were typed in.
+        //
+        // Consecutive days differing was already tested and already true —
+        // the *start* moved. This is the property that was not: that being in
+        // one practice together does not mean being in all of them together.
+        var successors: [String: Set<String>] = [:]
+        var seen: [String: Int] = [:]
+        for day in 0..<60 {
+            let names = Practice.moves(on: monday.addingTimeInterval(Double(day) * 86_400),
+                                       count: 8).map(\.name)
+            for name in names.dropLast() { seen[name, default: 0] += 1 }
+            for (a, b) in zip(names, names.dropFirst()) {
+                successors[a, default: []].insert(b)
+            }
+        }
+        // Only movements that turned up often enough for "always" to mean
+        // anything. A movement seen twice having one successor is chance.
+        let welded = successors.filter { seen[$0.key, default: 0] >= 3 && $0.value.count == 1 }
+        #expect(welded.isEmpty,
+                "always followed by the same movement: \(welded.keys.sorted())")
+    }
+
+    @Test("Every spacing the walk can take still lands on distinct movements")
+    func walkNeverRepeatsWithinADay() {
+        // The whole reason the step has to be coprime with the pool. If it
+        // ever is not, a practice asks for the same movement twice and the
+        // warm-up that reads "what the practice did not use" gets it wrong
+        // in the same breath.
+        for pool in 1...40 {
+            for step in Rotation.steps(for: pool) {
+                let landed = (0..<pool).map { ($0 * step) % pool }
+                #expect(Set(landed).count == pool,
+                        "a step of \(step) repeats inside a pool of \(pool)")
+            }
+        }
+    }
+
     @Test("A session never repeats a movement the morning already used")
     func sessionDoesNotRepeatThePractice() {
         for day in 0..<10 {
@@ -1347,6 +1497,115 @@ struct MorningPracticeTests {
     }
 }
 
+@Suite("A rotation is not the library's table of contents")
+struct RotationOrderTests {
+
+    @Test("The declaration order is not welded into a rotation")
+    func neighboursVary() {
+        // The strength twin of the morning practice's bug, and the blunter
+        // version: this took the *first* N moves of the library and did not
+        // vary at all, so whatever sat next to a move in `Equipment.swift`
+        // sat next to it in every rotation it ever appeared in.
+        var successors: [String: Set<String>] = [:]
+        var seen: [String: Int] = [:]
+        for turn in 0..<60 {
+            let names = MoveLibrary.rotation(of: 5, varying: turn).map(\.name)
+            #expect(names.count == 5)
+            #expect(Set(names).count == names.count, "turn \(turn) named a move twice")
+            for name in names.dropLast() { seen[name, default: 0] += 1 }
+            for (a, b) in zip(names, names.dropFirst()) {
+                successors[a, default: []].insert(b)
+            }
+        }
+        let welded = successors.filter { seen[$0.key, default: 0] >= 3 && $0.value.count == 1 }
+        #expect(welded.isEmpty,
+                "always followed by the same move: \(welded.keys.sorted())")
+    }
+
+    @Test("Varying never reaches past a refusal or repeats what is in hand")
+    func stillHonoursTheRules() {
+        // The walk changed which moves come back. It must not have changed
+        // which moves are allowed to.
+        let ruledOut: Set<String> = ["push-up"]
+        let inHand = Set(["Beam front squat"].map { MovePreference.key($0) })
+        for turn in 0..<40 {
+            let picked = MoveLibrary.rotation(of: 6, avoiding: ruledOut,
+                                              excluding: inHand, varying: turn)
+            for move in picked {
+                // Containment, so the incline and knee variants go too.
+                #expect(!MovePreference.anyCovers(ruledOut, move.name))
+                #expect(!inHand.contains(MovePreference.key(move.name)))
+                #expect(move.kind == .strength)
+                #expect(move.equipment.isOwned)
+            }
+        }
+    }
+
+    @Test("Preferred kit is still spent before anything else")
+    func preferenceSurvivesTheWalk() {
+        // The walk varies inside each half, never across them — a beam day
+        // filling up with dumbbells is what `preferring` exists to stop.
+        let beam = MoveLibrary.moves(for: .beam)
+        for turn in 0..<20 {
+            let picked = MoveLibrary.rotation(of: 3, preferring: [.beam], varying: turn)
+            #expect(picked.count == 3)
+            #expect(picked.allSatisfy { $0.equipment == .beam },
+                    "turn \(turn) reached off the beam with \(beam.count) beam moves free")
+        }
+    }
+
+    @Test("The same turn always gives the same rotation")
+    func stable() {
+        // A plan she opens twice reads the same both times. This is why the
+        // walk takes a seed rather than shuffling.
+        for turn in 0..<10 {
+            #expect(MoveLibrary.rotation(of: 5, varying: turn).map(\.name)
+                    == MoveLibrary.rotation(of: 5, varying: turn).map(\.name))
+        }
+    }
+
+    @Test("Sessions in one offline week do not all end with the same two moves")
+    func offlineTopUpVaries() {
+        // The templates hold three moves and a rotation is five, so every
+        // offline session is topped up. All of them used to be topped up
+        // identically.
+        let week = OfflinePlanner.week(1, pace: .hard, moves: 5)
+        let fillers = week.sessions.map {
+            $0.moves.suffix(2).map(\.name).joined(separator: "|")
+        }
+        #expect(fillers.count >= 4)
+        #expect(Set(fillers).count > 1, "every session filled with \(fillers.first ?? "")")
+    }
+
+    @Test("The next offline week asks for the same moves, not new ones")
+    func offlineWeeksRepeatOnPurpose() {
+        // Deliberately unchanged: repeating a week is how a movement gets
+        // easier before the numbers do, and the explanation says so. Only the
+        // rest and the rounds move.
+        let first = OfflinePlanner.week(1, pace: .hard, moves: 5)
+        let later = OfflinePlanner.week(2, pace: .hard, moves: 5)
+        #expect(first.sessions.map { $0.moves.map(\.name) }
+                == later.sessions.map { $0.moves.map(\.name) })
+    }
+
+    @Test("A topped-up offline week still passes the validator")
+    func offlineWeekSurvivesValidation() throws {
+        // The top-up used to walk `MoveLibrary.all`, so it could name kit she
+        // does not own — and the validator rejects a week whole, which would
+        // throw away the plan that is supposed to be the floor.
+        for size in Tuning.movesPerSessionRange {
+            for pace in Pace.allCases {
+                let week = OfflinePlanner.week(3, pace: pace, moves: size)
+                _ = try PlanValidator.routines(from: week)
+                for session in week.sessions {
+                    #expect(session.moves.count == size)
+                    #expect(Set(session.moves.map(\.name)).count == session.moves.count)
+                }
+            }
+        }
+    }
+}
+
 @Suite("A closed move library")
 struct ClosedLibraryTests {
 
@@ -1358,8 +1617,15 @@ struct ClosedLibraryTests {
         let name = try #require(properties["name"] as? [String: Any])
         let offered = try #require(name["enum"] as? [String])
 
-        #expect(Set(offered) == Set(MoveLibrary.names))
+        // Every name offered is one she owns and the library holds. Compared
+        // this way rather than against `Set(MoveLibrary.names)` taken a moment
+        // later: `names` reads what she owns, and a suite running beside this
+        // one can change that between the two reads.
         #expect(!offered.isEmpty)
+        #expect(Set(offered).isSubset(of: Set(MoveLibrary.all.map(\.name))))
+        #expect(offered.allSatisfy { name in
+            MoveLibrary.all.first { $0.name == name }?.kind == .strength
+        })
         // The failure this closes: the planner inventing a name the app then
         // had to guess the shape of.
         #expect(!offered.contains("Beam goblet squat"))
@@ -1681,7 +1947,9 @@ struct IntervalSequenceTests {
         let warmed = routine.warmingUp(with: Array(MoveLibrary.flow.prefix(3)))
         let phases = warmed.schedule.phases
         #expect(phases.prefix(3).allSatisfy { $0.isFlow })
-        #expect(phases[3].isWork)
+        // The setup pause, then her first written interval.
+        #expect(phases[3].isRest)
+        #expect(phases[4].isWork)
         #expect(warmed.roundCount == 5)
     }
 
@@ -2072,7 +2340,7 @@ struct AuditRegressionTests {
         writing.insert(block)
         try writing.save()
 
-        _ = await PlannerService.planWeek(1, of: block, in: writing)
+        _ = await PlannerService.planWeek(1, of: block, in: writing, planner: .blocked)
 
         // A second, independent context sees it only if it actually reached the
         // store. Reading back through `writing` would pass either way.
@@ -2090,14 +2358,14 @@ struct AuditRegressionTests {
         let block = Block(startDate: .now, goalWeightPounds: 150, startingWeightPounds: 165)
         context.insert(block)
 
-        _ = await PlannerService.planWeek(1, of: block, in: context)
+        _ = await PlannerService.planWeek(1, of: block, in: context, planner: .blocked)
         let first = try #require(
             (block.sessions ?? []).min(by: { $0.scheduledFor < $1.scheduledFor }))
         let trainedDay = Calendar.current.startOfDay(for: first.scheduledFor)
         first.completedAt = .now
         try context.save()
 
-        _ = await PlannerService.planWeek(1, of: block, in: context)
+        _ = await PlannerService.planWeek(1, of: block, in: context, planner: .blocked)
 
         let onThatDay = (block.sessions ?? []).filter {
             Calendar.current.startOfDay(for: $0.scheduledFor) == trainedDay
@@ -2380,6 +2648,20 @@ struct ExtraWorkTests {
         #expect(extra.warmUp.allSatisfy { $0.kind == .flow })
     }
 
+    @Test("Every offered extra clears the seven-minute floor, warm-up included")
+    func extraClearsTheTickFloor() {
+        // Her ask: extras "are all 7 mins so they count" toward the form's
+        // smaller ticks. The floor is on the written length — finishing the
+        // whole offer is one session, warm-up and all.
+        for week in 1...12 {
+            for pace in [Pace.steady, .building, .hard] {
+                let extra = ExtraSession.build(week: week, pace: pace, avoiding: [])
+                #expect(extra.totalDuration >= RoutineRun.substantialSeconds,
+                        "week \(week), \(pace.label): \(extra.totalDuration)s")
+            }
+        }
+    }
+
     @Test("Everything ruled out still yields a session rather than a bare timer")
     func extraNeverEmpties() {
         // A rotation of nothing would be a plain interval timer presented as a
@@ -2585,5 +2867,249 @@ struct WalkingIsNotASetTests {
         // from Health, which is where Whoop writes her walks.
         #expect(Equipment.allCases.contains(.walkingPad))
         #expect(PlanValidator.walkCeiling > 0)
+    }
+}
+
+// MARK: - What a day shows as finished
+
+@Suite("The session a day shows as finished")
+@MainActor
+struct FinishedSessionTests {
+
+    private func session(day: Int, title: String, finished: Date?) -> PlannedSession {
+        let when = Calendar.current.date(byAdding: .day, value: day, to: .now)!
+        let session = PlannedSession(scheduledFor: when, title: title, routine: nil)
+        session.completedAt = finished
+        return session
+    }
+
+    @Test("A session pulled forward on a rest day is what today shows")
+    func pulledForward() {
+        // Her case: today is a rest day, so she did tomorrow's session.
+        let tomorrow = session(day: 1, title: "Lower · beam", finished: .now)
+        #expect(FinishedSessions.today([tomorrow])?.title == "Lower · beam")
+    }
+
+    @Test("A session finished on another day is not today's")
+    func yesterdaysStaysYesterdays() {
+        let yesterday = session(day: -1, title: "Upper · rings",
+                                finished: Calendar.current.date(byAdding: .day, value: -1, to: .now))
+        #expect(FinishedSessions.today([yesterday]) == nil)
+    }
+
+    @Test("Today's own session wins over one pulled forward")
+    func todaysWins() {
+        let mine = session(day: 0, title: "Full · mixed", finished: .now)
+        let early = session(day: 2, title: "Lower · beam",
+                            finished: Date.now.addingTimeInterval(-600))
+        #expect(FinishedSessions.today([early, mine])?.title == "Full · mixed")
+    }
+
+    @Test("A session still to do is not finished")
+    func unfinished() {
+        #expect(FinishedSessions.today([session(day: 0, title: "Full", finished: nil)]) == nil)
+    }
+}
+
+// MARK: - When a load has been outgrown
+
+@Suite("The step up a load")
+struct LoadProgressionTests {
+
+    private func halo() -> Move {
+        MoveLibrary.all.first { $0.name == "Ring halo" }!
+    }
+
+    /// A counted session: reps with the interval each was done in.
+    private func log(_ reps: [Int], seconds: Double = 40, pounds: Double = 5,
+                     daysAgo: Int = 1) -> SetLog {
+        let log = SetLog(sourceID: UUID(), move: halo(), reps: reps,
+                         date: Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now)!)
+        log.loadPounds = pounds
+        log.setSeconds = reps.map { _ in seconds }
+        return log
+    }
+
+    @Test("Two sessions at pace is ready — the ceiling is reps per minute, not a count")
+    func readyByPace() {
+        // Twelve in forty seconds is the pace; so is eighteen in sixty.
+        let forty = [log([12, 13], seconds: 40, daysAgo: 4),
+                     log([13, 12], seconds: 40, daysAgo: 1)]
+        #expect(LoadProgression.ready(move: halo(), history: forty))
+
+        let sixty = [log([18, 19], seconds: 60, daysAgo: 4),
+                     log([18, 18], seconds: 60, daysAgo: 1)]
+        #expect(LoadProgression.ready(move: halo(), history: sixty))
+        #expect(LoadProgression.nextLoad(for: halo()) == 8)
+    }
+
+    @Test("A count that would pass at forty seconds fails at sixty")
+    func longIntervalsAreNotFlattered() {
+        // Twelve reps spread over a minute is a slower pace than the tempo
+        // asks — the load is still doing its job.
+        let history = [log([12, 13], seconds: 60, daysAgo: 4),
+                       log([13, 12], seconds: 60, daysAgo: 1)]
+        #expect(!LoadProgression.ready(move: halo(), history: history))
+    }
+
+    @Test("One strong session is a good day, not a verdict")
+    func oneSessionIsNotEnough() {
+        #expect(!LoadProgression.ready(move: halo(), history: [log([14, 13])]))
+    }
+
+    @Test("A slow set in the latest sessions holds the weight")
+    func fadingSetHolds() {
+        let history = [log([12, 12], daysAgo: 4),
+                       log([14, 9], daysAgo: 1)]
+        #expect(!LoadProgression.ready(move: halo(), history: history))
+    }
+
+    @Test("Counts at the old load say nothing about the new one")
+    func oldLoadDoesNotCarry() {
+        // She moved up to 8 lb; the history at 5 lb must not re-trigger.
+        let moved = halo().applyingLoad(from: ["ring halo": 8])
+        let history = [log([14, 14], daysAgo: 6), log([13, 12], daysAgo: 3)]
+        #expect(!LoadProgression.ready(move: moved, history: history))
+    }
+
+    @Test("A row without its interval lengths cannot qualify")
+    func noSecondsNoVerdict() {
+        // Rows from before the seconds were kept: the pace cannot be known,
+        // and it is not guessed.
+        let old = log([14, 14], daysAgo: 4)
+        old.setSeconds = nil
+        #expect(!LoadProgression.ready(move: halo(), history: [old, log([14, 13])]))
+    }
+
+    @Test("The heaviest load on the equipment has nowhere to go")
+    func topOfTheKit() {
+        // The library's deadlift is written for the 18; since August 2026
+        // there is a 35 above it. Set the move to the top of its ladder and
+        // the offer must vanish rather than invent a weight.
+        var bell = MoveLibrary.all.first { $0.name == "Kettlebell deadlift" }!
+        #expect(LoadProgression.nextLoad(for: bell) == 35)
+        bell.loadPounds = Equipment.kettlebell.availableLoadsPounds.max()
+        #expect(LoadProgression.nextLoad(for: bell) == nil)
+    }
+
+    @Test("The dumbbells now step 2, 3, 5")
+    func dumbbellSteps() {
+        let press = MoveLibrary.all.first { $0.name == "Dumbbell press" }!
+        #expect(LoadProgression.nextLoad(for: press) == 3)
+        #expect(LoadProgression.nextLoad(for: press.applyingLoad(from: ["dumbbell press": 3])) == 5)
+        #expect(LoadProgression.nextLoad(for: press.applyingLoad(from: ["dumbbell press": 5])) == nil)
+    }
+}
+
+
+// MARK: - The sampler
+
+@Suite("The sampler")
+struct MoveSamplerTests {
+
+    @Test("Tried is derived from everything she finished")
+    func derivedTried() {
+        let routine = IntervalRoutine(name: "S", work: 40, rest: 20, rounds: 2,
+                                      moves: [MoveLibrary.all[0]])
+        let keys = MoveSampler.triedKeys(routines: [routine],
+                                         runMoveNames: [["Ring row"]],
+                                         logMoveNames: ["Bicep curl"])
+        #expect(keys.contains(MovePreference.key(MoveLibrary.all[0].name)))
+        #expect(keys.contains("ring row"))
+        #expect(keys.contains("bicep curl"))
+    }
+
+    @Test("A flight is six untried strength moves at ten on, ten off, no mark's worth of anything")
+    func flight() {
+        let routine = MoveSampler.build(from: MoveLibrary.all, tried: [])
+        #expect(routine.moves.count == MoveSampler.count)
+        #expect(routine.work == 10)
+        #expect(routine.rest == 10)
+        #expect(routine.rounds == routine.moves.count)
+        #expect(routine.moves.allSatisfy { $0.kind == .strength })
+        #expect(routine.warmUp.isEmpty)
+    }
+
+    @Test("Tried moves fall out, refusals never appear, and a spent library re-tastes")
+    func progression() {
+        let first = MoveSampler.build(from: MoveLibrary.all, tried: [])
+        let tried = Set(first.moves.map { MovePreference.key($0.name) })
+        let second = MoveSampler.build(from: MoveLibrary.all, tried: tried)
+        #expect(Set(second.moves.map { MovePreference.key($0.name) })
+            .isDisjoint(with: tried))
+
+        // Every strength move tried: the flight fills rather than shrinking.
+        // Counted off the library actually passed in, not off
+        // `MoveLibrary.names` — that reads what she *owns*, so mixing the two
+        // made this assertion depend on whether the simulator's app had the
+        // band switched off. The sampler takes its pool as a parameter
+        // precisely so it can be tested without that.
+        let strength = MoveLibrary.all.filter { $0.kind == .strength }
+        let everything = Set(strength.map { MovePreference.key($0.name) })
+        #expect(MoveSampler.build(from: MoveLibrary.all, tried: everything)
+            .moves.count == MoveSampler.count)
+
+        let refused = MoveSampler.build(from: MoveLibrary.all, tried: [],
+                                        avoiding: ["push-up"])
+        #expect(!refused.moves.contains { MovePreference.anyCovers(["push-up"], $0.name) })
+
+        let progress = MoveSampler.progress(library: MoveLibrary.all, tried: tried)
+        #expect(progress.tried == MoveSampler.count)
+        #expect(progress.total == strength.count)
+    }
+}
+
+// MARK: - What she actually owns
+
+/// The ownership layer, tested through invariants that hold whatever is
+/// stored. `Tuning.ownedEquipment` is process-wide `UserDefaults` and these
+/// suites run in parallel, so a test that switched a drawer off would change
+/// what every other suite's rotation could reach. The mutating path is
+/// exercised by hand in the simulator instead.
+@Suite("Owned equipment")
+struct OwnedEquipmentTests {
+
+    @Test("Her own body and the pad cannot be switched off")
+    func alwaysOwned() {
+        #expect(Equipment.alwaysOwned.contains(.bodyweight))
+        #expect(Equipment.alwaysOwned.contains(.walkingPad))
+        #expect(Equipment.bodyweight.isOwned)
+        // The list Settings offers never includes them.
+        #expect(!Equipment.switchable.contains(.bodyweight))
+        #expect(!Equipment.switchable.contains(.walkingPad))
+        #expect(Equipment.switchable.allSatisfy { !Equipment.alwaysOwned.contains($0) })
+    }
+
+    @Test("Nothing may be offered or generated on kit she does not have")
+    func offersStayInsideTheKit() {
+        #expect(MoveLibrary.available.allSatisfy { $0.equipment.isOwned })
+        // The planner's schema enum is built from what she owns.
+        let names = Set(MoveLibrary.names)
+        #expect(names.allSatisfy { name in
+            MoveLibrary.all.first { $0.name == name }?.equipment.isOwned == true
+        })
+        // And so is every rotation, which is the one builder they all use.
+        #expect(MoveLibrary.rotation(of: 6).allSatisfy { $0.equipment.isOwned })
+        #expect(MoveLibrary.rotation(of: 40).allSatisfy { $0.equipment.isOwned })
+    }
+
+    @Test("A move is still read back after its kit goes away")
+    func stillReadsBack() {
+        // `all` stays the truth for reading: a week written when she had the
+        // band must still draw and still run. Only offering is filtered.
+        #expect(MoveLibrary.all.count >= MoveLibrary.available.count)
+        for move in MoveLibrary.all where !move.equipment.isOwned {
+            #expect(MoveLibrary.all.contains { $0.name == move.name })
+        }
+    }
+
+    @Test("A generated week may not name kit she does not have")
+    func validatorGuardsTheKit() throws {
+        for equipment in Equipment.switchable where !equipment.isOwned {
+            guard let move = MoveLibrary.moves(for: equipment).first else { continue }
+            #expect(throws: PlanValidator.Failure.self) {
+                _ = try PlanValidator.move(from: DraftMove(name: move.name))
+            }
+        }
     }
 }
