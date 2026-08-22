@@ -107,6 +107,7 @@ struct TodayView: View {
     /// Skipped moves waiting for the timer to close before they are asked about.
     @State private var pendingSkips: [String] = []
     @State private var showingSettings = false
+    @State private var showingCoach = false
     /// The move whose plate is open. Tapping a row shows the shape; the
     /// long-press menu is still there for an opinion.
     @State private var inspecting: Move?
@@ -322,6 +323,7 @@ struct TodayView: View {
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(isPresented: $showingCoach) { CoachView() }
         .sheet(item: $inspecting) { MoveSheet(move: $0) }
         .sheet(isPresented: $loggingSet) { LogSetView() }
         // Asked after the field register has closed, never inside it.
@@ -364,6 +366,24 @@ struct TodayView: View {
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+            // The coach, one line under the headline: the same coach that
+            // wrote the week, with her numbers in front of it. A row, not a
+            // tab — it is a thing she reaches for, not a place she lives.
+            Button { showingCoach = true } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Ask the coach").font(.almanacBody).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    Text("One request a message").almanacLabel(Palette.mute, small: true)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.mute)
+                }
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            Rule()
         }
         .padding(.top, 4)
     }

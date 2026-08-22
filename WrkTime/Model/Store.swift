@@ -724,7 +724,8 @@ enum Store {
     static let schema = Schema([
         Block.self, PlannedSession.self, SavedRoutine.self, WeightEntry.self,
         LoggedSet.self, MovePreference.self, MorningPractice.self,
-        RoutineRun.self, CustomMove.self, MoveOverride.self, SetLog.self
+        RoutineRun.self, CustomMove.self, MoveOverride.self, SetLog.self,
+        CoachMessage.self
     ])
 
     /// Local-first, synced through the user's own private CloudKit database.

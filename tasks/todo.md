@@ -159,14 +159,16 @@ Decisions proposed:
 - [x] `docs/COACH-BRIEF.md` drafted 22 Aug — the one coach every call reads.
 - [x] Load the brief at build time as the shared system prompt for planner
       and reviewer; tests assert the prompt carries its rules (no API).
-- [ ] Phase 6b — Coach chat on Today: streaming, local history, tool cards
-      (swapMove, changeLoad, scheduleTest) applied through the guarded paths.
+- [x] Phase 6b — Coach chat on Today: local history, two proposal cards
+      (change a load, rule out a move) applied through the guarded paths.
+      Non-streaming, like the planner. **Never sent live** — needs her key
+      and her say-so; the wire shape is tested offline.
 - [x] `PlanContext` carries the baseline; the prompt carries the library by
       pattern. Schema gains `mode` per session; validator rejects three
       implements.
 - [x] Prompt rewrite: the brief is the body; kit and library generated.
-- [ ] First live call only with your explicit approval, in the simulator,
-      usage reported.
+- [ ] First live call — planner, reviewer and chat — only with your explicit
+      approval, usage reported. Nothing has been sent.
 
 ### Phase 7 — Aesthetics
 - [ ] Moves tab by position with a compact row: name · pattern · load line ·
