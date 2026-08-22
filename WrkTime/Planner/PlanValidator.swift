@@ -100,7 +100,13 @@ enum PlanValidator {
                 throw Failure.nonsenseTiming("\"\(session.title)\" asks for \(session.rounds) rounds.")
             }
 
-            let moves = try session.moves.map { try move(from: $0, extras: extras) }
+            // Ordered, never trimmed: whatever the model or the offline
+            // planner wrote, the session runs standing first and the floor
+            // last, so a week never opens on the mat, stands up for the
+            // beam and lies back down. Coverage is the writer's job; order
+            // is the app's.
+            let moves = MoveLibrary.ordered(
+                try session.moves.map { try move(from: $0, extras: extras) })
             return (session.dayOffset,
                     IntervalRoutine(name: session.title,
                                     work: TimeInterval(session.work),

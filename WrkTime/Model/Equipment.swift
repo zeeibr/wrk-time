@@ -633,6 +633,10 @@ enum MoveLibrary {
     /// sort, not a filter, so a short library still fills the rotation.
     /// `plus` is her own approved additions — the working library where the
     /// caller has a store to read them from.
+    /// `holding` is what the session already has, when a rotation is being
+    /// grown rather than written: the slots those moves cover are taken as
+    /// covered, so a session with a hinge is not handed a second one. Only
+    /// the new moves are returned.
     /// `varying` is which turn this is — a session's place in the week, a day
     /// index, whatever the caller has that ought to make one rotation differ
     /// from the next. Without it this took the **first** `count` moves of the
@@ -645,6 +649,7 @@ enum MoveLibrary {
                          avoiding ruledOut: Set<String> = [],
                          excluding used: Set<String> = [],
                          plus extras: [Move] = [],
+                         holding inHand: [Move] = [],
                          varying turn: Int = 0) -> [Move] {
         // `available`, not `all`: this is the one builder for "pick N moves",
         // so filtering here is what keeps a rotation, an extra session and a
@@ -664,34 +669,187 @@ enum MoveLibrary {
             offered.append(move)
         }
 
-        // Two preferences, and both are **sorts rather than filters** — neither
-        // may make a move unreachable:
-        //
-        // - the session's own kit, so a beam day does not fill with dumbbells;
-        // - a move that has a drawing ahead of one that does not, so a written
-        //   week is one she can look at and see the shapes in.
-        //
-        // The second has to be a preference. Her own approved additions never
-        // have drawings, by decision, and neither do the four ring moves she
-        // took without them — filtering on it would quietly undo the review
-        // queue. They sort last and are still reached once the drawn moves on
-        // the right kit run out.
-        //
-        // Partitioned rather than `sorted`: `sorted(by:)` is not documented as
-        // stable, and now that position inside a group decides what the walk
-        // lands on, "near enough to declaration order" is not good enough.
-        func rank(_ move: Move) -> Int {
-            (kit.contains(move.equipment) ? 0 : 2) + (MovePlates.strip(for: move) == nil ? 1 : 0)
+        return Shape.fill(count, from: offered, preferring: kit,
+                          holding: inHand, varying: turn)
+    }
+
+    /// Puts a rotation in the order a session runs: standing first, the floor
+    /// block last, and inside each block the coach's order — hinge, squat or
+    /// lunge, row, press or push, then carries and core, then accessory work.
+    /// Stable for anything the table does not know (custom moves), which stay
+    /// where they were relative to each other.
+    ///
+    /// Applied to every rotation the app writes and to every one the model
+    /// writes (`PlanValidator`), so a week never opens on the mat, stands up
+    /// for the beam, and lies back down. See `docs/COACH-BRIEF.md` §8–9.
+    static func ordered(_ moves: [Move]) -> [Move] {
+        moves.enumerated().sorted { a, b in
+            let pa = MoveTaxonomy.position(for: a.element.name) ?? .standing
+            let pb = MoveTaxonomy.position(for: b.element.name) ?? .standing
+            if pa != pb { return pa < pb }
+            let sa = Shape.order(of: a.element), sb = Shape.order(of: b.element)
+            if sa != sb { return sa < sb }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// Shrinks a rotation to `count` without losing a pattern it could keep:
+    /// one move per pattern first, in running order, then whatever is left
+    /// in running order. Trimming the ordered list from the end would keep
+    /// two hinges and drop the squat.
+    static func trimmed(_ moves: [Move], to count: Int) -> [Move] {
+        let running = ordered(moves)
+        var seen: Set<MovePattern> = []
+        var kept: [Move] = []
+        for move in running where kept.count < count {
+            guard let pattern = MoveTaxonomy.pattern(for: move.name) else { kept.append(move); continue }
+            if seen.insert(pattern).inserted { kept.append(move) }
+        }
+        for move in running where kept.count < count && !kept.contains(where: { $0.name == move.name }) {
+            kept.append(move)
+        }
+        return ordered(kept)
+    }
+
+    /// The distinct implements a rotation asks her to fetch. Bodyweight is
+    /// not one — it is what she is already holding.
+    static func implements(in moves: [Move]) -> Set<Equipment> {
+        Set(moves.map(\.equipment)).subtracting([.bodyweight])
+    }
+
+    /// The coach's session shape, from `docs/COACH-BRIEF.md` §9: one bell,
+    /// standing — hinge, squat or lunge, row, press or push — then the floor
+    /// to close. Built slot by slot so coverage is by construction, with the
+    /// walk varying *which* hinge and *which* row rather than whether there
+    /// is one.
+    enum Shape {
+        /// What a slot will take, in order of preference. The first predicate
+        /// is the slot's own pattern; the later ones are what it settles for
+        /// when the pool has nothing in the first.
+        struct Slot {
+            var wants: [(Move) -> Bool]
         }
 
-        // The walk varies *within* a group and never across two, or the
-        // preferences would be the first thing it broke.
-        var out: [Move] = []
-        for group in 0...3 where out.count < count {
-            out += Rotation.walk(offered.filter { rank($0) == group },
-                                 taking: count - out.count, varying: turn)
+        private static func family(_ f: MovePattern.Family) -> (Move) -> Bool {
+            { MoveTaxonomy.pattern(for: $0.name)?.family == f }
         }
-        return out
+        private static func pattern(_ p: MovePattern) -> (Move) -> Bool {
+            { MoveTaxonomy.pattern(for: $0.name) == p }
+        }
+        private static func patterns(_ ps: Set<MovePattern>) -> (Move) -> Bool {
+            { MoveTaxonomy.pattern(for: $0.name).map(ps.contains) ?? false }
+        }
+        private static func floorCore(_ move: Move) -> Bool {
+            MoveTaxonomy.pattern(for: move.name)?.family == .core
+                && (MoveTaxonomy.position(for: move.name) ?? .standing) != .standing
+        }
+        private static func anything(_: Move) -> Bool { true }
+
+        /// The slots for a rotation of `count`. Five is the shape as written;
+        /// fewer drops from the end, more adds a carry or core and then
+        /// accessory work. `turn` alternates the squat and the lunge, which
+        /// the brief asks for on alternating sessions.
+        static func slots(_ count: Int, turn: Int) -> [Slot] {
+            let hinge = Slot(wants: [pattern(.hinge), family(.lower), anything])
+            let kneeOrLunge = turn.isMultiple(of: 2)
+                ? Slot(wants: [pattern(.squat), pattern(.lunge), family(.lower), anything])
+                : Slot(wants: [pattern(.lunge), pattern(.squat), family(.lower), anything])
+            let pull = Slot(wants: [pattern(.pullHorizontal), family(.pull), anything])
+            let push = Slot(wants: [family(.push), anything])
+            let core = Slot(wants: [floorCore, family(.core), anything])
+            let carry = Slot(wants: [pattern(.carry), patterns([.coreAntiRotation]), anything])
+            let accessory = Slot(wants: [pattern(.accessory), anything])
+            let base = [hinge, kneeOrLunge, pull, push, core, carry, accessory]
+            if count <= base.count { return Array(base.prefix(count)) }
+            return base + Array(repeating: Slot(wants: [anything]), count: count - base.count)
+        }
+
+        /// Where a move sits inside its position block.
+        static func order(of move: Move) -> Int {
+            switch MoveTaxonomy.pattern(for: move.name) {
+            case .hinge: 0
+            case .squat, .lunge: 1
+            case .pullHorizontal, .pullVertical: 2
+            case .pushHorizontal, .pushVertical: 3
+            case .carry, .coreAntiRotation, .coreFlexion, .coreExtension: 4
+            case .accessory: 5
+            case nil: 6
+            }
+        }
+
+        /// Fills the slots from `pool`, then orders the result.
+        ///
+        /// Three preferences, all **sorts rather than filters** so a short
+        /// pool still fills every slot:
+        /// - the session's bell — the kit it was asked to prefer, and once a
+        ///   loaded move is chosen, that implement — so a kettlebell day does
+        ///   not reach for the beam when a bell move would do;
+        /// - at most two implements: a third is taken only when nothing on
+        ///   the first two fits the slot at all;
+        /// - a move with a drawing ahead of one without, so a written week is
+        ///   one she can look at. Her own approved additions never have
+        ///   drawings, by decision, and still get reached.
+        ///
+        /// With `holding`, the slots those moves already satisfy are taken
+        /// as covered and only the `count` new picks come back.
+        static func fill(_ count: Int, from pool: [Move],
+                         preferring kit: Set<Equipment>,
+                         holding inHand: [Move] = [],
+                         varying turn: Int) -> [Move] {
+            var chosen = inHand
+            var unassigned = inHand
+            var picked: [Move] = []
+            var held = kit.union(implements(in: inHand))
+            for (index, slot) in slots(inHand.count + count, turn: turn).enumerated() {
+                // A move already in hand that fits this slot's first wish
+                // covers it; nothing new is fetched for it.
+                if let covered = unassigned.firstIndex(where: slot.wants[0]) {
+                    unassigned.remove(at: covered)
+                    continue
+                }
+                guard picked.count < count else { break }
+                let free = pool.filter { m in !chosen.contains { $0.name == m.name } }
+                guard !free.isEmpty else { break }
+                let fetched = implements(in: chosen)
+                // The bell in hand first; then bodyweight, which costs no
+                // fetch; then a second implement; a third only when nothing
+                // else fits the slot at all.
+                func rank(_ move: Move) -> Int {
+                    let bell: Int
+                    if held.contains(move.equipment) { bell = 0 }
+                    else if move.equipment == .bodyweight { bell = 1 }
+                    else if fetched.count < 2 { bell = 2 }
+                    else { bell = 3 }
+                    return bell * 2 + (MovePlates.strip(for: move) == nil ? 1 : 0)
+                }
+                var pick: Move?
+                search: for want in slot.wants {
+                    let fits = free.filter(want)
+                    for group in 0...7 {
+                        let tier = fits.filter { rank($0) == group }
+                        if let move = Rotation.walk(tier, taking: 1, varying: turn + index).first {
+                            pick = move
+                            break search
+                        }
+                    }
+                }
+                guard let pick else { break }
+                chosen.append(pick)
+                picked.append(pick)
+                if pick.equipment != .bodyweight { held.insert(pick.equipment) }
+            }
+            // Slots a held move did not cover in its first wish still count
+            // the move: if the loop ran out of slots before `count` picks
+            // (everything in hand was off-pattern), fill the remainder free.
+            while picked.count < count {
+                let free = pool.filter { m in !chosen.contains { $0.name == m.name } }
+                guard let more = Rotation.walk(free, taking: 1, varying: turn + picked.count).first
+                else { break }
+                chosen.append(more)
+                picked.append(more)
+            }
+            return ordered(picked)
+        }
     }
 
     /// Another move using the same equipment, avoiding a set of names.

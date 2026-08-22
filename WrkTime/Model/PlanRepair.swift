@@ -75,22 +75,28 @@ enum PlanRepair {
             guard routine.moves.count != count else { continue }
 
             if routine.moves.count > count {
-                routine.moves = Array(routine.moves.prefix(count))
+                // One move per pattern survives before any second one does,
+                // so a session that shrinks keeps its hinge and its squat
+                // rather than two hinges.
+                routine.moves = MoveLibrary.trimmed(routine.moves, to: count)
             } else {
                 // The one builder — `MoveLibrary.rotation` — rather than this
                 // logic written out again. It carries the containment-versus-
                 // exact distinction that four separate spellings of it once
                 // got wrong.
-                routine.moves += MoveLibrary.rotation(
+                routine.moves = MoveLibrary.ordered(routine.moves + MoveLibrary.rotation(
                     of: count - routine.moves.count,
                     // Prefer the kit the session already leans on, so a "beam"
                     // day does not fill up with dumbbells.
                     preferring: Set(routine.moves.map(\.equipment)),
                     avoiding: barred,
                     excluding: Set(routine.moves.map { MovePreference.key($0.name) }),
+                    // What is in hand covers its slots, so a session with a
+                    // hinge is not handed a second one.
+                    holding: routine.moves,
                     // The session's own day, so growing Tuesday and Thursday
                     // does not hand them both the same two moves.
-                    varying: Rotation.dayIndex(session.scheduledFor))
+                    varying: Rotation.dayIndex(session.scheduledFor)))
             }
 
             guard routine.moves.count != (session.routine?.moves.count ?? 0) else { continue }

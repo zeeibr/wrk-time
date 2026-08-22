@@ -500,12 +500,13 @@ struct MovePreferenceTests {
 
     @Test("The offline planner substitutes a rejected move rather than serving it")
     func offlineSubstitutes() throws {
-        // "Ring halo" is in the Upper template.
+        // The kettlebell day opens on the kettlebell deadlift.
         let plain = OfflinePlanner.week(1, pace: .building, moves: 5)
-        #expect(plain.sessions.flatMap(\.moves).contains { $0.name == "Ring halo" })
+        #expect(plain.sessions.flatMap(\.moves).contains { $0.name == "Kettlebell deadlift" })
 
-        let avoided = OfflinePlanner.week(1, pace: .building, avoiding: ["ring halo"], moves: 5)
-        #expect(!avoided.sessions.flatMap(\.moves).contains { $0.name == "Ring halo" })
+        let avoided = OfflinePlanner.week(1, pace: .building,
+                                          avoiding: ["kettlebell deadlift"], moves: 5)
+        #expect(!avoided.sessions.flatMap(\.moves).contains { $0.name == "Kettlebell deadlift" })
         // And the week is still a valid, full week.
         let routines = try PlanValidator.routines(from: avoided)
         #expect(routines.count == Pace.building.sessionsPerWeek)
@@ -514,10 +515,10 @@ struct MovePreferenceTests {
 
     @Test("Substitution keeps the equipment it replaced")
     func substitutionKeepsEquipment() {
-        let week = OfflinePlanner.week(1, pace: .building, avoiding: ["ring halo"])
-        // The Upper session still uses the rings; only the movement changed.
-        let upper = week.sessions.first { $0.title.contains("Upper") }
-        #expect(upper?.moves.contains { $0.equipment == Equipment.rings.rawValue } == true)
+        let week = OfflinePlanner.week(1, pace: .building, avoiding: ["kettlebell deadlift"])
+        // The kettlebell day still uses the bell; only the hinge changed.
+        let bell = week.sessions.first { $0.title.contains("kettlebell") }
+        #expect(bell?.moves.contains { $0.equipment == Equipment.kettlebell.rawValue } == true)
     }
 
     @Test("Refusals reach the prompt as absolute and soft rules")
@@ -1506,20 +1507,23 @@ struct RotationOrderTests {
         // version: this took the *first* N moves of the library and did not
         // vary at all, so whatever sat next to a move in `Equipment.swift`
         // sat next to it in every rotation it ever appeared in.
-        var successors: [String: Set<String>] = [:]
-        var seen: [String: Int] = [:]
+        //
+        // A rotation now has a fixed *shape* — hinge, squat or lunge, row,
+        // push, floor — so the neighbour of a slot is always the next slot.
+        // What must still vary is which hinge, which row: every slot has to
+        // see several different moves across the turns.
+        var perSlot: [Int: Set<String>] = [:]
         for turn in 0..<60 {
             let names = MoveLibrary.rotation(of: 5, varying: turn).map(\.name)
             #expect(names.count == 5)
             #expect(Set(names).count == names.count, "turn \(turn) named a move twice")
-            for name in names.dropLast() { seen[name, default: 0] += 1 }
-            for (a, b) in zip(names, names.dropFirst()) {
-                successors[a, default: []].insert(b)
-            }
+            for (slot, name) in names.enumerated() { perSlot[slot, default: []].insert(name) }
         }
-        let welded = successors.filter { seen[$0.key, default: 0] >= 3 && $0.value.count == 1 }
-        #expect(welded.isEmpty,
-                "always followed by the same move: \(welded.keys.sorted())")
+        for (slot, seen) in perSlot {
+            #expect(seen.count >= 3, "slot \(slot) only ever offered \(seen.sorted())")
+        }
+        let prefix = MoveLibrary.available.filter { $0.kind == .strength }.prefix(5).map(\.name)
+        #expect(MoveLibrary.rotation(of: 5, varying: 0).map(\.name) != prefix)
     }
 
     @Test("Varying never reaches past a refusal or repeats what is in hand")
@@ -2101,8 +2105,9 @@ struct RotationResizeTests {
         let moves = try #require(planned.routine?.moves)
         #expect(moves.count == 5)
         #expect(Set(moves.map(\.name)).count == 5, "a move was repeated")
-        // The first three are untouched: growing adds, it does not reshuffle.
-        #expect(moves.prefix(3).map(\.name) == beam.prefix(3).map(\.name))
+        // The three it had are all still there: growing adds — and puts the
+        // session in running order — but drops nothing.
+        #expect(Set(beam.prefix(3).map(\.name)).isSubset(of: Set(moves.map(\.name))))
     }
 
     @Test("It leans on the kit the session already uses")
@@ -2116,12 +2121,14 @@ struct RotationResizeTests {
                 "a beam day filled up with something else: \(added.map(\.name))")
     }
 
-    @Test("Shrinking drops from the end")
+    @Test("Shrinking keeps one of each pattern before a second of any")
     func shrinks() throws {
         let context = try store()
         let planned = session(beam, in: context)
         PlanRepair.resize(to: 2, in: context)
-        #expect(planned.routine?.moves.map(\.name) == beam.prefix(2).map(\.name))
+        // All thirteen beam moves, cut to two: the hinge and the squat, in
+        // running order — not the first two as typed into the library.
+        #expect(planned.routine?.moves.map(\.name) == ["Beam deadlift", "Beam front squat"])
     }
 
     @Test("It never reaches past something she has ruled out")

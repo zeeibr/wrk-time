@@ -159,80 +159,43 @@ enum OfflinePlanner {
 
     // MARK: - Templates
 
-    /// Four sessions that rotate through the week. Built from the real library
-    /// so the loads are correct by construction rather than by validation.
+    /// The sessions that rotate through the week: a title and the implement
+    /// the session is built around. Every move comes from the one rotation
+    /// builder, so the loads and cues are the library's by construction —
+    /// these used to carry three hard-coded moves each, and their cue text
+    /// had drifted from the library's before anyone noticed.
+    ///
+    /// Every session is full body, in the coach's shape (`docs/COACH-BRIEF.md`
+    /// §9): one bell standing, then the floor to close. What varies by day is
+    /// which bell, so the week spends the whole kit without any one session
+    /// asking her to fetch more than one thing.
     private struct Template {
         let title: String
-        let moves: [DraftMove]
+        let kit: Set<Equipment>
 
-        /// The template's own moves, and if it is shorter than `count`, topped
-        /// up from the library. A rotation is never padded with a repeat.
-        ///
-        /// `turn` is the session's place in the week. The templates hold three
-        /// moves and a rotation is five by default, so **every** offline
-        /// session is topped up — and this used to walk the library from the
-        /// top, which meant all five sessions of the week ended with the same
-        /// two movements, week after week. The turn is what tells them apart.
-        ///
-        /// The week number is deliberately *not* in it. Repeating a week is
-        /// how a movement gets easier before the numbers do — the explanation
-        /// the planner writes says exactly that — so the same session in the
-        /// next week should ask for the same moves and a shorter rest.
+        /// `turn` is the session's place in the week, and is what tells one
+        /// session's hinge from the next one's. The week number is
+        /// deliberately *not* in it: repeating a week is how a movement gets
+        /// easier before the numbers do, so the same session next week asks
+        /// for the same moves and a shorter rest.
         func rotation(of count: Int, avoiding excluded: Set<String> = [],
                       varying turn: Int = 0) -> [DraftMove] {
-            guard count > moves.count else { return Array(moves.prefix(count)) }
-            // The one builder — `MoveLibrary.rotation` — rather than a second
-            // spelling of it. This one walked `MoveLibrary.all` where the
-            // builder walks `available`, so a top-up could name a drawer she
-            // had switched off; `PlanValidator` rejects a week **whole**, so
-            // two filler moves were able to throw away the offline week that
-            // is supposed to be the floor everything else falls back to.
-            let kit = Set(moves.compactMap { Equipment(rawValue: $0.equipment) })
-            let topUp = MoveLibrary.rotation(of: count - moves.count,
-                                             preferring: kit,
-                                             avoiding: excluded,
-                                             excluding: Set(moves.map {
-                                                 MovePreference.key($0.name)
-                                             }),
-                                             varying: turn)
-            return moves + topUp.map {
-                DraftMove(name: $0.name, equipment: $0.equipment.rawValue,
-                          cue: $0.cue, loadPounds: $0.loadPounds ?? 0)
-            }
+            // `preferring` is a sort, never a filter: a drawer she has
+            // switched off simply stops being preferred, and the builder
+            // walks `available`, so a template named for kit she no longer
+            // owns still writes a session she can do.
+            MoveLibrary.rotation(of: count, preferring: kit,
+                                 avoiding: excluded, varying: turn)
+                .map { DraftMove(name: $0.name, equipment: $0.equipment.rawValue,
+                                 cue: $0.cue, loadPounds: $0.loadPounds ?? 0) }
         }
 
         static let rotation: [Template] = [
-            Template(title: "Lower · beam", moves: [
-                draft("Beam front squat", .beam, "Beam across the collarbones. Three counts down, one to stand.", 15),
-                draft("Beam deadlift", .beam, "Hinge from the hips. The beam stays close to your shins.", 15),
-                draft("Beam hip thrust", .beam, "Shoulders on the sofa edge, beam across the hips.", 15)
-            ]),
-            Template(title: "Upper · rings", moves: [
-                draft("Ring press-out", .rings, "Hold the 8 lb ring at the chest and press straight out.", 8),
-                draft("Ring halo", .rings, "The 5 lb ring in both hands, slow circles around the head.", 5),
-                draft("Lateral raise", .dumbbells, "Up to shoulder height, down over three counts.", 2)
-            ]),
-            Template(title: "Full · mixed", moves: [
-                draft("Ring deadlift", .rings, "The 10 lb ring between the feet. Hinge, don't squat.", 10),
-                draft("Beam good morning", .beam, "Soft knees, flat back. Stop when your hamstrings say so.", 15),
-                draft("Dumbbell press", .dumbbells, "Two pounds is enough when you go slowly.", 2)
-            ]),
-            // The easy day is floor work, not the pad. This template used to
-            // open and close with a walk, which is how "Easy · pad and floor"
-            // put two treadmill intervals inside a session — and a
-            // forty-second walk is longer to set the pad up for than to do.
-            // Walking is a weekly total the plan sets separately and Signals
-            // draws; it was never meant to be a work interval.
-            Template(title: "Easy · floor", moves: [
-                draft("Dead bug", .bodyweight, "Ribs down, low back flat on the floor.", 0),
-                draft("Glute bridge", .bodyweight, "Push through the heels. Squeeze at the top, then lower slowly.", 0),
-                draft("Bird dog", .bodyweight, "Opposite arm and leg, long and level. Nothing rotates.", 0)
-            ])
+            Template(title: "Full body · kettlebell", kit: [.kettlebell]),
+            Template(title: "Full body · beam", kit: [.beam]),
+            Template(title: "Full body · single dumbbell", kit: [.singleDumbbell]),
+            Template(title: "Full body · rings", kit: [.rings]),
+            Template(title: "Full body · dumbbells", kit: [.dumbbells]),
         ]
-
-        private static func draft(_ name: String, _ equipment: Equipment,
-                                  _ cue: String, _ load: Double) -> DraftMove {
-            DraftMove(name: name, equipment: equipment.rawValue, cue: cue, loadPounds: load)
-        }
     }
 }
