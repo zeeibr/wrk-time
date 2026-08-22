@@ -23,3 +23,10 @@ are two different worlds, and the switch between them is the idea the build
 must preserve.
 
 See `../HANDOFF.md` section 3 for the rules that follow from it.
+
+## Where the mockups no longer match the app
+
+These files are a record of the design rounds and are deliberately left as they
+were drawn. One thing has since changed: **fasting was removed from the app
+entirely.** Every mockup here still shows a fasting stat somewhere — on Today,
+or as an input on Progress. Ignore it. The code is the source of truth.

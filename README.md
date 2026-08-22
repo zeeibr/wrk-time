@@ -2,7 +2,8 @@
 
 An interval workout timer and fitness planner for one person's kit: two 2 lb
 dumbbells, a 15 lb Bala Beam, three Bala rings, and a walking pad. Work
-intervals are capped at sixty seconds.
+intervals are capped at sixty seconds. There is no fasting feature — it was
+considered, built, and cut.
 
 Design direction: **Almanac** — the approved lane. The mockups it was built
 from, and the two rounds of alternatives it beat, are in `docs/design/`.
@@ -152,6 +153,9 @@ suspended.
   rather than inventing a reason to alter it.
 - **Only *asleep* samples count as sleep.** Time in bed awake is not sleep, and
   counting it would flatter the numbers.
+- **Fasting was removed rather than hidden.** No model, no stat, no planner
+  input. The design mockups in `docs/design/` predate the removal and still
+  show it; the code is the source of truth.
 
 ## Next
 
