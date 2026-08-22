@@ -70,6 +70,10 @@ struct MoveSheet: View {
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    if let form = MoveForm.notes(for: move.name) {
+                        FormCard(form: form).padding(.top, 18)
+                    }
+
                     if let verdict {
                         Text(note(for: verdict))
                             .almanacLabel(Palette.mute, small: true)
@@ -242,6 +246,47 @@ struct MoveSheet: View {
         case .disliked: "You said you would rather do less of this."
         case .hard: "Kept in the plan, scaled down."
         case .liked: "You asked for more of this."
+        }
+    }
+}
+
+
+/// The five lines of `MoveForm`, as a small document: a mono label, the
+/// sentence beside it, a hairline between. Shared by the move sheet and the
+/// timer's form sheet so the two never drift.
+struct FormCard: View {
+    let form: MoveForm
+    /// On the field the card draws in the field's own colours.
+    var foreground: Color = Palette.ink
+    var secondary: Color = Palette.mute
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Form").almanacLabel(secondary, small: true)
+                .padding(.bottom, 6)
+            Rule(firm: true)
+            line("Set up", form.setUp)
+            line("Move", form.movement)
+            line("Feel", form.feel)
+            line("Watch", form.wrong)
+            line("Stop if", form.stopIf)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func line(_ label: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(label)
+                    .almanacLabel(secondary, small: true)
+                    .frame(width: 56, alignment: .leading)
+                Text(text)
+                    .font(.almanacBody)
+                    .foregroundStyle(foreground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 9)
+            Rule()
         }
     }
 }

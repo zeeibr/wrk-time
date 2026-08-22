@@ -89,3 +89,30 @@ struct MoveTaxonomyTests {
         #expect(!MovePattern.pushVertical.isBigLift)
     }
 }
+
+@Suite("Form notes")
+struct MoveFormTests {
+    @Test("Every strength move has form notes")
+    func everyStrengthMove() {
+        let missing = MoveLibrary.all
+            .filter { $0.kind == .strength && MoveForm.notes(for: $0.name) == nil }
+            .map(\.name)
+        #expect(missing.isEmpty, "no form notes: \(missing)")
+    }
+
+    @Test("Notes are five sentences and never empty")
+    func fiveLines() {
+        for move in MoveLibrary.all where move.kind == .strength {
+            guard let form = MoveForm.notes(for: move.name) else { continue }
+            for line in [form.setUp, form.movement, form.feel, form.wrong, form.stopIf] {
+                #expect(!line.isEmpty, "\(move.name)")
+                #expect(!line.contains("!"), "\(move.name) exclaims")
+            }
+        }
+    }
+
+    @Test("Flow movements carry no strength form")
+    func flowHasNone() {
+        #expect(MoveLibrary.flow.allSatisfy { MoveForm.notes(for: $0.name) == nil })
+    }
+}

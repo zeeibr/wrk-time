@@ -36,6 +36,22 @@ many times since; what that first call taught is in HANDOFF §5 and every lesson
 there is still load-bearing. Her own spend on it is about 62 cents across a
 block. Tests must never add to that — see the Workflow note below.
 
+## The coach
+
+`docs/COACH-BRIEF.md` is the app's one coach — the programming rules
+(modes, rest, setup buffers, the session shape, double progression, testing
+as extras) settled with a coaching panel and with her on 22 August 2026. It
+is hers to correct. Every model call is to read it as the standing system
+prompt (Phase 6 of `tasks/todo.md`); until then the local arithmetic already
+follows it. When a rule here and a rule there disagree, the brief wins.
+
+Three lookups sit beside the library and are never stored fields, so no
+routine on disk changes shape: `MoveMuscles` (display), `MoveTaxonomy`
+(pattern and position — what the rotation builder and the Moves tab
+reason in), and `MoveForm` (five lines of form per strength move, her ask
+as a beginner). Every strength move must have an entry in all three; tests
+enforce it.
+
 ## Model usage
 
 **The model is for adaptation, not arithmetic.** Progression — rest shortening,
@@ -299,7 +315,14 @@ These look like oversights and are not:
   library". It matches refusals by containment and what is already in hand
   exactly, which is two different questions — and the last time they were
   spelled out separately in several places, the spellings disagreed and the app
-  offered her the incline push-up she was on record as disliking.
+  offered her the incline push-up she was on record as disliking. Since
+  August 2026 it fills the coach's **slots** — hinge, squat or lunge, row,
+  push, floor core — and returns them in running order (standing, then the
+  mat), preferring the bell in hand, then bodyweight, then a second
+  implement. `MoveLibrary.ordered` is the one ordering; `PlanValidator`
+  applies it to what the model writes and `PlannedSession.routine` to what
+  is already stored and still pending. A **finished** session is never
+  reordered, and her saved routines are never reordered.
 - `ExtraSession` returns an `IntervalRoutine` and never a `PlannedSession`.
   Writing one would earn a mark it is not entitled to and would collide with
   `PlanValidator.duplicateDay` and with `write`'s set of days already trained.

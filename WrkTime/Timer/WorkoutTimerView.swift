@@ -14,6 +14,10 @@ struct WorkoutTimerView: View {
     private enum Stage { case arriving, leadIn, running, ended }
 
     @State private var engine: IntervalEngine
+    /// The move whose form notes are open over the timer. The engine runs on
+    /// wall-clock time, so reading them costs nothing but the rest she
+    /// chooses to spend on it.
+    @State private var formFor: Move?
     @State private var liveActivity = LiveActivityController()
     @State private var audio = SessionAudio()
     /// Persisted, because `.playback` sounds through the silent switch and the
@@ -226,6 +230,37 @@ struct WorkoutTimerView: View {
         }
         .statusBarHidden(false)
         .preferredColorScheme(.light)
+        .sheet(item: $formFor) { move in
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(move.name)
+                            .font(.almanacTitle)
+                            .foregroundStyle(Palette.ink)
+                        Text(move.equipmentLabel)
+                            .almanacLabel(Palette.mute, small: true)
+                            .padding(.top, 6)
+                        if let form = MoveForm.notes(for: move.name) {
+                            FormCard(form: form).padding(.top, 18)
+                        } else {
+                            Text(move.cue)
+                                .font(.almanacBody)
+                                .foregroundStyle(Palette.ink)
+                                .padding(.top, 18)
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 30)
+                }
+                .background(Palette.oat.ignoresSafeArea())
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { formFor = nil }.foregroundStyle(Palette.ink)
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .onAppear {
             // The phone spends the session on the floor, untouched. Without
             // this the display locks during the first round and takes the
@@ -696,6 +731,22 @@ struct WorkoutTimerView: View {
                     .font(.almanacBody)
                     .foregroundStyle(secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // The form notes, one tap away and never in the way: the cue
+                // is what she reads mid-set, the notes are what she reads
+                // before the first one. Her ask — she is new to this and
+                // has not been shown.
+                if MoveForm.notes(for: move.name) != nil {
+                    Button { formFor = move } label: {
+                        Text("Form")
+                            .almanacLabel(foreground, small: true)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .overlay(Rectangle().strokeBorder(secondary.opacity(0.6), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                    .accessibilityLabel("Form notes for \(move.name)")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

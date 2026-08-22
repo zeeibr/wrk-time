@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftData
 @testable import WrkTime
 
 /// The coach's session shape, `docs/COACH-BRIEF.md` §8–9, held by the one
@@ -112,5 +113,44 @@ struct RotationShapeTests {
             #expect(MoveLibrary.implements(in: moves).count <= 2)
             print("  \(session.title): " + moves.map { "\($0.name) [\($0.equipmentLabel)]" }.joined(separator: " · "))
         }
+    }
+}
+
+@Suite("A written week runs in the new order")
+struct PendingOrderTests {
+    private func store() throws -> ModelContext {
+        let container = try ModelContainer(for: PlannedSession.self, MoveOverride.self,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        return ModelContext(container)
+    }
+
+    private func named(_ name: String) -> Move { MoveLibrary.all.first { $0.name == name }! }
+
+    @Test("A pending session reads back standing first, floor last")
+    func pendingIsOrdered() throws {
+        let context = try store()
+        let chop = [named("Dead bug"), named("Beam row"), named("Glute bridge"),
+                    named("Kettlebell deadlift"), named("Incline push-up")]
+        let session = PlannedSession(scheduledFor: .now, title: "Old week",
+                                     routine: IntervalRoutine(name: "Old week", work: 40, rest: 20,
+                                                              rounds: 5, moves: chop))
+        context.insert(session)
+        let names = try #require(session.routine?.moves.map(\.name))
+        // Both floor moves are core, so inside the floor block their
+        // original order holds — the sort is stable on purpose.
+        #expect(names == ["Kettlebell deadlift", "Beam row", "Incline push-up",
+                          "Dead bug", "Glute bridge"])
+    }
+
+    @Test("A finished session is a record and keeps the order it ran in")
+    func finishedIsFrozen() throws {
+        let context = try store()
+        let chop = [named("Dead bug"), named("Beam row"), named("Kettlebell deadlift")]
+        let session = PlannedSession(scheduledFor: .now, title: "Ran",
+                                     routine: IntervalRoutine(name: "Ran", work: 40, rest: 20,
+                                                              rounds: 3, moves: chop))
+        session.completedAt = .now
+        context.insert(session)
+        #expect(session.routine?.moves.map(\.name) == chop.map(\.name))
     }
 }

@@ -187,11 +187,14 @@ final class PlannedSession {
         // says she lifted.
         guard completedAt == nil else { return stored }
         // A session still ahead is the plan, and the plan keeps up: sidedness
-        // from the library, and her current loads, so the week already written
-        // asks for the ring she actually uses.
+        // from the library, her current loads, and the running order —
+        // standing first, the floor last — so a week written before the
+        // order existed runs in it too, without being rewritten. Her saved
+        // routines are deliberately not reordered; the order there is hers.
         return stored?
             .adoptingLibrarySidedness()
             .applyingLoads(from: MoveOverrides.table(in: modelContext))
+            .inRunningOrder()
     }
 
     var isComplete: Bool { completedAt != nil }
@@ -564,6 +567,14 @@ extension Move {
 extension IntervalRoutine {
     /// The routine with her loads applied throughout — rotation and warm-up
     /// both, though in practice only strength moves carry loads.
+    /// The rotation in the order a session runs (`MoveLibrary.ordered`).
+    /// The warm-up is left alone: it is flow, and already standing to floor.
+    func inRunningOrder() -> IntervalRoutine {
+        var copy = self
+        copy.moves = MoveLibrary.ordered(moves)
+        return copy
+    }
+
     func applyingLoads(from table: [String: Double]) -> IntervalRoutine {
         guard !table.isEmpty else { return self }
         var copy = self

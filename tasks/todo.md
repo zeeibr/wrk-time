@@ -93,16 +93,16 @@ Decisions proposed:
       implement changes (≤2). Same inputs, same refusal rules, new ordering.
 - [x] `PlanRepair` and `ExtraSession` inherit it, since both go through
       `rotation`.
-- [ ] UI: Moves tab grouped by **position** with pattern chips as filters;
+- [x] UI: Moves tab grouped by **position** with pattern chips as filters;
       equipment becomes a line on the row, not a section. Seeded routines
       re-ordered to the same rule.
 - [ ] Warm-up unchanged (it is flow, already standing→floor).
 
 ### Phase 2c — Form (her ask, 22 Aug: "im a beginner so i dont know much about form")
-- [ ] `MoveForm` lookup beside the library: set up · the movement · what you
+- [x] `MoveForm` lookup beside the library: set up · the movement · what you
       should feel · what goes wrong · stop if. Five lines, app voice, no
       medical claims. Reviewed against the coach brief.
-- [ ] Form card on the move sheet; one tap from the timer without leaving
+- [x] Form card on the move sheet; one tap from the timer without leaving
       the set.
 - [ ] Custom moves get form notes from the reviewer at approval; no form, no
       approval.

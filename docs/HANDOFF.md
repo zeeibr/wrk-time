@@ -725,3 +725,35 @@ No "Crush it!", no "Great job!", no exclamation marks.
    made materially easier.
 4. **The watch app.** Decided, never started. It reads the same store.
 5. **Cycle-aware programming**, only if she opts in.
+
+## 22 August 2026 — the reorganization
+
+Her brief: the app had grown disorganized; the timer no longer said what to
+pick up (it did, in the uncommitted tree — three weeks of August were never
+committed); moves were grouped by drawer when the same movement exists on
+four implements; sessions ran mat → standing → mat; she wants rep work as
+well as intervals, a baseline test, a clear "too light, move up" rule, and
+form notes because she has never been shown.
+
+Done today, in order, each committed and tested:
+
+1. August committed; the new ladder (15 lb single; 9/13/18/35 kettlebells;
+   no band, never bought). Remote "Remove fasting" commit merged, local won.
+2. `docs/COACH-BRIEF.md` — the one coach, from a three-person panel
+   (strength, fat loss, physiology) and her answers. Read it first.
+3. `MoveTaxonomy` — pattern and position for all 96 strength moves.
+4. `MoveLibrary.rotation` builds the coach's shape; offline templates are a
+   title and a lead implement; the validator and the pending-session read
+   seam order by position. The week already on her phone runs in the new
+   order without a rewrite.
+5. Moves tab by position with pattern chips.
+6. `MoveForm` — five lines of form per strength move; a card on the move
+   sheet and a Form button on the timer.
+
+Not done, in `tasks/todo.md`: session modes (reps / EMOM / AMRAP), the
+baseline test and weekly check, double progression replacing the pace
+rule, the setup buffer in the schedule, the two-implement validator rule
+(waits for the prompt to say it), the coach brief as the shared system
+prompt, the coach chat, aesthetics. Known small thing seen on Today: the
+"Weight · 7-day mean" value wraps at 168.4 lb.
+
