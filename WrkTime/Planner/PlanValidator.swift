@@ -19,11 +19,15 @@ enum PlanValidator {
         case nonsenseTiming(String)
         case duplicateDay(Int)
         case stubbed
+        /// Three implements in one session is a planning error, brief §8:
+        /// one by default, two at most, the second set out before she starts.
+        case tooManyImplements(String, Int)
 
         var errorDescription: String? {
             switch self {
             case .noSessions: "The week came back with no sessions."
             case .dayOutOfWeek(let day): "A session was scheduled on day \(day)."
+            case .tooManyImplements(let title, let count): "\"\(title)\" asks for \(count) implements; two is the most a session may need."
             case .emptyRotation(let title): "\"\(title)\" has no moves."
             case .unknownEquipment(let raw): "\"\(raw)\" is not equipment that exists."
             case .unknownMove(let raw): "\"\(raw)\" is not a move in the library."
@@ -107,6 +111,12 @@ enum PlanValidator {
             // is the app's.
             let moves = MoveLibrary.ordered(
                 try session.moves.map { try move(from: $0, extras: extras) })
+            // Brief §8: one implement by default, two at most. A third is
+            // fetching mid-session, which is the complaint this exists for.
+            let implements = MoveLibrary.implements(in: moves).count
+            guard implements <= 2 else {
+                throw Failure.tooManyImplements(session.title, implements)
+            }
             return (session.dayOffset,
                     IntervalRoutine(name: session.title,
                                     work: TimeInterval(session.work),

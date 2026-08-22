@@ -364,6 +364,13 @@ struct MoveLibraryView: View {
         row.sidedRaw = entry.sided == "none" ? nil : entry.sided
         row.muscles = entry.muscles.isEmpty ? nil : entry.muscles
         row.note = entry.note.isEmpty ? nil : entry.note
+        if let form = entry.form {
+            row.formSetUp = form.setUp
+            row.formMovement = form.movement
+            row.formFeel = form.feel
+            row.formWrong = form.wrong
+            row.formStopIf = form.stopIf
+        }
     }
 
     /// The sheet's two asks of Claude, drawn as outlined rows — label left,

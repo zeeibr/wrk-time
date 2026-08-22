@@ -70,7 +70,7 @@ struct MoveSheet: View {
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if let form = MoveForm.notes(for: move.name) {
+                    if let form = CustomMoves.form(for: move.name, in: context) {
                         FormCard(form: form).padding(.top, 18)
                     }
 

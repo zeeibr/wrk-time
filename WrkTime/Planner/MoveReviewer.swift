@@ -34,6 +34,17 @@ struct MoveReviewer: Sendable {
         var sided: String
         var muscles: String
         var note: String
+        /// The five form lines, required of an approval. Optional in the
+        /// struct so a stored response from before they were asked decodes.
+        var form: Form?
+
+        struct Form: Codable, Sendable {
+            var setUp: String
+            var movement: String
+            var feel: String
+            var wrong: String
+            var stopIf: String
+        }
 
         var isApproved: Bool { verdict == "approved" }
         var isFlow: Bool { kind == MoveKind.flow.rawValue }
@@ -230,7 +241,7 @@ struct MoveReviewer: Sendable {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["name", "verdict", "kind", "equipment", "loadPounds",
-                             "cue", "sided", "muscles", "note"],
+                             "cue", "sided", "muscles", "note", "form"],
                 "properties": [
                     "name": [
                         "type": "string",
@@ -272,6 +283,19 @@ struct MoveReviewer: Sendable {
                     "note": [
                         "type": "string",
                         "description": "For a rejection, one plain sentence saying why. For an approval, empty."
+                    ],
+                    "form": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["setUp", "movement", "feel", "wrong", "stopIf"],
+                        "description": "Five one-sentence form notes for a beginner who has never been shown. Empty strings on a rejection.",
+                        "properties": [
+                            "setUp": ["type": "string", "description": "Where the feet, hands and implement are before anything moves."],
+                            "movement": ["type": "string", "description": "What moves, in what order, how fast."],
+                            "feel": ["type": "string", "description": "Where the work should land."],
+                            "wrong": ["type": "string", "description": "The mistake a beginner makes, and what to do instead."],
+                            "stopIf": ["type": "string", "description": "The signal that means stop — pain named by place, never effort."]
+                        ]
                     ]
                 ]
             ]
@@ -281,43 +305,51 @@ struct MoveReviewer: Sendable {
         ]
     ]}
 
-    static let systemPrompt = """
-    You curate the move library of a home training app called Almanac, for its \
-    one user: a 34-year-old woman, new to lifting.
+    /// The coach brief, then what only code can say: the kit with its loads
+    /// (from the enum) and what a library move is. One coach for the planner
+    /// and the reviewer, so a move the reviewer approves is one the planner
+    /// would have written.
+    static var systemPrompt: String {
+        """
+        You curate the move library of a home training app called Almanac, for \
+        its one user. You are the coach described below; the brief's rules — \
+        what a move must name to be accepted, what is never proposed — are \
+        yours here.
 
-    THE KIT — nothing else exists
-    - Dumbbell pairs at 2, 3 and 5 lb (always used as a pair)
-    - Single dumbbells at 10 and 15 lb — one dumbbell, held in both hands, \
-    bought for core work like Russian twists. Never treat either as a pair; \
-    there is exactly one of each.
-    - One 15 lb Bala Beam
-    - Three Bala power rings: 5, 8 and 10 lb — three different weights, not a set
-    - Kettlebells at 9, 13, 18 and 35 lb
-    - A light resistance band
-    - Her own bodyweight
-    There is no bench, no bar, no bands, no pull-up bar, no box. A move that \
-    needs any of those is rejected, not adapted into something she did not ask for.
+        ===== THE COACH BRIEF =====
+        \(CoachBrief.text)
+        ===== END OF THE BRIEF =====
 
-    WHAT A LIBRARY MOVE IS
-    Two kinds, and classifying is your job, never hers:
-    - 'strength': a lift or hold done for time — work intervals run 20 to 60 \
-    seconds — with one piece of the kit and one load that equipment can \
-    actually be set to. It joins the session rotations.
-    - 'flow': qi gong, mobility or lymphatic movement — continuous, unhurried, \
-    never counted down at. It joins her daily morning practice and the \
-    warm-ups. Almost always bodyweight with no load.
-    Approve only what a careful beginner can do alone on a mat at home. Reject \
-    anything that is really cardio, anything that needs a coach's eye to be \
-    safe (heavy hinges at speed, anything overhead and behind the neck), and \
-    any duplicate of a move the library already holds — say which one.
+        \(ClaudePlanner.kitSection)
 
-    Mark a move 'sides' when it is done one leg or arm at a time, and \
-    'directions' when it runs one way and then the other, like a halo. The \
-    timer then gives each side its own full work interval.
+        WHAT A LIBRARY MOVE IS
+        Two kinds, and classifying is your job, never hers:
+        - 'strength': a lift or hold done for sets or for time, with one piece \
+        of the kit and one load that equipment can actually be set to. It joins \
+        the session rotations.
+        - 'flow': qi gong, mobility or lymphatic movement — continuous, \
+        unhurried, never counted down at. It joins her daily morning practice \
+        and the warm-ups. Almost always bodyweight with no load.
+        Approve only what a careful beginner can do alone on a mat at home. \
+        Reject anything that is really cardio, anything that needs a coach's \
+        eye to be safe (heavy hinges at speed, anything overhead and behind the \
+        neck, the kettlebell swing), and any duplicate of a move the library \
+        already holds — say which one.
 
-    VOICE — every cue and note
-    Plain, warm, specific. Name the real equipment and the real load. One \
-    sentence. Never exclaim, never imply she failed, no emoji. In register: \
-    "The 10 lb ring between the feet. Hinge, don't squat."
-    """
+        Mark a move 'sides' when it is done one leg or arm at a time, and \
+        'directions' when it runs one way and then the other, like a halo. The \
+        timer then gives each side its own full work interval.
+
+        FORM
+        Every approval carries five form lines for someone who has never been \
+        shown: set up, the movement, what to feel, what goes wrong, stop if. \
+        One sentence each, in the brief's voice. Effort is never the stop \
+        signal; pain named by place is.
+
+        VOICE — every cue, note and form line
+        Plain, warm, specific. Name the real equipment and the real load. One \
+        sentence. Never exclaim, never imply she failed, no emoji. In register: \
+        "The 10 lb ring between the feet. Hinge, don't squat."
+        """
+    }
 }

@@ -406,6 +406,14 @@ enum PlannerService {
                     .map { $0.applyingLoad(from: overrides) }
                 return LoadProgression.all(in: library, context: context).map(\.line)
             }(),
+            baseline: {
+                let tests = RoutineRuns.all(in: context).filter { $0.source == .test }
+                guard let latest = tests.max(by: { $0.finishedAt < $1.finishedAt }) else { return [] }
+                let days = Calendar.current.dateComponents([.day], from: latest.finishedAt, to: .now).day ?? 0
+                let results = Baseline.results(for: latest, in: context).map(\.line)
+                guard !results.isEmpty else { return [] }
+                return ["\(latest.name), \(days == 0 ? "today" : "\(days) days ago"):"] + results
+            }(),
             workload: workload(for: block, in: context)
         )
     }

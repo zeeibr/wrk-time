@@ -456,6 +456,21 @@ final class CustomMove {
     /// worth knowing about an approval.
     var note: String?
     var addedAt: Date = Date()
+    /// The five form lines (`MoveForm`), written by the review at approval.
+    /// Optional: rows approved before form was asked for have none, and
+    /// a custom move without them shows its cue alone.
+    var formSetUp: String?
+    var formMovement: String?
+    var formFeel: String?
+    var formWrong: String?
+    var formStopIf: String?
+
+    var form: MoveForm? {
+        guard let formSetUp, let formMovement, let formFeel, let formWrong, let formStopIf,
+              !formSetUp.isEmpty, !formMovement.isEmpty else { return nil }
+        return MoveForm(setUp: formSetUp, movement: formMovement, feel: formFeel,
+                        wrong: formWrong, stopIf: formStopIf)
+    }
 
     enum Status: String { case queued, approved, rejected }
 
@@ -484,6 +499,17 @@ enum CustomMoves {
     static func all(in context: ModelContext) -> [CustomMove] {
         (try? context.fetch(FetchDescriptor<CustomMove>(
             sortBy: [SortDescriptor(\.addedAt)]))) ?? []
+    }
+
+    /// Form notes for a move by name: the library's table first, then an
+    /// approved addition's own. One question, asked the same way by the
+    /// move sheet and the timer.
+    static func form(for name: String, in context: ModelContext) -> MoveForm? {
+        if let built = MoveForm.notes(for: name) { return built }
+        let key = MovePreference.key(name)
+        return all(in: context)
+            .first { $0.status == .approved && MovePreference.key($0.name) == key }?
+            .form
     }
 
     /// Every approved addition, whatever its kind.

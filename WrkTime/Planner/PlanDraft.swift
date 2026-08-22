@@ -41,6 +41,11 @@ struct PlanContext: Sendable {
     /// on these moves or speak to the step, never assign it.
     var readyForMore: [String] = []
 
+    /// Her latest baseline or weekly check, as the result sentences
+    /// `Baseline` writes, with how long ago. Where she is, measured — the
+    /// coach programs from it and never re-runs it.
+    var baseline: [String] = []
+
     /// How much she actually did in the last seven days.
     ///
     /// Her ask, in her words: *"sometimes i do a lot of them in a day and i want
@@ -118,6 +123,9 @@ struct PlanContext: Sendable {
         }
         if !readyForMore.isEmpty {
             lines.append("Her counted reps say these moves have outgrown their load: \(readyForMore.joined(separator: " ")) The change is hers to make in the library — program around it or speak to it, never assign it.")
+        }
+        if !baseline.isEmpty {
+            lines.append("Where she is, from her last test: \(baseline.joined(separator: " "))")
         }
         // The timer gives a sided move one full work interval per side, so a
         // turn on one costs double. Said here because the schema cannot say it,

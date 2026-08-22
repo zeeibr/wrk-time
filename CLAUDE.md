@@ -38,12 +38,13 @@ block. Tests must never add to that — see the Workflow note below.
 
 ## The coach
 
-`docs/COACH-BRIEF.md` is the app's one coach — the programming rules
+`WrkTime/Coach/COACH-BRIEF.md` (linked as `docs/COACH-BRIEF.md`) is the app's one coach — the programming rules
 (modes, rest, setup buffers, the session shape, double progression, testing
 as extras) settled with a coaching panel and with her on 22 August 2026. It
-is hers to correct. Every model call is to read it as the standing system
-prompt (Phase 6 of `tasks/todo.md`); until then the local arithmetic already
-follows it. When a rule here and a rule there disagree, the brief wins.
+is hers to correct. It ships in the bundle (`CoachBrief.text`) and is the body of both the
+planner's and the reviewer's system prompt; the kit, the library by pattern
+and the response rules are generated from the enums after it, so nothing
+about the kit is typed twice. The local arithmetic follows it too. When a rule here and a rule there disagree, the brief wins.
 
 Three lookups sit beside the library and are never stored fields, so no
 routine on disk changes shape: `MoveMuscles` (display), `MoveTaxonomy`

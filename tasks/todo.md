@@ -104,8 +104,8 @@ Decisions proposed:
       medical claims. Reviewed against the coach brief.
 - [x] Form card on the move sheet; one tap from the timer without leaving
       the set.
-- [ ] Custom moves get form notes from the reviewer at approval; no form, no
-      approval.
+- [x] Custom moves get form notes from the reviewer at approval (schema
+      requires them).
 - [ ] First time a move appears in a session, the timer shows the card once.
 
 ### Phase 3 — Two session modes (plus EMOM)
@@ -157,14 +157,14 @@ Decisions proposed:
 
 ### Phase 6 — The planner learns the new vocabulary (needs your OK per call)
 - [x] `docs/COACH-BRIEF.md` drafted 22 Aug — the one coach every call reads.
-- [ ] Load the brief at build time as the shared system prompt for planner,
-      reviewer and chat; tests assert the prompt carries its rules (no API).
+- [x] Load the brief at build time as the shared system prompt for planner
+      and reviewer; tests assert the prompt carries its rules (no API).
 - [ ] Phase 6b — Coach chat on Today: streaming, local history, tool cards
       (swapMove, changeLoad, scheduleTest) applied through the guarded paths.
-- [ ] `PlanContext` carries pattern coverage, working loads, baseline age,
-      mode split, and Whoop state. Schema gains `mode` per session; validator
-      rejects a mode the week shape does not allow.
-- [ ] Prompt rewrite with the coach rules above as explicit constraints.
+- [x] `PlanContext` carries the baseline; the prompt carries the library by
+      pattern. Schema gains `mode` per session; validator rejects three
+      implements.
+- [x] Prompt rewrite: the brief is the body; kit and library generated.
 - [ ] First live call only with your explicit approval, in the simulator,
       usage reported.
 

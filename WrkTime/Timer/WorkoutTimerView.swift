@@ -261,7 +261,7 @@ struct WorkoutTimerView: View {
                         Text(move.equipmentLabel)
                             .almanacLabel(Palette.mute, small: true)
                             .padding(.top, 6)
-                        if let form = MoveForm.notes(for: move.name) {
+                        if let form = CustomMoves.form(for: move.name, in: context) {
                             FormCard(form: form).padding(.top, 18)
                         } else {
                             Text(move.cue)
@@ -796,7 +796,7 @@ struct WorkoutTimerView: View {
                 // is what she reads mid-set, the notes are what she reads
                 // before the first one. Her ask — she is new to this and
                 // has not been shown.
-                if MoveForm.notes(for: move.name) != nil {
+                if CustomMoves.form(for: move.name, in: context) != nil {
                     Button { formFor = move } label: {
                         Text("Form")
                             .almanacLabel(foreground, small: true)
