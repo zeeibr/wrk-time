@@ -24,7 +24,6 @@ struct Archive: Codable {
     var sessions: [SessionRecord] = []
     var routines: [RoutineRecord] = []
     var weights: [WeightRecord] = []
-    var fasts: [FastRecord] = []
     var loggedSets: [LoggedSetRecord] = []
 
     /// Both default to empty, so a file written by an earlier build still
@@ -117,15 +116,6 @@ struct Archive: Codable {
         var loadPounds: Double?
     }
 
-    struct FastRecord: Codable {
-        var id: UUID
-        var lastBite: Date
-        var windowOpensHour: Int
-        var windowOpensMinute: Int
-        var windowClosesHour: Int
-        var windowClosesMinute: Int
-    }
-
     /// A filename you can recognise in a folder a year from now.
     var suggestedFilename: String {
         let stamp = exportedAt.formatted(.iso8601.year().month().day())
@@ -162,13 +152,6 @@ enum ArchiveService {
         archive.loggedSets = try context.fetch(FetchDescriptor<LoggedSet>()).map {
             .init(id: $0.id, date: $0.date, moveName: $0.moveName,
                   equipmentRaw: $0.equipmentRaw, reps: $0.reps, loadPounds: $0.loadPounds)
-        }
-        archive.fasts = try context.fetch(FetchDescriptor<FastWindow>()).map {
-            .init(id: $0.id, lastBite: $0.lastBite,
-                  windowOpensHour: $0.windowOpensHour,
-                  windowOpensMinute: $0.windowOpensMinute,
-                  windowClosesHour: $0.windowClosesHour,
-                  windowClosesMinute: $0.windowClosesMinute)
         }
         archive.preferences = try context.fetch(FetchDescriptor<MovePreference>()).map {
             .init(id: $0.id, moveName: $0.moveName, verdictRaw: $0.verdictRaw,
@@ -290,22 +273,6 @@ enum ArchiveService {
                                 loadPounds: record.loadPounds, date: record.date)
             set.id = record.id
             context.insert(set)
-            summary.added += 1
-        }
-
-        let existingFasts = Set(try context.fetch(FetchDescriptor<FastWindow>()).map(\.id))
-        for record in archive.fasts {
-            guard !existingFasts.contains(record.id) else {
-                summary.alreadyPresent += 1
-                continue
-            }
-            let window = FastWindow(lastBite: record.lastBite)
-            window.id = record.id
-            window.windowOpensHour = record.windowOpensHour
-            window.windowOpensMinute = record.windowOpensMinute
-            window.windowClosesHour = record.windowClosesHour
-            window.windowClosesMinute = record.windowClosesMinute
-            context.insert(window)
             summary.added += 1
         }
 

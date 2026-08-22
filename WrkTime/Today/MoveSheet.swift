@@ -18,6 +18,9 @@ struct MoveSheet: View {
     /// What the last change did to the plan, so the consequence is visible
     /// instead of being taken on trust.
     @State private var repairNote: String?
+    /// The load she just stepped up to from here, so the offer becomes an
+    /// acknowledgement rather than repeating itself.
+    @State private var appliedLoad: Double?
 
     private var verdict: MoveVerdict? {
         let matches = preferences.filter { $0.covers(move.name) }
@@ -72,6 +75,9 @@ struct MoveSheet: View {
                             .almanacLabel(Palette.mute, small: true)
                             .padding(.top, 14)
                     }
+
+                    history
+                    progression
                     if let repairNote {
                         Text(repairNote)
                             .font(.almanacBodySmall)
@@ -107,6 +113,111 @@ struct MoveSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - What you have done
+
+    /// The sessions this move was counted in, most recent first.
+    ///
+    /// A record, not a scoreboard. It states the sets in the order they were
+    /// done and leaves the reading to her: a session that went down is shown
+    /// exactly like one that went up, because a day with less in it is a fact
+    /// about that day and not a verdict on her. The only interpretation
+    /// offered is the plainest one — the best set, and when it was.
+    @ViewBuilder
+    private var history: some View {
+        let logs = SetLogs.history(for: move, in: context)
+        if !logs.isEmpty {
+            Rule().padding(.top, 18)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Counted").almanacLabel(Palette.mute, small: true)
+                Spacer(minLength: 8)
+                Text(bestLine(logs)).almanacLabel(Palette.mute, small: true).tabular()
+            }
+            .padding(.top, 14)
+            .padding(.bottom, 2)
+
+            ForEach(logs.reversed().prefix(6)) { log in
+                VStack(spacing: 0) {
+                    Rule()
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(log.date.formatted(.dateTime.day().month(.abbreviated)))
+                            .almanacLabel(Palette.mute, small: true)
+                            .tabular()
+                        Text(log.reps.map(String.init).joined(separator: ", "))
+                            .font(.almanacBody)
+                            .foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        if let pounds = log.loadPounds, pounds > 0 {
+                            Text("\(Int(pounds)) lb")
+                                .almanacLabel(Palette.mute, small: true)
+                                .tabular()
+                        }
+                    }
+                    .padding(.vertical, 9)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Rule()
+
+            Text(log(for: move))
+                .font(.almanacBodySmall)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+        }
+    }
+
+    /// The step up, when her counts have earned it. Offered, never urged: one
+    /// sentence, one button, and declining it is just not tapping. The load
+    /// change goes through `MoveOverrides` like any other, so it reaches
+    /// sessions already written and the cue text corrects itself.
+    @ViewBuilder
+    private var progression: some View {
+        if let suggestion = LoadProgression.suggestion(for: move, in: context),
+           appliedLoad == nil {
+            VStack(alignment: .leading, spacing: 0) {
+                Rule().padding(.top, 16)
+                Text(suggestion.line)
+                    .font(.almanacBody)
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
+                Text("Two sessions with every counted set quicker than the tempo wants — about 12 in a 40-second interval. Staying where you are is also a fine answer.")
+                    .font(.almanacBodySmall)
+                    .foregroundStyle(Palette.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+                Button("Move to \(Int(suggestion.nextPounds)) lb") {
+                    MoveOverrides.set(suggestion.nextPounds, for: move, in: context)
+                    appliedLoad = suggestion.nextPounds
+                    Haptics.transport()
+                }
+                .font(.almanacBody)
+                .foregroundStyle(Palette.moss)
+                .padding(.vertical, 12)
+            }
+        } else if let pounds = appliedLoad {
+            Text("\(move.name) now asks for \(Int(pounds)) lb — everywhere, including sessions already written.")
+                .font(.almanacBodySmall)
+                .foregroundStyle(Palette.saffronInk)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
+        }
+    }
+
+    /// "Best 12 · Aug 14", or nothing to say with one session behind it.
+    private func bestLine(_ logs: [SetLog]) -> String {
+        guard let best = logs.max(by: { $0.best < $1.best }), best.best > 0 else {
+            return "\(logs.count) \(logs.count == 1 ? "session" : "sessions")"
+        }
+        return "Best \(best.best) · \(best.date.formatted(.dateTime.day().month(.abbreviated)))"
+    }
+
+    private func log(for move: Move) -> String {
+        move.sided != nil
+            ? "Sets in the order you did them, one entry per side. Counted during the rest after each set."
+            : "Sets in the order you did them, counted during the rest after each set."
     }
 
     private func opinion(_ title: String, _ verdict: MoveVerdict,

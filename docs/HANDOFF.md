@@ -14,7 +14,10 @@ one specific set of equipment. Claude generates an adaptive multi-week program;
 the user runs it against a drift-free interval timer; weight and recovery come
 in from Apple Health and steer the next week's plan.
 
-**The equipment is the whole constraint.** Two 2 lb dumbbells, one 15 lb Bala
+**The equipment is the whole constraint.** Dumbbell pairs (2/3/5 lb), a single
+10 lb dumbbell — one dumbbell held in both hands, bought August 2026 for core
+work, its own `Equipment` case so nothing can treat it as a pair — an 18 lb
+kettlebell, a resistance band, one 15 lb Bala
 Beam, three Bala rings at **5, 8 and 10 lb — three separate items, used one at a
 time**, not a matched set — a walking pad, and bodyweight. Nothing else exists
 as far as this app is concerned, and `Equipment` in `WrkTime/Model/Equipment.swift` is a
@@ -40,12 +43,12 @@ asking.
 | Platforms | iPhone, Live Activity + Dynamic Island, and an Apple Watch standalone runner. |
 | AI scope | Adaptive multi-week program, re-planned weekly from weight trend and recovery. Not one-off workout generation. |
 | Persistence | SwiftData, synced through the user's private CloudKit database. |
-| Fasting | **Demoted.** Started as a headline feature with a functional-medicine lens; the user later cut it back. Stats stay visible, but it gets no tab and no hero screen — one cell on Today, one module on Signals, and an input to the projection. |
+| Fasting | **Removed.** Started as a headline feature, was demoted to an input, and in August 2026 the user asked for it to go entirely. `FastWindow`, the eating-window editor, the Today cell, the Signals module and the planner context line are all gone. Old archives with a `fasts` array still restore; the key is simply ignored. |
 | Functional-medicine lens | Circadian timing, sleep and recovery, stress load, minerals and hydration. Framed as education, never medical advice. |
 | Profile data | Entered by the user in `BlockSetupView` on first run. It previously opened with an invented starting weight and goal; that seed is gone. |
 | Design lane | **G, "Almanac."** |
 | Intensity | One dial, `Pace` — steady / building / hard. It changes sessions per week and how fast load climbs. It is **not** allowed to claim it moves the scale faster; see §9. |
-| Which lever moves the scale | Walking volume and the eating window she set. Stated plainly on Signals. The app never prescribes intake. |
+| Which lever moves the scale | Walking volume. Stated plainly on Signals. The app never prescribes intake. |
 | Disliked moves | Recorded, not hard-coded. She said "deweight things like pushups i dont like those", so push-ups ship as a seeded *preference* she can undo, not as a hole in the library. |
 | After a skipped move | Asked why, once, at the end — hurt / disliked / too hard / no room / no time. The answer changes next week's plan. Never asked mid-set. |
 | Flow work | Qi gong and lymphatic movement are in the kit as `.flow`, kept out of work intervals. Two named YouTube sequences are still to be matched. |
@@ -87,11 +90,155 @@ Four rules the code enforces, inherited from the mockups:
 2. **Sage never carries body text.** It does not clear 4.5:1 on oat.
 3. **One mark is one finished session.** A session started and abandoned earns
    nothing — `PlannedSession.completedAt` is the only thing that counts.
-4. **Fasting is an input, not a feature.** See the table above.
+4. **Fasting is not in the app.** It was an input for a while; the user removed it entirely. Nothing tracks, displays or asks about eating.
 
 ---
 
 ## 4. State of the build
+
+**Added 17 August 2026 — kit she can switch on and off, and two upper-body
+routines.** Her words: *"i dont have the resistance bands yet"* — the band was
+in the app months before it was in the house. `Tuning.ownedEquipment` now says
+what she actually has, and Settings §05 lists every switchable drawer with its
+move count. The enum stays closed; this is not a way to add equipment, only a
+way to say "not yet" about equipment already in it. Bodyweight and the pad are
+not on the list, because they are not hers to lose.
+
+The seam that matters: **`MoveLibrary.available` is what may be offered or
+generated; `MoveLibrary.all` is what things are read back against.** Rotations,
+`names` (the planner's schema enum), the sampler, both pickers and the reviewer
+take `available`; drawings, the sidedness repair and stored-routine lookups keep
+`all`, so a week written when she had the band still draws and still runs.
+`PlanValidator` rejects a move on kit she does not have — the last gate before
+the store, and it guards the offline planner too. `PlanContext` and the reviewer
+both say out loud what is missing, because the system prompts list the kit as a
+fixed fact and would otherwise contradict the schema.
+
+Switching a drawer off **rewrites the sessions already written**, the same path
+a ruled-out move takes; switching one back on changes nothing already written.
+Two seeded routines came with it: **Upper body** (push/pull alternating, the
+pull side leading on the two heaviest things she owns) and **Triceps** (every
+angle the elbow extends through, on the beam and the 8 lb ring rather than
+stranded on the 2 lb pairs — the audit's finding). Neither uses the band.
+
+**Two smaller things from the same stretch.** Today is drawn on the growth
+form as a **saffron arc** across its seventh of the current week's ring, on the
+ring's own wobble so it sits exactly on the week it marks and only ever on the
+week being lived — the one place on the drawing that means *now* rather than
+*done*. And a move you have recorded an opinion about keeps its muscle groups
+on the row: the verdict takes the equipment's place in saffron and the muscles
+follow in mute, because a ruled-out move still saying what it worked is exactly
+what you need when picking its replacement.
+
+**Two things this cost, both worth remembering.** The seed first used a
+separate "have I done this" `@AppStorage` flag, set *before* the write; the
+write did not land and the flag said the job was done for good. It is guarded
+on the stored value's own presence now — a one-shot marker can outlive the
+thing it marks. And **synthetic taps do not reach SwiftUI `Toggle`s** in this
+harness (the pre-existing Sound toggle does not respond either); a short drag
+across the switch does. Verified by hand: band off by default, on → the drawer
+returns to Moves live, off → the repair note reads "Nothing already written was
+using it."
+
+**Added 15 August 2026 — the 10 lb dumbbell, the core set, wider suggestions,
+and a setup pause.** She bought a single 10 lb dumbbell for core work.
+`Equipment.singleDumbbell` is its own case — one dumbbell held in both hands,
+never a pair — so `label(forLoad:)` says "One 10 lb dumbbell" where the pairs
+say "Two". Seven core moves joined the library: Russian twist and standing
+side bend on the new dumbbell, and forearm plank, side plank, lying leg raise,
+bicycle crunch and plank shoulder tap on bodyweight — core *strength*, never a
+claim about where fat comes off, because no move decides that. Side plank and
+the side bend are sided; all seven are in `MovePlates.deferred`. A seeded
+"Core foundation" `SavedRoutine` rides along, same precedent as the posture
+reset: her ask was a core start that respects a core that is not strong yet
+but still offers a bit of a challenge, so it runs easy-to-hard — dead bug and
+bird dog first, the holds last — at 30-second intervals, eight minutes with
+its warm-up, hers to edit or delete. Asked whether core could live on the kit
+rather than only the mat, five more joined — one loaded core pattern per
+implement, holds and slow carries rather than loaded flexion: beam overhead
+hold, ring half-kneeling overhead hold (sided), kettlebell around the body
+(both directions), dumbbell dead bug press on the pairs, and a front-rack
+march on the 10 lb single. The band deliberately has none: band core work is
+a Pallof press, and a Pallof press needs an anchor the kit does not have.
+Arm work followed, asked for by name: "Raise the platters" — her name for
+the barre serve-a-platter move, kept — and a straight-arm tricep press-back,
+both on the 2 lb pair. Framed as arm strength; the ask behind it (the
+underarm) is hers to hold, not the app's to promise against. And Season's
+lived week rows now open on tap: a day-by-day list of finished sessions and
+substantial extras, only days that held something, per the no-ledger rule.
+
+**Also 15 August 2026 — the coach audit, 124 moves, and the sampler.** At
+her ask, a subagent playing a veteran women's strength coach audited the
+whole catalog. Its fixes landed: the chin tuck's "neck" tag was outside the
+seven-word muscle vocabulary (now "back, core"), the beam hip thrust and
+good morning cues were rewritten (the first prescribed furniture, the second
+never said where the beam sits), the upright row cue now forbids the narrow
+high pull, the Russian twist cue insists on the lifted chest, and the
+pullover cue names one weight in both hands. Its additions landed too — 33
+strength moves and 5 floor-based flows, chosen against the gaps it found
+(pull volume, lateral and single-leg lower body, calves, grip, triceps
+beyond 2 lb) — taking the library to **124 moves: 96 strength, 28 flow**.
+Two proposals were declined: band lateral walks and clamshells want a mini
+loop around the thighs, which her long band is not. **Watch item:** the
+planner's schema name enum now carries ~96 strength names plus customs; the
+move object is `$ref`'d once so the compiled grammar should hold, but the
+next live plan is the real test — a 400 "schema too complex" would point
+here first.
+
+Same day, the repeat offer: "More today" now also offers the session she
+finished today — today's own or the next one pulled early, which is what
+`FinishedSessions.today` already answers — one more time. It runs the
+**frozen** routine from the completed row (her loads, her warm-up, exactly as
+done) through the `.extra` path, so it lands as a `RoutineRun` and never a
+second mark. Offered in both branches: beside a still-on-the-plan session
+and above the composed extra.
+
+**The drawings caught up (15 August 2026).** Adding 40 moves in a day left 65
+of 124 with no plate, so six agents drew in parallel, one per pose family, and
+their geometry was integrated centrally and validated against `MovePlateTests`
+in one pass. **88 of 124 moves are drawn now, up from 59.** The kettlebell got
+its own `Prop.bell` — a stroked body with a handle arch, never the dumbbell's
+filled disc, because eighteen pounds is not two — and `MovePlates` gained
+`kettlebell` and `singleDumbbell` arrays. "Air squat" needed no drawing at
+all: the bare `squat` strip was orphaned, every other squat being claimed by a
+longer key, so deleting it from `deferred` handed it over by the ordinary
+longest-match rule.
+
+**36 remain deferred, and `MovePlates.deferred` is now grouped by why**, which
+is the useful part. Only three are simply undrawn. Six are band moves, which
+have no `Prop` — a band is a line between the hands under tension and it
+genuinely changes the silhouette, so inventing one is a drawing decision
+rather than geometry. Twelve need a **pose builder that does not exist**:
+there is no prone, side-lying, seated or kneel-back builder, and `supine`
+places one arm, one leg and a pinned sole — that gap is what blocks the side
+plank, the superman, the Russian twist and the child's pose, and it is the
+single highest-value thing to build next. The rest were refused on principle:
+eight because the movement is smaller than the one-head panel rule (a chin
+tuck moves an inch, a static hold has one frame), and seven because the fact
+that names the move is invisible in both projections (a grip rotation, a
+wheel turn, a step that goes back *and* across). Those are the same call that
+dropped "Shaking" from the library, and they should not be quietly reversed.
+
+The sampler (same day, her ask: "try all the moves — keep track of what weve
+tried"): a flight of six untried strength moves at ten seconds on, ten off,
+from a section on Moves. "Tried" is **derived, never stored** — completed
+sessions' routines, `RoutineRun` move names, `SetLog` rows — so history
+counts retroactively and no second ledger can disagree with the first.
+Finishing a flight records a `RoutineRun` like any routine, which is exactly
+what advances the count; it earns no mark and stays under the tick floor on
+purpose. Verified end-to-end in the simulator: a finished flight moved the
+count and the next flight offered the next six. The by-muscle
+suggestions now ask for ten moves rather than four (four minus the
+near-duplicates `validated` demotes is how "core" once returned a single
+offer), carry her refusals into the prompt, and drop any suggestion
+`MovePreference.anyCovers` matches on the way out. And every session with a
+warm-up now takes a 30-second rest phase (`WarmUp.setupSeconds`) between the
+last flow movement and round one — time to get the kit out, shown as "Next up"
+with the first move, filing no reps because no set precedes it. The morning
+practice, all flow, never gets one. Weekly counts stopped capping at the
+target the same day: a week she finished six sessions of five reads 6/5 on
+Today, Season and the ring, which the ring's slot arithmetic was already built
+for.
 
 **Added 29 July 2026 — more than one workout a day.** Today used to dead-end:
 the finished branch of section 02 had no button, so a day the plan scheduled
@@ -166,7 +313,9 @@ the first time.
 | Season screen | Built | `WrkTime/Today/SeasonView.swift` |
 | Signals screen | Built | `WrkTime/Today/SignalsView.swift` |
 | Projection chart (from the approved mockup) | Built | `WrkTime/Today/ProjectionChart.swift` |
-| Eating window editor, manual weigh-ins | Built | `WrkTime/Today/EatingWindowView.swift`, `WeighInView.swift` |
+| Manual weigh-ins | Built | `WrkTime/Today/WeighInView.swift` |
+| Sided moves — a full work interval per side | Built, tested | `WrkTime/Timer/IntervalRoutine.swift` |
+| Custom-move queue, review, muscle suggestions | Built, live-verified Aug 8 2026 | `WrkTime/Planner/MoveReviewer.swift`, `WrkTime/App/MoveLibraryView.swift` |
 | Interrupted-session recovery | Built, tested | `WrkTime/Timer/ActiveSession.swift` |
 | Move preferences and skip reasons | Built, tested | `WrkTime/Model/MovePreference.swift`, `WrkTime/Today/SkipReviewView.swift` |
 | Backup and restore | Built | `WrkTime/Model/Archive.swift` |
@@ -175,12 +324,32 @@ the first time.
 | Flow warm-up on every session | Built, tested | `WrkTime/Model/WarmUp.swift` |
 | Timer-only routines — no moves | Built, tested | `WrkTime/Timer/RoutineBuilderView.swift` |
 | Move diagrams — drawn stick figures | Built, tested | `WrkTime/DesignSystem/MoveDiagram.swift`, `WrkTime/Today/MoveSheet.swift` |
+| Chronological extra-workout ticks on the rings | Built, tested | `GrowthForm.tickPositions` in `WrkTime/Today/GrowthForm.swift` |
+| Single 10 lb dumbbell + core move set | Built, tested | `Equipment.singleDumbbell`, `MoveLibrary` in `WrkTime/Model/Equipment.swift` |
+| Setup pause between warm-up and round one | Built, tested | `RoutineSchedule` in `WrkTime/Timer/IntervalRoutine.swift`, `WarmUp.setupSeconds` |
+| Loaded core work on every implement | Built, tested | `MoveLibrary` in `WrkTime/Model/Equipment.swift` |
+| The sampler — 10s tastes, tried/untried derived | Built, tested | `WrkTime/Model/MoveSampler.swift`, `WrkTime/App/MoveLibraryView.swift` |
+| Equipment she can switch on and off | Built, tested | `Tuning.ownedEquipment`, `Equipment.isOwned`, `MoveLibrary.available`, Settings §05 |
+| Week rows open to a day-by-day breakdown | Built | `WrkTime/Today/SeasonView.swift` |
+| Repeating the session finished today | Built | `TodayView.repeatOffer` |
+| Today drawn as a saffron arc on the current ring | Built | `GrowthForm.ringSegment` in `WrkTime/Today/GrowthForm.swift` |
+| Seeded routines — posture, core, upper body, triceps | Built | `WrkTimeApp.seed…Routine` |
 | **Watch app** | **Not started** | — |
 | **`LiveActivityIntent`** | **Not started** — lock screen is read-only | — |
 | Cycle-aware programming | Deliberately not built — opt-in only, awaiting her decision | — |
 
-90 tests in 14 suites. Builds and runs on the iPhone 17 Pro simulator and on a
+283 tests in 48 suites. Builds and runs on the iPhone 17 Pro simulator and on a
 physical iPhone 17 Pro.
+
+The extra-workout ticks (Aug 15 2026): a tick no longer lands at an arbitrary
+slot — `GrowthForm.tickPositions` places each `RoutineRun` just past the dot of
+the session it actually followed, from timestamps. Same-day extras cluster
+tight, a different-day extra steps wider, one before any session tucks ahead of
+the first dot, and a heavy day clamps inside its gap so it cannot collide with
+the next dot. The function is `nonisolated static` and pure — living on a
+SwiftUI view it would otherwise inherit `@MainActor`, which the app never
+noticed and the off-actor tests crashed on. Anything pure added to a view type
+for testability should carry the same keyword.
 
 ### What is still unverified
 
@@ -471,7 +640,6 @@ What the planner is told, and what it may do with each:
 | Recovery (sleep, HRV, resting heart rate) | Yes |
 | Moves she said hurt | Yes — absolute, overrides everything |
 | Moves she dislikes | Yes — rarely, never twice in a week |
-| Eating window | **No** — passed as context only |
 | Weight and goal | **No** — sessions are written the same either way |
 | Goal weight → `walkMinutes` | **Yes, and only here** |
 
@@ -479,7 +647,7 @@ What the planner is told, and what it may do with each:
 cannot move energy balance; walking can. So `walkMinutes` is the single number
 set with the goal in mind, bounded at 300 a week, climbing by at most ten
 minutes a week offline. The app states plainly on Signals which lever moves the
-scale — walking and the eating window she set — and never prescribes intake.
+scale — walking — and never prescribes intake.
 
 **Flow work is not strength work.** `MoveKind` separates them, and
 `MoveLibrary.moves(for:)` filters to `.strength`, so a spinal wave can never be
@@ -521,8 +689,19 @@ No "Crush it!", no "Great job!", no exclamation marks.
 - Branch: `claude/ai-fitness-planner-ios-nh2obt`. Push there, not to the
   default branch.
 - No pull request unless the user asks for one.
-- Health and fasting content is educational, never medical advice. That framing
+- Health content is educational, never medical advice. That framing
   is both correct and what keeps a health app through App Store review.
+- **A test must never be able to spend her money.** Ten test call sites used
+  `PlannerService.planWeek`'s default `ClaudePlanner()`, which reads her key out
+  of the Keychain and calls Anthropic for real — so every full suite run on a
+  machine with a key made up to ten genuine requests, once per call site, every
+  run. That is where the simulator's 485 requests and $37 came from; her phone,
+  doing the same job for real, had spent 62 cents. The launch guard was never at
+  fault: `planCurrentWeekIfNeeded` skips a week that already has sessions, and
+  opening the app into a written week costs nothing. Tests now go through
+  `ClaudePlanner.blocked`, whose `URLSession` fails every request before it
+  leaves the process. Keep the key off development simulators as well — two
+  independent reasons are the right number.
 - Tests: `xcodebuild test -project WrkTime.xcodeproj -scheme WrkTime
   -destination 'platform=iOS Simulator,name=iPhone 16'`, or ⌘U.
 - The API key is never committed, never in `UserDefaults`, never in a build

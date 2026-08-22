@@ -52,7 +52,10 @@ enum PlanValidator {
     static let walkCeiling = 300
 
     /// Validates and converts. Throws on the first thing that is wrong.
-    static func routines(from draft: PlanDraft) throws -> [(dayOffset: Int, routine: IntervalRoutine)] {
+    /// `extras` are her own approved additions — the one way the working
+    /// library is larger than the built-in one.
+    static func routines(from draft: PlanDraft,
+                         extras: [Move] = []) throws -> [(dayOffset: Int, routine: IntervalRoutine)] {
         guard !draft.sessions.isEmpty else { throw Failure.noSessions }
 
         // Two sessions on one day is the signature of a half-written week: the
@@ -97,7 +100,7 @@ enum PlanValidator {
                 throw Failure.nonsenseTiming("\"\(session.title)\" asks for \(session.rounds) rounds.")
             }
 
-            let moves = try session.moves.map(move(from:))
+            let moves = try session.moves.map { try move(from: $0, extras: extras) }
             return (session.dayOffset,
                     IntervalRoutine(name: session.title,
                                     work: TimeInterval(session.work),
@@ -123,11 +126,12 @@ enum PlanValidator {
     /// It also removed three fields from a definition paid for once per move
     /// slot per session, which is what put the compiled grammar over the size
     /// limit and returned 400 "schema too complex".
-    static func move(from draft: DraftMove) throws -> Move {
+    static func move(from draft: DraftMove, extras: [Move] = []) throws -> Move {
         // The library is closed, so a name outside it is a week that would draw
         // the wrong shape or none at all. Rejected here rather than papered
-        // over by a matcher further down.
-        guard let known = MoveLibrary.all.first(where: {
+        // over by a matcher further down. Her approved additions count as the
+        // library here — they went through their own review to earn it.
+        guard let known = (MoveLibrary.all + extras).first(where: {
             MovePreference.key($0.name) == MovePreference.key(draft.name)
         }) else {
             throw Failure.unknownMove(draft.name)
@@ -137,6 +141,14 @@ enum PlanValidator {
         // so too. A flow movement in a rotation becomes a work interval and
         // gets counted down at like a set.
         guard known.kind == .strength else {
+            throw Failure.unknownMove(draft.name)
+        }
+        // And the kit has to be in the house. The schema's name enum is built
+        // from what she owns, so this should be unreachable from a generated
+        // week — but the validator guards the offline planner too, and it is
+        // the last thing between a plan and the store. A week asking for a
+        // band she does not have is a week she cannot do.
+        guard known.equipment.isOwned else {
             throw Failure.unknownMove(draft.name)
         }
         return known

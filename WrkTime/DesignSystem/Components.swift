@@ -260,23 +260,23 @@ struct FieldButton: View {
     /// has to reach it — at the design alpha it is 1.74:1 against the field.
     private var edgeOpacity: Double {
         let increased = contrast == .increased
-        if prominent { return increased ? 0.55 : 0.25 }
+        if prominent { return increased ? 0.90 : 0.70 }
         return increased ? 0.80 : 0.45
     }
 
     var body: some View {
+        // Outlined at every prominence, per the approved mockup's field
+        // controls. Pause wore a solid saffron disc for a while, which spent
+        // the one colour that means "live" on a control that is always there —
+        // the live mark belongs beside the phase word, on work only.
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: prominent ? 22 : 17, weight: .medium))
-                .foregroundStyle(prominent ? Palette.field : foreground)
+                .foregroundStyle(foreground)
                 .frame(width: prominent ? 66 : 48, height: prominent ? 66 : 48)
                 .background {
-                    Circle()
-                        .fill(prominent ? Palette.saffron : Color.clear)
-                        .overlay {
-                            Circle().strokeBorder(foreground.opacity(edgeOpacity),
-                                                  lineWidth: 1)
-                        }
+                    Circle().strokeBorder(foreground.opacity(edgeOpacity),
+                                          lineWidth: prominent ? 1.6 : 1)
                 }
         }
         .buttonStyle(.plain)

@@ -195,6 +195,10 @@ enum Prop: Sendable {
     case ring(CGPoint)
     /// A dumbbell at each listed hand.
     case bells([CGPoint])
+    /// The kettlebell: a body with a handle arched over it, hanging from the
+    /// hand that grips it. Never the dumbbell's filled disc — eighteen pounds
+    /// is not two, and the handle is the whole difference.
+    case bell(CGPoint)
     /// The walking pad. `rise` lifts the far end.
     case pad(rise: Double)
     case wall(x: Double)
@@ -440,6 +444,62 @@ enum MovePlates {
     /// By name alone, for callers with no `Move` to hand.
     static func strip(for name: String) -> Strip? { byName[MovePreference.key(name)] }
 
+    /// Moves whose drawings are deliberately not made yet. Without this the
+    /// containment matcher hands "Ring bicep curl" the dumbbell curl strip —
+    /// the right body, the wrong implement in its hands — and a drawing of the
+    /// wrong thing is worse than none. Remove a name from here when its own
+    /// strip is drawn. Internal so the coverage test can hold the whole
+    /// library to account *except* exactly these.
+    /// Grouped by *why*, because the reasons are different and only one of
+    /// them is "nobody has drawn it yet". Anything here that a builder could
+    /// reach is a to-do; anything below the second heading is a decision.
+    ///
+    /// "Air squat" is deliberately absent from this set: the bare `squat`
+    /// strip is the plain bodyweight squat and nothing else claims it — every
+    /// other squat in the library is taken by a longer key (front, goblet,
+    /// split, deep) — so the ordinary longest-match rule hands it over, which
+    /// is the whole reason keys are matched by containment.
+    static let deferred: Set<String> = [
+        // NOT YET DRAWN. Reachable with the builders that exist.
+        "russian twist", "tall-kneeling press", "plank pull-through",
+
+        // NO PROP FOR IT. The band is a line between the hands under tension,
+        // and it genuinely changes the silhouette — `Prop` has no case for it,
+        // and inventing one is a drawing decision rather than geometry.
+        "band pull-apart", "band face pull", "band w raise",
+        "band external rotation", "band seated row", "band overhead press",
+
+        // NO BUILDER FOR THE SHAPE. There is no prone, side-lying, seated or
+        // kneel-back pose, and `supine` places one arm, one leg and a pinned
+        // sole. Each of these needs a builder before it can be drawn at all.
+        "forearm plank", "side plank", "lying leg raise", "bicycle crunch",
+        "plank shoulder tap", "superman", "one-leg bridge", "side leg lift",
+        "reverse tabletop hold", "child's pose reach", "thread the needle",
+        "wall angel",
+
+        // THE MOVEMENT IS SMALLER THAN THE PANEL RULE. Consecutive panels must
+        // differ by a head diameter to read as a change; a chin tuck moves an
+        // inch, a wrist curl less, and a bear hold's knees hover. Drawing any
+        // of these to clear the bar would be drawing a movement she is not
+        // doing — the same call that dropped "Shaking" from the library.
+        "chin tuck", "ring wrist curl", "bear hold", "single-leg calf raise",
+        "pelvic rocks", "knee sways", "kettlebell calf raise",
+        // A static hold has one frame. Two panels can only differ by inventing
+        // an entry the move does not contain — a clean, in these two cases.
+        "kettlebell rack hold", "kettlebell suitcase hold",
+
+        // THE DISTINGUISHING FACT IS INVISIBLE IN BOTH PROJECTIONS. A grip
+        // rotation, a wheel turn, a step that goes back *and* across, a chop
+        // across the body: side-on collapses the across, front-on mirrors
+        // what it draws, and neither can hold the thing that names the move.
+        "ring hammer curl", "ring bus driver", "ring chop", "beam curtsy lunge",
+        // The Zottman turns the forearm over and the scaption lifts in the
+        // plane halfway between front and side: front-on the scaption is the
+        // lateral raise, side-on it is the front raise, and the Zottman is the
+        // bicep curl either way.
+        "zottman curl", "scaption raise"
+    ]
+
     /// Every library move to its drawing, resolved once at launch. The library
     /// is fixed, so the longest-key-wins rule that makes "split squat" beat
     /// "squat" runs here rather than on every lookup.
@@ -447,6 +507,7 @@ enum MovePlates {
         var table: [String: Strip] = [:]
         for move in MoveLibrary.all {
             let key = MovePreference.key(move.name)
+            guard !deferred.contains(key) else { continue }
             if let strip = sorted.first(where: { key.contains($0.key) }) {
                 table[key] = strip
             }
@@ -457,7 +518,8 @@ enum MovePlates {
 
     private static let sorted: [Strip] = all.sorted { $0.key.count > $1.key.count }
 
-    static let all: [Strip] = beam + rings + dumbbells + bodyweight + flow
+    static let all: [Strip] = beam + rings + dumbbells + singleDumbbell
+        + kettlebell + bodyweight + flow
 
     // MARK: Beam
     //
@@ -518,6 +580,44 @@ enum MovePlates {
                 .holding { [.beam($0.hip), .ledge(x: 0.34, y: Anatomy.floorY + 0.30 * Anatomy.head + 1.15 * Anatomy.head)] },
             .supine(width: 1.0, hipLift: 1.15, shoulderLift: 1.15, kneeUp: 1.15, armAngle: 92)
                 .holding { [.beam($0.hip), .ledge(x: 0.34, y: Anatomy.floorY + 0.30 * Anatomy.head + 1.15 * Anatomy.head)] }
+        ], signature: 1),
+
+        // A hold has one position, so the strip shows the way into it: racked,
+        // then locked out with the arms by the ears. Side-on rather than
+        // front-on like the overhead press — the hold is the stacked line,
+        // wrist over shoulder over hip, which is a sagittal fact.
+        Strip(key: "beam overhead hold", equipment: .beam, facing: .side, panels: [
+            .side(sink: 1.00, shoulder: 88, elbow: 176).holding { [.beam($0.chest)] },
+            .side(sink: 1.00, shoulder: 172, elbow: 4).holding { [.beam($0.hand)] }
+        ], signature: 1),
+
+        // Front-on: both hands on one bar is the whole difference from the
+        // dumbbell curl, and side-on the two drawings would differ only by the
+        // mark at the hand. The elbows hold still in both panels — that is the
+        // cue — and the travel is carried by the hands.
+        Strip(key: "beam curl", equipment: .beam, facing: .front, panels: [
+            .front(spread: 8, elbow: 4).holding { [.beam(midpoint($0.hands))] },
+            .front(spread: 8, elbow: 160).holding { [.beam(midpoint($0.hands))] }
+        ], signature: 1),
+
+        // Panel 0 is the beam floor press's lockout, honestly, because that is
+        // where this move starts. So the signature is the lowered frame, or a
+        // list row would show the two moves as the same drawing.
+        Strip(key: "beam triceps extension", equipment: .beam, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0)
+                .holding { [.beam($0.hand, angle: 90)] },
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0, armBend: -100)
+                .holding { [.beam($0.hand, angle: 90)] }
+        ], signature: 1),
+
+        // Front-on, because the step is sideways and side-on it collapses to a
+        // foreshortened line. `shift` is what makes it the move rather than a
+        // wide squat: the hips travel over one foot, so that knee bends and the
+        // far leg comes out straight on its own.
+        Strip(key: "beam lateral lunge", equipment: .beam, facing: .front, panels: [
+            .front(spread: 34, elbow: 128).holding { [.beam(midpoint($0.hands))] },
+            .front(sink: 0.35, spread: 34, elbow: 128, stance: 3.1, shift: 0.55)
+                .holding { [.beam(midpoint($0.hands))] }
         ], signature: 1)
     ]
 
@@ -561,6 +661,74 @@ enum MovePlates {
         Strip(key: "ring deadlift", equipment: .rings, facing: .side, panels: [
             .side(sink: 0.86, lean: 34, shoulder: 6, elbow: 4).holding { [.ring($0.hand)] },
             .side(sink: 0.74, lean: 70, shoulder: 4, elbow: 4).holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        // One arm, elbow pinned: the upper arm holds still in both panels and
+        // only the forearm sweeps. The far arm hangs throughout, which is what
+        // makes this read as one arm at a time rather than as the dumbbell
+        // curl with a ring drawn on it. It must stay in both panels.
+        Strip(key: "ring bicep curl", equipment: .rings, facing: .side, panels: [
+            .side(shoulder: 6, elbow: 34, farArm: (6, 4)).holding { [.ring($0.hand)] },
+            .side(shoulder: 6, elbow: 140, farArm: (6, 4)).holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        // Side-on rather than front-on like the dumbbell Arnold press, because
+        // this one is a single arm and `front` mirrors what it draws. Panel 0
+        // is the ring at the chin with the elbow tucked; the rotation itself is
+        // not drawable and is not attempted.
+        Strip(key: "ring arnold press", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.24, shoulder: -6, elbow: 160, farArm: (6, 4))
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.24, shoulder: 172, elbow: 4, farArm: (6, 4))
+                .holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        // The hinge is held across both panels so the arm is the only thing
+        // that moves — the difference between this and the ring row, where the
+        // elbow folds and the arm stays under the shoulder.
+        Strip(key: "ring behind-back raise", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.26, sink: 0.90, lean: 55, shoulder: -35, elbow: -4)
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.26, sink: 0.90, lean: 55, shoulder: -85, elbow: -6)
+                .holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        // A hold, so the travel is the entry — the wall sit's answer. The ring
+        // is overhead in both panels because it never leaves there; what
+        // changes is the body under it.
+        Strip(key: "ring half-kneeling overhead hold", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.25, sink: 1.00, shoulder: 178, elbow: 2, split: 0.2)
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.25, sink: 0.12, shoulder: 178, elbow: 2, split: 2.5)
+                .holding { [.ring($0.hand)] }
+        ], signature: 1),
+
+        // The elbow is identical in both panels and only the forearm moves,
+        // which is the cue read literally. Signature 0 — the ring behind the
+        // head is what names this move; the finish is a figure with an arm up,
+        // like four others in the library.
+        Strip(key: "ring triceps extension", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.20, shoulder: 172, elbow: -232).holding { [.ring($0.hand)] },
+            .side(anchorX: 0.20, shoulder: 172, elbow: 4).holding { [.ring($0.hand)] }
+        ], signature: 0),
+
+        // The glute bridge with the ring on the hip bones, drawn the way the
+        // beam hip thrust is — the ring rides at `hip` so it travels with her
+        // rather than sitting at a number kept in step by hand.
+        Strip(key: "ring bridge", equipment: .rings, facing: .front, panels: [
+            .supine(width: 1.0, hipLift: 0, kneeUp: 1.15, armAngle: 92)
+                .holding { [.ring($0.hip)] },
+            .supine(width: 1.0, hipLift: 1.05, kneeUp: 1.15, armAngle: 92)
+                .holding { [.ring($0.hip)] }
+        ], signature: 1),
+
+        // The dumbbell kickback's hinge and pinned upper arm — the same
+        // movement, and the kit is what the strip draws.
+        Strip(key: "ring kickback", equipment: .rings, facing: .side, panels: [
+            .side(anchorX: 0.20, sink: 0.94, lean: 46, shoulder: -50, elbow: 94)
+                .holding { [.ring($0.hand)] },
+            .side(anchorX: 0.20, sink: 0.94, lean: 46, shoulder: -50, elbow: 2)
+                .holding { [.ring($0.hand)] }
         ], signature: 1)
     ]
 
@@ -639,6 +807,178 @@ enum MovePlates {
                 .holding { [.bells($0.hands)] },
             .side(anchorX: 0.16, shoulder: 86, elbow: 4, farArm: (56, 106))
                 .holding { [.bells($0.hands)] }
+        ], signature: 1),
+
+        // Her own name for the barre move: forearms out level at the waist,
+        // then straight arms to shoulder height. Signature 0 — panel 1 is the
+        // front raise's finish almost exactly, and the platter carry is what
+        // names the move.
+        Strip(key: "platters", equipment: .dumbbells, facing: .side, panels: [
+            .side(anchorX: 0.16, shoulder: 6, elbow: 84).holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.16, shoulder: 88, elbow: 4).holding { [.bells([$0.hand])] }
+        ], signature: 0),
+
+        // Standing tall, straight arms sweeping back and up. Upright, which is
+        // the whole distinction from the kickback: same triceps, no hinge.
+        Strip(key: "press-back", equipment: .dumbbells, facing: .side, panels: [
+            .side(anchorX: 0.28, shoulder: -4, elbow: -2).holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.28, shoulder: -46, elbow: -4).holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // The arms hold still and the leg travels — "arms straight the whole
+        // time" is the cue, so `armBend` is 6 rather than the builder's 16.
+        // The bell is what separates this row from the bodyweight dead bug.
+        Strip(key: "dead bug press", equipment: .dumbbells, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.30, armAngle: 0, armBend: 6)
+                .holding { [.bells([$0.hand])] },
+            .supine(width: 1.0, kneeUp: 0.35, armAngle: 0, armBend: 6)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // Elbow down on the deck with the forearm vertical, then pressed
+        // straight up. Signature 0: the beam floor press already owns the
+        // pressed-up frame, and the elbow on the floor names this one.
+        Strip(key: "dumbbell floor press", equipment: .dumbbells, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 90, armBend: -76)
+                .holding { [.bells([$0.hand])] },
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0, armBend: 4)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 0),
+
+        // Hinged and held there. The elbow drives back past the ribs and the
+        // forearm hangs, so the weight finishes at the hip — the beam and ring
+        // rows keep the upper arm still and swing the forearm forward instead,
+        // because they pull to an implement rather than to the hip.
+        Strip(key: "dumbbell row", equipment: .dumbbells, facing: .side, panels: [
+            .side(anchorX: 0.29, sink: 0.92, lean: 52, shoulder: 8, elbow: 6)
+                .holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.29, sink: 0.92, lean: 52, shoulder: -42, elbow: 48)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // Both hands meet on the spine, so the two bells land on the same point
+        // and draw as one disc — which is what two weights pressed together
+        // look like.
+        Strip(key: "squeeze press", equipment: .dumbbells, facing: .front, panels: [
+            .front(spread: 20, elbow: -153).holding { [.bells($0.hands)] },
+            .front(spread: 190, elbow: 1).holding { [.bells($0.hands)] }
+        ], signature: 0)
+    ]
+
+    // MARK: Kettlebell
+    //
+    // The bell hangs below the hand it is drawn at, so every pose here is
+    // chosen with that in mind: at the bottom of a hinge the body sits on the
+    // floor line, and nowhere does it cross a shin. That is why the hinges
+    // carry a small negative `footAhead` — a bell drawn over the near shin is
+    // a smudge, not a kettlebell.
+    //
+    // Every key is the full move name, because "deadlift", "goblet squat" and
+    // "squat" already exist and would win by containment otherwise.
+
+    private static let kettlebell: [Strip] = [
+        Strip(key: "kettlebell deadlift", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.24, sink: 1.00, shoulder: 16, elbow: 4, footAhead: -0.4)
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.24, sink: 0.82, lean: 70, shoulder: 14, elbow: 4, footAhead: -0.4)
+                .holding { [.bell($0.hand)] }
+        ], signature: 1),
+
+        // Elbows down and the bell in front of the chest. The arm folds tight
+        // rather than reaching, which is the difference between a goblet hold
+        // and the ring's press-out.
+        Strip(key: "kettlebell goblet squat", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.21, sink: 1.00, shoulder: 20, elbow: 142)
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.21, sink: 0.34, lean: 26, shoulder: 10, elbow: 150)
+                .holding { [.bell($0.hand)] }
+        ], signature: 1),
+
+        // A walk, so the stride and the free arm carry the change. The loaded
+        // arm hangs plumb in both panels — that is the move, and swinging it
+        // would draw a different one.
+        Strip(key: "kettlebell carry", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.24, sink: 0.90, shoulder: 2, elbow: 2, farArm: (28, 10), split: 1.5)
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.24, sink: 0.84, shoulder: 2, elbow: 2, farArm: (-28, 10), split: 2.2)
+                .holding { [.bell($0.hand)] }
+        ], signature: 1),
+
+        // Side-on, because the pass reads as front-then-behind: a front view
+        // puts half the circle out of sight behind the back. The hips do not
+        // move between the panels — only the arms — which is the cue.
+        Strip(key: "kettlebell around the body", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.24, shoulder: 34, elbow: 52, farArm: (-30, -24))
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.24, shoulder: -30, elbow: -24, farArm: (34, 52))
+                .holding { [.bell($0.hand)] }
+        ], signature: 0),
+
+        // The elbow goes back, not out: the upper arm draws back above the ribs
+        // and the forearm hangs plumb, so the bell finishes behind the thigh
+        // rather than on top of it.
+        Strip(key: "kettlebell row", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.22, sink: 0.90, lean: 58, shoulder: 4, elbow: 4)
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.22, sink: 0.90, lean: 58, shoulder: -84, elbow: 68)
+                .holding { [.bell($0.hand)] }
+        ], signature: 1),
+
+        // Front-on: wide feet and a bell hanging between them is the whole
+        // shape, and side-on it collapses to the goblet squat. The arms angle
+        // in so both hands meet on one handle.
+        Strip(key: "kettlebell sumo squat", equipment: .kettlebell, facing: .front, panels: [
+            .front(sink: 0.92, spread: -8, elbow: -4, stance: 2.2)
+                .holding { [.bell(midpoint($0.hands))] },
+            .front(sink: 0.16, spread: -8, elbow: -4, stance: 2.2)
+                .holding { [.bell(midpoint($0.hands))] }
+        ], signature: 1),
+
+        // No "kettlebell" in the name and still the kettlebell's move. The back
+        // foot is a little over a head behind and stays down: the builder has
+        // no heel to raise, and a lifted back foot would draw a one-leg
+        // deadlift.
+        Strip(key: "kickstand deadlift", equipment: .kettlebell, facing: .side, panels: [
+            .side(anchorX: 0.24, sink: 0.96, lean: 8, shoulder: 16, elbow: 4,
+                  split: 1.3, footAhead: -0.3)
+                .holding { [.bell($0.hand)] },
+            .side(anchorX: 0.24, sink: 0.86, lean: 70, shoulder: 14, elbow: 4,
+                  split: 1.3, footAhead: -0.3)
+                .holding { [.bell($0.hand)] }
+        ], signature: 1)
+    ]
+
+    // MARK: Single 10 lb dumbbell
+    //
+    // One dumbbell, held in both hands or one — never a pair. `Prop.bells`
+    // takes a list of hands, so a single is one hand and the pairs are two.
+
+    private static let singleDumbbell: [Strip] = [
+        // The hips travel one way and the trunk slants the other, with the head
+        // carrying it further — the same device the hip circle uses, which is
+        // all `front` has for a lateral bend.
+        Strip(key: "side bend", equipment: .singleDumbbell, facing: .front, panels: [
+            .front(spread: 6, elbow: 4).holding { [.bells([$0.hand])] },
+            .front(sink: 0.92, spread: 6, elbow: 4, tilt: -34, shift: 1.15)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // One dumbbell in both hands: the hands meet on the spine, so a single
+        // bell draws at the meeting point. The arms are identical in both
+        // panels because only the knee moves — the ribs stay stacked.
+        Strip(key: "dumbbell march", equipment: .singleDumbbell, facing: .front, panels: [
+            .front(spread: 20, elbow: -153).holding { [.bells([$0.hand])] },
+            .front(spread: 20, elbow: -153, footLift: 1.7).holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // Deeper than the beam deadlift on purpose: a 10 lb dumbbell standing
+        // on the floor is a short lever, and the hand has to get down to it.
+        // The bell lands beside the foot, which is the cue.
+        Strip(key: "suitcase deadlift", equipment: .singleDumbbell, facing: .side, panels: [
+            .side(anchorX: 0.26, sink: 1.00, lean: 4, shoulder: 2, elbow: 2)
+                .holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.26, sink: 0.45, lean: 58, shoulder: 2, elbow: 2)
+                .holding { [.bells([$0.hand])] }
         ], signature: 1)
     ]
 
@@ -862,7 +1202,17 @@ enum MovePlates {
             .side(sink: 1.00, lean: 0, shoulder: 14, elbow: 8),
             .side(sink: 0.98, lean: 50, shoulder: 8, elbow: 6),
             .side(sink: 0.90, lean: 88, shoulder: 4, elbow: 4)
-        ], signature: 2)
+        ], signature: 2),
+
+        // The sweep is frontal and both arms do the same thing, which is what
+        // `front` draws. Three panels because the arc is the movement. The wide
+        // panel is the signature rather than the overhead one: overhead at this
+        // scale is `arm circles` drawn a second time.
+        Strip(key: "sun breath", facing: .front, panels: [
+            .front(spread: 6, elbow: 6),
+            .front(spread: 88, elbow: 6),
+            .front(spread: 172, elbow: 6)
+        ], signature: 1)
     ]
 
     private static func midpoint(_ points: [CGPoint]) -> CGPoint {
@@ -1080,6 +1430,28 @@ struct MoveStrip: View {
                                                         width: r * 2, height: r * 2)),
                                  with: .color(line))
                 }
+
+            case .bell(let grip):
+                // The grip is the hand; the weight hangs under it. Stroked, not
+                // filled: at this size a bell is head-sized, and a disc that big
+                // reads as a hole punched in the panel rather than as iron.
+                let h = Anatomy.head
+                let seat = CGPoint(x: grip.x, y: grip.y - 0.62 * h)
+                let c = point(seat)
+                let r = 0.30 * h / facing.width * frame.width
+                context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r,
+                                                      width: r * 2, height: r * 2)),
+                               with: .color(line), style: body)
+                // Both ends sit on the body's rim and the arch passes through
+                // the hand, so she is holding the handle rather than hovering
+                // above it. Same weight as the body — this is held kit, not
+                // furniture.
+                var handle = Path()
+                handle.move(to: point(CGPoint(x: seat.x - 0.22 * h, y: seat.y + 0.20 * h)))
+                handle.addQuadCurve(
+                    to: point(CGPoint(x: seat.x + 0.22 * h, y: seat.y + 0.20 * h)),
+                    control: point(CGPoint(x: seat.x, y: grip.y + 0.42 * h)))
+                context.stroke(handle, with: .color(line), style: body)
 
             case .pad(let rise):
                 var deck = Path()

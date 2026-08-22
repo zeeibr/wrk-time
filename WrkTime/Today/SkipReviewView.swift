@@ -41,18 +41,32 @@ struct SkipReviewView: View {
                         .foregroundStyle(Palette.mute)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    // One compact row of reasons per move, not five tall rows
+                    // each. Eight skipped moves used to mean forty tappable
+                    // rows — a form where a question was wanted. The stated
+                    // consequence still appears, but only for the reason she
+                    // picks: that is the moment it is a fact about her plan
+                    // rather than five hypotheticals.
                     ForEach(Array(skipped.enumerated()), id: \.offset) { index, move in
                         IndexedSection(number: String(format: "%02d", index + 1), label: "Why") {
                             SectionHead(title: move, note: reasons[move] == nil ? nil : "Noted")
-                                .padding(.bottom, 4)
+                                .padding(.bottom, 8)
 
-                            ForEach(SkipReason.allCases) { reason in
-                                ReasonRow(reason: reason,
-                                          selected: reasons[move] == reason) {
-                                    reasons[move] = reason
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
+                                      spacing: 8) {
+                                ForEach(SkipReason.allCases) { reason in
+                                    reasonChip(reason, for: move)
                                 }
                             }
-                            Rule()
+
+                            if let picked = reasons[move] {
+                                Text(picked.consequence)
+                                    .font(.almanacBodySmall)
+                                    .foregroundStyle(Palette.moss)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.top, 8)
+                            }
+                            Rule().padding(.top, 12)
                         }
                     }
 
@@ -80,6 +94,29 @@ struct SkipReviewView: View {
         !skipped.isEmpty && skipped.allSatisfy { reasons[$0] != nil }
     }
 
+    /// The library's chip dialect: squared, outlined, ink-filled when chosen.
+    private func reasonChip(_ reason: SkipReason, for move: String) -> some View {
+        let chosen = reasons[move] == reason
+        return Button {
+            reasons[move] = chosen ? nil : reason
+        } label: {
+            Text(reason.label)
+                .font(.almanacBodySmall)
+                .foregroundStyle(chosen ? Palette.oat : Palette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(chosen ? Palette.ink : Color.clear)
+                .overlay(Rectangle().strokeBorder(chosen ? Palette.ink : Palette.ruleFirm,
+                                                  lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(reason.label)
+        .accessibilityHint(reason.consequence)
+        .accessibilityAddTraits(chosen ? [.isButton, .isSelected] : .isButton)
+    }
+
     private func save() {
         for (move, reason) in reasons {
             MovePreferences.record(reason, for: move, in: context)
@@ -89,42 +126,3 @@ struct SkipReviewView: View {
     }
 }
 
-/// One reason, with what it will do stated beside it.
-private struct ReasonRow: View {
-    let reason: SkipReason
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 0) {
-                Rule()
-                HStack(alignment: .top, spacing: 12) {
-                    Rectangle()
-                        .fill(selected ? Palette.moss : Color.clear)
-                        .frame(width: 9, height: 9)
-                        .overlay { Rectangle().strokeBorder(Palette.moss.opacity(0.55), lineWidth: 1) }
-                        .padding(.top, 5)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(reason.label)
-                            .font(.almanacBody)
-                            .foregroundStyle(Palette.ink)
-                        Text(reason.consequence)
-                            .font(.almanacBodySmall)
-                            .foregroundStyle(selected ? Palette.moss : Palette.mute)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, 11)
-                .contentShape(Rectangle())
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(reason.label)
-        .accessibilityValue(reason.consequence)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-}

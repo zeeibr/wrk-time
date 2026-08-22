@@ -23,6 +23,13 @@ enum WarmUp {
     static let maximum = 5
     static let seconds: TimeInterval = 40
 
+    /// The pause between the last flow movement and round one — time to get
+    /// the kit out. The schedule used to step straight from a bare-handed
+    /// spinal wave into a loaded work interval, which left fetching the beam
+    /// or threading a ring to happen *during* the set. Half a minute: enough
+    /// to pick the weight up, not enough to cool down.
+    static let setupSeconds: TimeInterval = 30
+
     /// The practice for one day.
     ///
     /// Rotated by the date rather than shuffled, so the same day always
@@ -42,10 +49,7 @@ enum WarmUp {
         // with whatever is left rather than reaching past her to fill the slots.
         guard !allowed.isEmpty else { return [] }
 
-        let offset = dayIndex(date) * stride(taking: wanted, from: allowed.count)
-        return (0..<min(wanted, allowed.count)).map { step in
-            allowed[(offset + step) % allowed.count]
-        }
+        return Rotation.walk(allowed, taking: wanted, varying: Rotation.dayIndex(date))
     }
 
     /// The movements this day's session should open with, given what the
@@ -55,52 +59,25 @@ enum WarmUp {
     /// movement between them would be the app failing to notice it had already
     /// asked for it. Twelve flow movements, eight in the morning, four left —
     /// which is exactly a warm-up.
+    /// `library` is the whole flow pool for the day — built-ins plus her
+    /// approved flow additions where the caller has a store to read them from.
+    /// It is used for both halves of the question, deliberately: what the
+    /// practice used this morning and what is left must be answered against
+    /// the same pool or a custom movement could appear in both.
     static func afterPractice(on date: Date,
                               avoiding excluded: Set<String> = [],
                               count: Int = target,
-                              practiceCount: Int? = nil) -> [Move] {
-        let used = Set(Practice.moves(on: date, avoiding: excluded, count: practiceCount)
+                              practiceCount: Int? = nil,
+                              library: [Move] = MoveLibrary.flow) -> [Move] {
+        let used = Set(Practice.moves(on: date, avoiding: excluded, count: practiceCount,
+                                      library: library)
             .map { MovePreference.key($0.name) })
-        let left = MoveLibrary.flow.filter { !used.contains(MovePreference.key($0.name)) }
+        let left = library.filter { !used.contains(MovePreference.key($0.name)) }
         // If the practice took nearly everything, fall back to the whole
         // library rather than opening a session with one movement.
         guard left.count >= minimum else {
-            return moves(on: date, avoiding: excluded, count: count)
+            return moves(on: date, avoiding: excluded, count: count, library: library)
         }
         return moves(on: date, avoiding: excluded, count: count, library: left)
-    }
-
-    /// How far the window moves each day.
-    ///
-    /// It has to be coprime with the pool, or the rotation closes early: a
-    /// window of four stepping by four through twelve movements gives three
-    /// distinct practices, so every Thursday opens like every Monday. A fixed
-    /// `width + 1` fixed that for twelve and broke again at ten — dropping one
-    /// movement from the library was enough. Chosen against the actual pool
-    /// instead, so it cannot rot when the library changes size.
-    static func stride(taking width: Int, from pool: Int) -> Int {
-        guard pool > 1 else { return 1 }
-        let preferred = max(width + 1, 2)
-        // Walk outward from the preferred step to the first one that shares no
-        // factor with the pool.
-        for delta in 0..<pool {
-            for candidate in [preferred + delta, preferred - delta] where candidate > 0 {
-                if gcd(candidate % pool == 0 ? pool : candidate, pool) == 1 { return candidate }
-            }
-        }
-        return 1
-    }
-
-    private static func gcd(_ a: Int, _ b: Int) -> Int {
-        b == 0 ? abs(a) : gcd(b, a % b)
-    }
-
-    /// Days since the reference date, non-negative and stable across time zones
-    /// because it counts calendar days rather than dividing seconds.
-    static func dayIndex(_ date: Date, calendar: Calendar = .current) -> Int {
-        let days = calendar.dateComponents([.day],
-                                           from: Date(timeIntervalSinceReferenceDate: 0),
-                                           to: calendar.startOfDay(for: date)).day ?? 0
-        return abs(days)
     }
 }

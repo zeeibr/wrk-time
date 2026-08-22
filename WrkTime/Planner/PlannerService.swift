@@ -196,6 +196,9 @@ enum PlannerService {
             let outcome = Outcome(explanation: draft.explanation, source: .stepped(decision.reason),
                                   sessionsWritten: written, walkMinutes: draft.walkMinutes)
             Memo.record(outcome, week: weekNumber)
+            // A stepped-on week is still a written week; the widget must not
+            // learn about it only on the paths that asked Claude.
+            WidgetSnapshots.refresh(in: context)
             return outcome
         }
 
@@ -213,7 +216,7 @@ enum PlannerService {
             PlanTrigger.recordCall()
             // Parsing is not trusting. If the week breaks the kit or the
             // ceiling, it is discarded whole and the offline planner runs.
-            _ = try PlanValidator.routines(from: result.draft)
+            _ = try PlanValidator.routines(from: result.draft, extras: snapshot.customMoves)
             draft = result.draft
             source = .claude
         } catch {
@@ -227,7 +230,7 @@ enum PlannerService {
         // The offline draft is validated too. It is built from the real library
         // so it should always pass — and if a future edit breaks that, this is
         // where it surfaces rather than in a session she is halfway through.
-        guard let routines = try? PlanValidator.routines(from: draft) else {
+        guard let routines = try? PlanValidator.routines(from: draft, extras: snapshot.customMoves) else {
             // Recorded, not just returned. This path used to return before
             // `Memo.record`, so the sentence was written nowhere and shown
             // nowhere — Today found no sessions for the day, fell through to
@@ -247,6 +250,10 @@ enum PlannerService {
         let outcome = Outcome(explanation: draft.explanation, source: source,
                               sessionsWritten: written, walkMinutes: draft.walkMinutes)
         Memo.record(outcome, week: weekNumber)
+        // The overnight run is the one mutation made with the app closed, so
+        // the widget's fact sheet is rewritten here or it shows yesterday's
+        // week until she opens the app.
+        WidgetSnapshots.refresh(in: context)
         return outcome
     }
 
@@ -301,11 +308,15 @@ enum PlannerService {
             .map { calendar.startOfDay(for: $0.scheduledFor) })
 
         var written = 0
+        // Built-ins plus her approved flow additions — the same pool the
+        // morning practice draws from, so the warm-up's "what is left today"
+        // arithmetic holds.
+        let flowPool = MoveLibrary.flow + CustomMoves.flow(in: context)
         for entry in routines {
             guard let day = calendar.date(byAdding: .day, value: entry.dayOffset, to: start) else { continue }
             guard !trained.contains(calendar.startOfDay(for: day)) else { continue }
             let routine = entry.routine.warmingUp(
-                with: WarmUp.afterPractice(on: day, avoiding: excluded))
+                with: WarmUp.afterPractice(on: day, avoiding: excluded, library: flowPool))
             let session = PlannedSession(scheduledFor: day,
                                          title: entry.routine.name,
                                          routine: routine)
@@ -368,7 +379,6 @@ enum PlannerService {
         ))) ?? []
 
         let weights = (try? context.fetch(FetchDescriptor<WeightEntry>())) ?? []
-        let window = (try? context.fetch(FetchDescriptor<FastWindow>()))?.first
         let preferences = MovePreferences.lists(in: context)
 
         return PlanContext(
@@ -377,17 +387,25 @@ enum PlannerService {
             recent: Array(recent),
             loggedSets: sets.prefix(10).map(\.summary),
             weightNote: weightNote(block: block, entries: weights),
-            eatingWindow: window.map { window in
-                let opens = String(format: "%02d:%02d", window.windowOpensHour, window.windowOpensMinute)
-                let closes = String(format: "%02d:%02d", window.windowClosesHour, window.windowClosesMinute)
-                return "\(opens)–\(closes)"
-            },
             avoidedMoves: preferences.avoided,
             dislikedMoves: preferences.disliked,
             hardMoves: preferences.hard,
             // Threaded back in so week five reads as a continuation of week
             // four rather than as a fresh start with amnesia.
             lastExplanation: Memo.lastExplanation,
+            // Her approved strength additions ride along so the schema, the
+            // prompt and the validator all mean the same library. Strength
+            // only: a flow addition joins the practice pool instead, and in a
+            // rotation it would be counted down at like a set.
+            customMoves: CustomMoves.strength(in: context),
+            // Loads she has outgrown by her own counts, at the loads she
+            // actually lifts — overrides applied before the rule runs.
+            readyForMore: {
+                let overrides = MoveOverrides.table(in: context)
+                let library = (MoveLibrary.all + CustomMoves.strength(in: context))
+                    .map { $0.applyingLoad(from: overrides) }
+                return LoadProgression.all(in: library, context: context).map(\.line)
+            }(),
             workload: workload(for: block, in: context)
         )
     }

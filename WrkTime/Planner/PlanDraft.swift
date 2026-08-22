@@ -16,8 +16,6 @@ struct PlanContext: Sendable {
     var loggedSets: [String]
     /// The trailing weight mean and the projection, when she has set a goal.
     var weightNote: String?
-    /// Eating window, if one is recorded.
-    var eatingWindow: String?
     /// Walking minutes recorded in the last seven days, from Health.
     var recentWalkMinutes: Int?
     /// Pounds still to go, when she has set a goal. The only number the walking
@@ -32,6 +30,16 @@ struct PlanContext: Sendable {
     /// What the last generated week said, so this week reads as a continuation
     /// rather than a fresh start every time.
     var lastExplanation: String?
+
+    /// Moves she added to the library herself, already reviewed and approved.
+    /// They join the schema's name enum and the validator's lookup, so the
+    /// planner can program them like anything built in.
+    var customMoves: [Move] = []
+
+    /// Moves whose counted reps have outgrown their current load, as
+    /// ready-made sentences. The load change stays hers — the model may lean
+    /// on these moves or speak to the step, never assign it.
+    var readyForMore: [String] = []
 
     /// How much she actually did in the last seven days.
     ///
@@ -96,8 +104,31 @@ struct PlanContext: Sendable {
             // only spends thinking on resolving the contradiction.
             "Every session must fill all \(Tuning.movesPerSession) move slots. A session with an empty move list is discarded and the whole week is thrown away."
         ]
+        // What she does not have this week. The system prompt lists the whole
+        // kit as a fixed fact, so without this the model would be told she
+        // owns a band and then handed a move enum with no band moves in it —
+        // a contradiction it would spend thinking on resolving.
+        let missing = Equipment.switchable.filter { !$0.isOwned }
+        if !missing.isEmpty {
+            lines.append("She does not have these right now, whatever the kit list says — do not program them or mention them: \(missing.map { $0.label.lowercased() }.joined(separator: ", ")).")
+        }
         if let weightNote { lines.append("Weight: \(weightNote)") }
-        if let eatingWindow { lines.append("Eating window: \(eatingWindow)") }
+        if !customMoves.isEmpty {
+            lines.append("Moves she added to the library herself: \(customMoves.map(\.name).joined(separator: ", ")). Program them like any other move.")
+        }
+        if !readyForMore.isEmpty {
+            lines.append("Her counted reps say these moves have outgrown their load: \(readyForMore.joined(separator: " ")) The change is hers to make in the library — program around it or speak to it, never assign it.")
+        }
+        // The timer gives a sided move one full work interval per side, so a
+        // turn on one costs double. Said here because the schema cannot say it,
+        // and a model budgeting "roughly thirteen minutes" would otherwise
+        // write a session that honestly reports itself forty percent longer.
+        let sided = (MoveLibrary.all + customMoves)
+            .filter { $0.kind == .strength && $0.sided != nil }
+            .map(\.name)
+        if !sided.isEmpty {
+            lines.append("These moves run once per side, so each turn on them takes two work intervals — budget rounds accordingly: \(sided.joined(separator: ", ")).")
+        }
         if let recentWalkMinutes {
             lines.append("Walking in the last seven days: \(recentWalkMinutes) minutes.")
         } else {

@@ -23,6 +23,12 @@ struct ProjectionChart: View {
     /// Below this there is no line worth drawing.
     static let minimumReadings = 2
 
+    /// Which reading she is reading, if any. Nil is the resting state, where
+    /// the chart speaks for today. It survives the finger lifting — the point
+    /// of picking a day is to look at it — and tapping it again puts the
+    /// chart back on today.
+    @State private var scrubbed: Int?
+
     private var readings: [WeightEntry] {
         entries.sorted { $0.date < $1.date }.suffix(60)
     }
@@ -39,27 +45,102 @@ struct ProjectionChart: View {
     }
 
     private var chart: some View {
-        Canvas { context, size in
-            let plot = Plot(size: size, readings: readings, goal: goal, projection: projection)
+        // The size is needed twice — by the drawing and by the finger — so it
+        // comes from the geometry rather than from the canvas closure, which
+        // no gesture can see.
+        GeometryReader { geometry in
+            Canvas { context, size in
+                let plot = ProjectionPlot(size: size, readings: readings, goal: goal, projection: projection)
 
-            drawGrid(context, plot)
-            drawBand(context, plot)
-            drawGoalLine(context, plot)
-            drawArea(context, plot)
-            drawProjection(context, plot)
-            drawActual(context, plot)
-            drawNow(context, plot)
-            drawGoalLabel(context, plot)
-            drawAxis(context, plot)
+                drawGrid(context, plot)
+                drawBand(context, plot)
+                drawGoalLine(context, plot)
+                drawArea(context, plot)
+                drawProjection(context, plot)
+                drawActual(context, plot)
+                // One readout at a time. While she is holding a reading, the
+                // "today" plate steps aside rather than sitting beside a
+                // second figure claiming a different day.
+                if let index = scrubbedIndex {
+                    drawScrub(context, plot, index: index)
+                } else {
+                    drawNow(context, plot)
+                }
+                drawGoalLabel(context, plot)
+                drawAxis(context, plot)
+            }
+            .contentShape(Rectangle())
+            // Tap a reading to read it; drag along the line to sweep through
+            // them. Both are attached so that the page keeps scrolling, which
+            // took three tries to get right and is the whole reason this is
+            // shaped the way it is:
+            //
+            // A `DragGesture` attached with `.gesture` — at any minimum
+            // distance, and even behind a `LongPressGesture` — takes the touch
+            // from the scroll view it sits inside, and Signals stopped
+            // scrolling entirely wherever a finger happened to land on the
+            // chart. A tap never does that, and a *simultaneous* drag that
+            // refuses to start until the finger has clearly gone sideways
+            // never does either: a vertical swipe stays the scroll view's.
+            .onTapGesture(coordinateSpace: .local) { location in
+                let plot = ProjectionPlot(size: geometry.size, readings: readings,
+                                          goal: goal, projection: projection)
+                let index = plot.nearestIndex(toX: location.x)
+                // Tapping the reading already being read puts the chart back
+                // on today, so there is a way out that is not a guess.
+                scrubbed = (index == scrubbed) ? nil : index
+                Haptics.transport()
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 18)
+                    .onChanged { value in
+                        let sideways = abs(value.translation.width)
+                        let downwards = abs(value.translation.height)
+                        // Committed only once the drag is unambiguously along
+                        // the line. Until then it might still become a scroll,
+                        // and claiming it early is what broke the page.
+                        if scrubbed == nil {
+                            guard sideways > 8, sideways > downwards else { return }
+                        }
+                        let plot = ProjectionPlot(size: geometry.size, readings: readings,
+                                                  goal: goal, projection: projection)
+                        let index = plot.nearestIndex(toX: value.location.x)
+                        // A tick only when the reading under the finger
+                        // actually changes; per-pixel haptics are a buzz.
+                        if index != scrubbed { Haptics.transport() }
+                        scrubbed = index
+                    }
+            )
         }
         .frame(height: 168)
         .accessibilityElement()
         .accessibilityLabel("Weight trend and projection")
         .accessibilityValue(summary)
+        // The same scrubbing by swipe-up and swipe-down under VoiceOver, which
+        // cannot drag along a canvas.
+        .accessibilityAdjustableAction { direction in
+            let last = readings.count - 1
+            switch direction {
+            case .increment: scrubbed = min((scrubbed ?? last) + 1, last)
+            case .decrement: scrubbed = max((scrubbed ?? last) - 1, 0)
+            @unknown default: break
+            }
+        }
+    }
+
+    /// Clamped on read, so a reading arriving mid-hold cannot leave the index
+    /// pointing past the end of the line.
+    private var scrubbedIndex: Int? {
+        guard let scrubbed, readings.indices.contains(scrubbed) else { return nil }
+        return scrubbed
     }
 
     private var summary: String {
         guard let latest = readings.last else { return "No readings." }
+        if let index = scrubbedIndex {
+            let reading = readings[index]
+            return "\(String(format: "%.1f", reading.pounds)) pounds on \(reading.date.formatted(.dateTime.month(.wide).day()))."
+        }
         let now = String(format: "%.1f", latest.pounds)
         guard let projection, !projection.isComplete else {
             return "\(now) pounds today. At goal."
@@ -78,7 +159,7 @@ struct ProjectionChart: View {
 
     // MARK: - Layers
 
-    private func drawGrid(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawGrid(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         for pounds in plot.gridValues {
             let y = plot.y(for: pounds)
             var line = Path()
@@ -98,7 +179,7 @@ struct ProjectionChart: View {
 
     /// The range around the projection, widening with distance because that is
     /// what actually happens to a forecast.
-    private func drawBand(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawBand(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         guard let end = plot.projectedEnd else { return }
         let spread = plot.bandSpread
 
@@ -125,7 +206,7 @@ struct ProjectionChart: View {
         )
     }
 
-    private func drawGoalLine(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawGoalLine(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         guard goal > 0 else { return }
         let y = plot.y(for: goal)
         var line = Path()
@@ -138,7 +219,7 @@ struct ProjectionChart: View {
 
     /// Drawn last, so the projection dashes cannot cross the label. Order is
     /// the whole fix: the plate is only opaque to what was painted before it.
-    private func drawGoalLabel(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawGoalLabel(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         guard goal > 0 else { return }
         let centre = CGPoint(x: plot.right - 36, y: plot.y(for: goal) - 11)
         plate(context, at: centre, size: CGSize(width: 78, height: 14))
@@ -153,7 +234,7 @@ struct ProjectionChart: View {
         )
     }
 
-    private func drawArea(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawArea(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         guard let first = plot.points.first, let last = plot.points.last else { return }
         var area = Path()
         area.move(to: first)
@@ -164,7 +245,7 @@ struct ProjectionChart: View {
         context.fill(area, with: .color(Palette.moss.opacity(0.12)))
     }
 
-    private func drawProjection(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawProjection(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         guard let end = plot.projectedEnd else { return }
         var line = Path()
         line.move(to: plot.nowPoint)
@@ -176,7 +257,7 @@ struct ProjectionChart: View {
                      with: .color(Palette.saffron))
     }
 
-    private func drawActual(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawActual(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         var line = Path()
         guard let first = plot.points.first else { return }
         line.move(to: first)
@@ -192,7 +273,7 @@ struct ProjectionChart: View {
                      with: .color(Palette.ink))
     }
 
-    private func drawNow(_ context: GraphicsContext, _ plot: Plot) {
+    private func drawNow(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         var line = Path()
         line.move(to: CGPoint(x: plot.nowPoint.x, y: plot.nowPoint.y + 7))
         line.addLine(to: CGPoint(x: plot.nowPoint.x, y: plot.bottom))
@@ -222,7 +303,56 @@ struct ProjectionChart: View {
         )
     }
 
-    private func drawAxis(_ context: GraphicsContext, _ plot: Plot) {
+    /// The reading she is holding: the same vocabulary as "today" — a dashed
+    /// drop line, a haloed dot, a figure on a plate — reading the day she is
+    /// on rather than the day it is.
+    private func drawScrub(_ context: GraphicsContext, _ plot: ProjectionPlot, index: Int) {
+        let point = plot.points[index]
+        let reading = readings[index]
+
+        var line = Path()
+        line.move(to: CGPoint(x: point.x, y: plot.top))
+        line.addLine(to: CGPoint(x: point.x, y: plot.bottom))
+        context.stroke(line, with: .color(Palette.sage),
+                       style: StrokeStyle(lineWidth: 1, dash: [1.5, 3]))
+
+        context.fill(Path(ellipseIn: CGRect(x: point.x - 5.4, y: point.y - 5.4,
+                                            width: 10.8, height: 10.8)),
+                     with: .color(Palette.oat))
+        context.fill(Path(ellipseIn: CGRect(x: point.x - 3.1, y: point.y - 3.1,
+                                            width: 6.2, height: 6.2)),
+                     with: .color(Palette.ink))
+
+        // The plate sits on whichever side has room, so a reading at either
+        // end of the line is still legible.
+        let width: CGFloat = 92
+        let onLeft = point.x > (plot.left + plot.right) / 2
+        let anchorX = onLeft ? point.x - 10 - width : point.x + 10
+        let clampedX = min(max(anchorX, plot.left), plot.right - width)
+        // The figure hangs *above* the plate's centre — a heading's worth of
+        // it — so the headroom has to allow for the type, not just the plate.
+        // Reserving only the plate put a reading at the top of the range
+        // outside the canvas entirely, printing over the status bar.
+        let plateY = min(max(point.y + 2, plot.top + 34), plot.bottom - 14)
+
+        plate(context, at: CGPoint(x: clampedX + width / 2, y: plateY),
+              size: CGSize(width: width, height: 30))
+        context.draw(
+            Text(String(format: "%.1f", reading.pounds))
+                .font(.almanacHeading)
+                .foregroundStyle(Palette.ink),
+            at: CGPoint(x: clampedX, y: plateY - 4), anchor: .bottomLeading
+        )
+        context.draw(
+            Text("LB · \(reading.date.formatted(.dateTime.day().month(.abbreviated)).uppercased())")
+                .font(Face.mono(9))
+                .tracking(0.9)
+                .foregroundStyle(Palette.mute),
+            at: CGPoint(x: clampedX, y: plateY + 10), anchor: .bottomLeading
+        )
+    }
+
+    private func drawAxis(_ context: GraphicsContext, _ plot: ProjectionPlot) {
         var axis = Path()
         axis.move(to: CGPoint(x: plot.left, y: plot.bottom))
         axis.addLine(to: CGPoint(x: plot.right, y: plot.bottom))
@@ -249,8 +379,9 @@ struct ProjectionChart: View {
 // MARK: - Geometry
 
 /// Maps pounds and dates onto the canvas. Kept apart from the drawing so the
-/// scale is decided once and every layer agrees with it.
-private struct Plot {
+/// scale is decided once and every layer agrees with it — and so the finger's
+/// hit-testing can be tested without a view.
+struct ProjectionPlot {
     let left: CGFloat = 34
     let right: CGFloat
     let top: CGFloat = 14
@@ -319,5 +450,14 @@ private struct Plot {
     func y(for pounds: Double) -> CGFloat {
         let height = bottom - top
         return top + height * CGFloat((high - pounds) / (high - low))
+    }
+
+    /// The reading nearest a finger, by horizontal distance alone — she is
+    /// picking a date, and asking her to also be near the line vertically
+    /// would make the readings on a steep stretch the hardest to reach.
+    func nearestIndex(toX x: CGFloat) -> Int? {
+        guard !points.isEmpty else { return nil }
+        return points.enumerated()
+            .min { abs($0.element.x - x) < abs($1.element.x - x) }?.offset
     }
 }

@@ -14,11 +14,41 @@ struct RoutineListView: View {
     @State private var editing: SavedRoutine?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        // The tab is one document: her routines first, then the whole library
+        // — which used to live three modals deep behind Settings, holding rep
+        // history and the step-up nudges it made no sense to bury. The
+        // library owns the scroll and the selection bar; this view slots the
+        // routines in above and keeps its own sheets and covers.
+        MoveLibraryView(embedded: true, topSection: AnyView(routinesSection))
+        .sheet(isPresented: $building) {
+            RoutineBuilderView { routine in
+                context.insert(SavedRoutine(routine: routine))
+            }
+        }
+        .sheet(item: $editing) { item in
+            RoutineBuilderView(editing: item.routine) { routine in
+                item.update(to: routine)
+                try? context.save()
+            }
+        }
+        .fullScreenCover(item: $running) { item in
+            if let routine = item.routine {
+                // Marked as its own kind, so an interruption picked up from
+                // Today cannot be mistaken for the day's planned session.
+                WorkoutTimerView(routine: routine, subject: .routine) { outcome in
+                    // Only a finished run counts as having run it.
+                    guard case .completed = outcome else { return }
+                    item.lastRunAt = .now
+                    try? context.save()
+                }
+            }
+        }
+    }
+
+    private var routinesSection: some View {
                 VStack(alignment: .leading, spacing: 16) {
                     // Every document screen opens the same way.
-                    Masthead(context: "Your own")
+                    Masthead(context: "Moves")
                         .padding(.top, 4)
                     Text("Your own routines")
                         .font(.almanacTitle)
@@ -79,34 +109,6 @@ struct RoutineListView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
-            }
-            .background(Palette.oat.ignoresSafeArea())
-        }
-        .sheet(isPresented: $building) {
-            RoutineBuilderView { routine in
-                context.insert(SavedRoutine(routine: routine))
-            }
-        }
-        .sheet(item: $editing) { item in
-            RoutineBuilderView(editing: item.routine) { routine in
-                item.update(to: routine)
-                try? context.save()
-            }
-        }
-        .fullScreenCover(item: $running) { item in
-            if let routine = item.routine {
-                // Marked as its own kind, so an interruption picked up from
-                // Today cannot be mistaken for the day's planned session.
-                WorkoutTimerView(routine: routine, subject: .routine) { outcome in
-                    // Only a finished run counts as having run it.
-                    guard case .completed = outcome else { return }
-                    item.lastRunAt = .now
-                    try? context.save()
-                }
-            }
-        }
     }
 
     /// "3 moves", or "timer only" — which is a description, not an apology.
@@ -255,7 +257,7 @@ struct RoutineBuilderView: View {
     private var draft: IntervalRoutine {
         guard shape != .flow else { return flowDraft }
         var routine = IntervalRoutine(id: editing?.id ?? UUID(),
-                                      name: name.isEmpty ? "Untitled routine" : name,
+                                      name: name.isEmpty ? defaultName : name,
                                       work: work, rest: rest, rounds: rounds, moves: moves)
             .warmingUp(with: warmUp)
         // Steps are kept in state while she is on the fixed shape, so switching
@@ -279,9 +281,24 @@ struct RoutineBuilderView: View {
     /// to ask for it.
     private var flowDraft: IntervalRoutine {
         IntervalRoutine(id: editing?.id ?? UUID(),
-                        name: name.isEmpty ? "Untitled flow" : name,
+                        name: name.isEmpty ? defaultName : name,
                         work: 0, rest: 0, rounds: 0, moves: [])
             .warmingUp(with: warmUp, seconds: TimeInterval(flowSeconds))
+    }
+
+    /// A routine she does not name is named for what it is — "Rings · 8 ×
+    /// 40/45", "Flow · 6 movements" — never "Untitled". An almanac names real
+    /// things, and "Untitled routine" twice over in a list tells her nothing.
+    private var defaultName: String {
+        if shape == .flow {
+            return warmUp.count == 1 ? "Flow · 1 movement" : "Flow · \(warmUp.count) movements"
+        }
+        let shapeText = shape == .fixed
+            ? "\(rounds) × \(Int(work))/\(Int(rest))"
+            : "\(steps.count) \(steps.count == 1 ? "interval" : "intervals")"
+        guard let kit = moves.first?.equipment else { return "Timer · \(shapeText)" }
+        let single = moves.allSatisfy { $0.equipment == kit }
+        return "\(single ? kit.shortLabel : "Mixed") · \(shapeText)"
     }
 
     var body: some View {
@@ -568,8 +585,11 @@ struct RoutineBuilderView: View {
         if shape == .flow {
             return "\(warmUp.count) \(warmUp.count == 1 ? "movement" : "movements") · \(flowSeconds)s each"
         }
+        // `draft.roundCount`, never the `rounds` stepper: a sided move doubles
+        // its turns, and this line must agree with the saved list and the
+        // timer about how many work intervals that is.
         let body = shape == .fixed
-            ? "\(rounds) × \(Int(work))/\(Int(rest)) · final rest dropped"
+            ? "\(draft.roundCount) × \(Int(work))/\(Int(rest)) · final rest dropped"
             : "\(draft.roundCount) work \(draft.roundCount == 1 ? "interval" : "intervals")"
                 + " in \(steps.count) \(steps.count == 1 ? "step" : "steps")"
                 + (repeats > 1 ? " × \(repeats)" : "")
@@ -585,9 +605,21 @@ struct RoutineBuilderView: View {
     /// number would be picking a favourite. So the row names the intervals it
     /// lands on instead.
     private func measure(forMoveAt index: Int) -> String {
-        guard shape == .written, !steps.isEmpty else { return "\(Int(work))s" }
+        // The doubling has to be visible before the timer runs, or the number
+        // silently changes meaning between this screen and the session.
+        let sided = moves.indices.contains(index)
+            ? moves[index].sided.map { $0 == .directions ? " · both ways" : " · each side" }
+            : nil
+        guard shape == .written, !steps.isEmpty else {
+            return "\(Int(work))s" + (sided ?? "")
+        }
+        // Assignment follows the sided cycle exactly as `RoutineSchedule`
+        // does — a sided move claims two written steps, so a plain modulo over
+        // `moves` would label the rows with the wrong intervals.
+        let cycle = RoutineSchedule.sidedCycle(of: moves)
+        guard !cycle.isEmpty, moves.indices.contains(index) else { return "\(Int(work))s" }
         let lengths = steps.filter(\.isWork).enumerated()
-            .filter { $0.offset % max(moves.count, 1) == index }
+            .filter { cycle[$0.offset % cycle.count].move.id == moves[index].id }
             .map { Int($0.element.clamped) }
         guard !lengths.isEmpty else { return "unused" }
         return Set(lengths).count == 1
@@ -736,7 +768,20 @@ private extension View {
 /// Only ever your own equipment.
 struct MovePicker: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     let onPick: (Move) -> Void
+
+    /// The working flow pool — built-ins plus her approved flow additions, the
+    /// same set the practice and the warm-ups draw from.
+    private var flowPool: [Move] { MoveLibrary.flow + CustomMoves.flow(in: context) }
+    /// Her approved strength additions, offered under their own heading since
+    /// they belong to no built-in equipment group's fixed list.
+    private var customStrength: [Move] {
+        CustomMoves.strength(in: context).map { $0.applyingLoad(from: loads) }
+    }
+    /// Her loads, so a picked move goes into the routine at the weight she
+    /// actually uses.
+    private var loads: [String: Double] { MoveOverrides.table(in: context) }
 
     var body: some View {
         NavigationStack {
@@ -744,9 +789,9 @@ struct MovePicker: View {
                 // The morning practice first: it is what she reaches for most
                 // often, and burying it under five equipment headings would
                 // make the thing she does daily the hardest thing to find.
-                if !MoveLibrary.flow.isEmpty {
+                if !flowPool.isEmpty {
                     SwiftUI.Section {
-                        ForEach(MoveLibrary.flow) { move in
+                        ForEach(flowPool) { move in
                             Button {
                                 onPick(move)
                                 dismiss()
@@ -764,8 +809,8 @@ struct MovePicker: View {
                     }
                 }
 
-                ForEach(Equipment.allCases) { equipment in
-                    let moves = MoveLibrary.moves(for: equipment)
+                ForEach(Equipment.owned) { equipment in
+                    let moves = MoveLibrary.moves(for: equipment).map { $0.applyingLoad(from: loads) }
                     if !moves.isEmpty {
                         SwiftUI.Section {
                             ForEach(moves) { move in
@@ -780,6 +825,22 @@ struct MovePicker: View {
                         } header: {
                             Text(equipment.label).almanacLabel(small: true)
                         }
+                    }
+                }
+
+                if !customStrength.isEmpty {
+                    SwiftUI.Section {
+                        ForEach(customStrength) { move in
+                            Button {
+                                onPick(move)
+                                dismiss()
+                            } label: { row(move) }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Palette.oat)
+                            .listRowSeparatorTint(Palette.rule)
+                        }
+                    } header: {
+                        Text("Your additions").almanacLabel(small: true)
                     }
                 }
             }

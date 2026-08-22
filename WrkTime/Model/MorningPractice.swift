@@ -54,20 +54,19 @@ enum Practice {
         guard !rest.isEmpty else { return lead.map { [$0] } ?? [] }
 
         let following = (lead == nil ? count : count - 1)
-        let offset = WarmUp.dayIndex(date) * WarmUp.stride(taking: following, from: rest.count)
-        let rotated = (0..<min(following, rest.count)).map { step in
-            rest[(offset + step) % rest.count]
-        }
-        return (lead.map { [$0] } ?? []) + rotated
+        return (lead.map { [$0] } ?? [])
+            + Rotation.walk(rest, taking: following, varying: Rotation.dayIndex(date))
     }
 
     /// The practice as something the interval engine can run.
     ///
     /// A routine of pure flow: no rounds, no rest, no work interval. The
     /// schedule allows that precisely so this can exist without a second engine.
-    static func routine(on date: Date, avoiding excluded: Set<String> = []) -> IntervalRoutine {
+    static func routine(on date: Date, avoiding excluded: Set<String> = [],
+                        library: [Move] = MoveLibrary.flow) -> IntervalRoutine {
         IntervalRoutine(name: "Morning practice", work: 0, rest: 0, rounds: 0, moves: [])
-            .warmingUp(with: moves(on: date, avoiding: excluded), seconds: seconds)
+            .warmingUp(with: moves(on: date, avoiding: excluded, library: library),
+                       seconds: seconds)
     }
 }
 

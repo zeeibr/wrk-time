@@ -14,13 +14,16 @@ import SwiftUI
 /// signal that is absent says so rather than reading as zero.
 struct SignalsView: View {
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
-    @Query private var fastWindows: [FastWindow]
     @Query(sort: \Block.startDate, order: .reverse) private var blocks: [Block]
+    // Observed for the minutes ledger, so a session finished five minutes ago
+    // is already counted when she opens this screen.
+    @Query private var sessions: [PlannedSession]
+    @Query private var runs: [RoutineRun]
+    @Query private var practices: [MorningPractice]
 
     @State private var recovery = RecoverySnapshot()
     @State private var walks: [RecordedWalk] = []
     @State private var loaded = false
-    @State private var editingWindow = false
     @State private var loggingWeight = false
     @AppStorage(PlannerService.Memo.walkMinutes) private var walkTarget = 0
 
@@ -33,13 +36,11 @@ struct SignalsView: View {
                 recoverySection
                 weightSection
                 movementSection
-                windowSection
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
         }
         .background(Palette.oat.ignoresSafeArea())
-        .sheet(isPresented: $editingWindow) { EatingWindowView() }
         .sheet(isPresented: $loggingWeight) { WeighInView() }
         .task {
             let health = HealthKitService()
@@ -232,8 +233,13 @@ struct SignalsView: View {
     // MARK: - Movement
 
     private var movementSection: some View {
-        IndexedSection(number: "03", label: "Walking") {
-            SectionHead(title: "This week", note: walkTarget > 0 ? "\(walkedThisWeek)/\(walkTarget) min" : "No target")
+        // One section for the week's movement, walking first because it is
+        // the number with a target. It was two sections — 03 WALKING and 04
+        // MINUTES, both headed "This week", with the walking minutes stated
+        // in each — which was the screen asking one question twice and
+        // filing the answers apart.
+        IndexedSection(number: "03", label: "Movement") {
+            SectionHead(title: "This week", note: walkTarget > 0 ? "\(walkedThisWeek)/\(walkTarget) min" : "\(walkedThisWeek + strengthMinutes + flowMinutes) min moved")
                 .padding(.bottom, 10)
 
             if walkTarget > 0 {
@@ -258,8 +264,30 @@ struct SignalsView: View {
                     .padding(.bottom, 14)
             }
 
-            SectionHead(title: "Off the plan", note: walks.isEmpty ? "Nothing logged" : "\(walks.count) walks")
-                .padding(.bottom, walks.isEmpty ? 10 : 4)
+            DetailLine(label: "Walking", value: "\(walkedThisWeek) min")
+            DetailLine(label: "Strength", value: "\(strengthMinutes) min")
+            DetailLine(label: "Qi gong", value: "\(flowMinutes) min")
+            Rule()
+
+            Text("Strength counts finished sessions and workouts of your own; qi gong counts the morning practice and the flow that opens each session. Walking comes from Health, so a walk the phone missed is missing here too.")
+                .font(.almanacBodySmall)
+                .foregroundStyle(Palette.mute)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
+            // An eyebrow, not a second section head — this list belongs to
+            // the movement section, and a full-size title here read as an
+            // unnumbered peer breaking the margin's rhythm.
+            HStack(alignment: .firstTextBaseline) {
+                Text("Off the plan")
+                    .almanacLabel(Palette.mute, small: true)
+                Spacer(minLength: 8)
+                Text(walks.isEmpty ? "Nothing logged" : "\(walks.count) walks")
+                    .almanacLabel(Palette.mute, small: true)
+                    .tabular()
+            }
+            .padding(.bottom, walks.isEmpty ? 10 : 4)
 
             if walks.isEmpty {
                 Text("Walks recorded by Whoop, a Watch or your phone appear here. They are context for the plan, never marks — a mark is a finished session you planned.")
@@ -301,8 +329,8 @@ struct SignalsView: View {
     /// The one place the app says out loud which lever moves the scale.
     ///
     /// It is stated here rather than beside the weight, because this is the
-    /// number she can act on. It names walking and the eating window, and stops
-    /// there — the app does not tell anyone what to eat.
+    /// number she can act on. It names walking and stops there — the app does
+    /// not tell anyone what to eat.
     /// "About 26 minutes a day", and what today still owes.
     ///
     /// Spread across the days **left in the week**, not across seven. A target
@@ -327,49 +355,50 @@ struct SignalsView: View {
     }
 
     private var walkNote: String {
-        let base = "The sessions build and keep muscle; they are too short to move the scale. Walking is the part of the plan that does, alongside the eating window you set."
+        let base = "The sessions build and keep muscle; they are too short to move the scale. Walking is the part of the plan that does."
         guard walkedThisWeek < walkTarget else {
             return "That is this week's walking done. " + base
         }
         return base
     }
 
-    // MARK: - Window
+    // MARK: - This week's minutes
 
-    private var windowSection: some View {
-        IndexedSection(number: "04", label: "Window") {
-            SectionHead(title: "Eating window", note: fastWindows.first?.summaryLine ?? "Not set")
-                .padding(.bottom, 10)
+    private var weekStart: Date {
+        Calendar.current.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now
+    }
 
-            Button { editingWindow = true } label: {
-                HStack {
-                    Text(fastWindows.first == nil ? "Set the window" : "Edit the window")
-                        .font(.almanacBody)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(Palette.moss)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Rule()
+    /// Split by the routine's own schedule: a finished session's flow opener
+    /// goes under qi gong, the rounds under strength. Runs recorded before the
+    /// split existed count wholly as strength — the only honest reading of a
+    /// row that never said.
+    private var strengthMinutes: Int {
+        let fromSessions = sessions
+            .filter { ($0.completedAt ?? .distantPast) >= weekStart }
+            .compactMap(\.routine)
+            .reduce(0.0) { $0 + $1.schedule.total - flowPortion($1) }
+        let fromRuns = runs
+            .filter { $0.finishedAt >= weekStart }
+            .reduce(0.0) { $0 + max($1.seconds - min($1.flowSeconds ?? 0, $1.seconds), 0) }
+        return Int(((fromSessions + fromRuns) / 60).rounded())
+    }
 
-            if let window = fastWindows.first {
-                let opens = String(format: "%02d:%02d", window.windowOpensHour, window.windowOpensMinute)
-                let closes = String(format: "%02d:%02d", window.windowClosesHour, window.windowClosesMinute)
-                DetailLine(label: "Opens", value: opens)
-                DetailLine(label: "Closes", value: closes)
-                Rule()
-            }
+    private var flowMinutes: Int {
+        let fromPractices = practices
+            .filter { ($0.completedAt ?? .distantPast) >= weekStart }
+            .reduce(0.0) { $0 + Double($1.moveNames.count) * Practice.seconds }
+        let fromSessions = sessions
+            .filter { ($0.completedAt ?? .distantPast) >= weekStart }
+            .compactMap(\.routine)
+            .reduce(0.0) { $0 + flowPortion($1) }
+        let fromRuns = runs
+            .filter { $0.finishedAt >= weekStart }
+            .reduce(0.0) { $0 + min($1.flowSeconds ?? 0, $1.seconds) }
+        return Int(((fromPractices + fromSessions + fromRuns) / 60).rounded())
+    }
 
-            Text("Fasting is an input here, not a feature. It is passed to the planner alongside what you actually did, and it never gets a screen of its own or a streak to protect.")
-                .font(.almanacBodySmall)
-                .foregroundStyle(Palette.mute)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
-        }
+    private func flowPortion(_ routine: IntervalRoutine) -> TimeInterval {
+        Double(routine.warmUp.count) * routine.warmUpSeconds
     }
 }
 

@@ -19,10 +19,13 @@ private func named(_ name: String) -> Move {
     MoveLibrary.all.first { $0.name == name } ?? MoveLibrary.all[0]
 }
 
+// "Ring row" rather than "Ring halo" deliberately: the halo is a sided move
+// and expands to two intervals a turn, which is its own suite's business —
+// these tests want two plain moves.
 private func routine(rounds: Int = 3, work: TimeInterval = 60, rest: TimeInterval = 45,
                      dropsFinalRest: Bool = true) -> IntervalRoutine {
     IntervalRoutine(name: "Test", work: work, rest: rest, rounds: rounds,
-                    moves: [named("Beam front squat"), named("Ring halo")],
+                    moves: [named("Beam front squat"), named("Ring row")],
                     dropsFinalRest: dropsFinalRest)
 }
 
@@ -55,7 +58,39 @@ struct RoutineScheduleTests {
     func moveRotation() {
         let schedule = routine(rounds: 3).schedule
         let workMoves = schedule.phases.filter(\.isWork).map(\.move?.name)
-        #expect(workMoves == ["Beam front squat", "Ring halo", "Beam front squat"])
+        #expect(workMoves == ["Beam front squat", "Ring row", "Beam front squat"])
+    }
+
+    @Test("A sided move takes a full work interval per side, added not carved")
+    func sidedExpansion() {
+        // The halo is `.directions`; the front squat is plain. Two turns.
+        let sided = IntervalRoutine(name: "Sided", work: 40, rest: 20, rounds: 2,
+                                    moves: [named("Beam front squat"), named("Ring halo")])
+        let work = sided.schedule.phases.filter(\.isWork)
+
+        // Three work intervals from two turns: the halo got one per direction.
+        #expect(work.map(\.move?.name) == ["Beam front squat", "Ring halo", "Ring halo"])
+        #expect(work.map(\.side) == [nil, "One way", "Other way"])
+        // Each side is the full forty seconds — nothing halved.
+        #expect(work.allSatisfy { $0.duration == 40 })
+        // Every surface counts against `roundCount`, so it must agree.
+        #expect(sided.roundCount == 3)
+        #expect(sided.schedule.workPhaseCount == 3)
+        #expect(work.map(\.round) == [1, 2, 3])
+    }
+
+    @Test("A sided move in a sequence claims two written work steps, one per side")
+    func sidedSequence() {
+        let base = IntervalRoutine(name: "Seq", work: 0, rest: 0, rounds: 0,
+                                   moves: [named("Split squat"), named("Ring row")])
+        let sequence = base.following([.work(30), .work(30), .work(30)])
+        let work = sequence.schedule.phases.filter(\.isWork)
+
+        // Her three steps stay three steps; the split squat takes the first
+        // two — left then right — and the row takes the third.
+        #expect(work.map(\.move?.name) == ["Split squat", "Split squat", "Ring row"])
+        #expect(work.map(\.side) == ["Left side", "Right side", nil])
+        #expect(sequence.roundCount == 3)
     }
 
     @Test("Phase boundaries are half-open, so no elapsed value lands in two phases")
@@ -544,5 +579,157 @@ struct FlowLengthTests {
         var routine = IntervalRoutine(name: "Old", work: 40, rest: 45, rounds: 8, moves: [])
         routine.warmUpMoves = Array(MoveLibrary.flow.prefix(2))
         #expect(routine.warmUpSeconds == WarmUp.seconds)
+    }
+}
+
+// MARK: - Pasting a session into Whoop
+
+@Suite("The session, written out for Whoop")
+struct WhoopSummaryTests {
+
+    @Test("A sided move reports the turns she did, not the intervals it took")
+    func sidedCountsTurns() {
+        // Three turns on the split squat is six work intervals — the schedule's
+        // number, not hers. Whoop is being told what she lifted.
+        let routine = IntervalRoutine(name: "Lower", work: 40, rest: 20, rounds: 3,
+                                      moves: [named("Split squat")])
+        let entry = try! #require(WhoopSummary.entries(for: routine).first)
+        #expect(entry.name == "Split squat")
+        #expect(entry.measure == "3 × 40s each side")
+    }
+
+    @Test("A move done one way and then the other says so in its own words")
+    func directionsReadAsWays() {
+        let routine = IntervalRoutine(name: "Upper", work: 45, rest: 20, rounds: 2,
+                                      moves: [named("Ring halo")])
+        let entry = try! #require(WhoopSummary.entries(for: routine).first)
+        #expect(entry.measure == "2 × 45s each way")
+    }
+
+    @Test("Every move carries the load it is written for")
+    func loadsAreNamed() {
+        let routine = IntervalRoutine(name: "Mixed", work: 40, rest: 20, rounds: 4,
+                                      moves: [named("Ring goblet squat"), named("Dumbbell press")])
+        let entries = WhoopSummary.entries(for: routine)
+        #expect(entries.count == 2)
+        #expect(entries[0].equipment.contains("10 lb"))
+        #expect(entries[1].equipment.contains("2 lb"))
+        #expect(entries.allSatisfy { $0.measure == "2 × 40s" })
+    }
+
+    @Test("The text opens with the session and closes with the warm-up")
+    func wholeText() {
+        let routine = IntervalRoutine(name: "Full · mixed", work: 40, rest: 20, rounds: 2,
+                                      moves: [named("Beam row")])
+            .warmingUp(with: Array(MoveLibrary.flow.prefix(4)))
+        let text = WhoopSummary.text(for: routine)
+        #expect(text.hasPrefix("Full · mixed · "))
+        #expect(text.contains("Beam row — 15 lb Bala Beam, 2 × 40s"))
+        #expect(text.contains("Warm-up: 4 mobility movements, 40s each"))
+    }
+
+    @Test("A plain interval timer has nothing to tell Whoop")
+    func noMoves() {
+        let bare = IntervalRoutine(name: "Timer", work: 30, rest: 30, rounds: 4, moves: [])
+        #expect(WhoopSummary.entries(for: bare).isEmpty)
+    }
+}
+
+// MARK: - Counting the reps
+
+@Suite("Reps she counted")
+struct RepCountingTests {
+
+    @Test("A rest knows which set it follows, and work and warm-up know they are not one")
+    func setsAreFiledInOrder() {
+        let routine = IntervalRoutine(name: "Test", work: 40, rest: 20, rounds: 3,
+                                      moves: [named("Beam row")])
+            .warmingUp(with: Array(MoveLibrary.flow.prefix(2)))
+        let schedule = routine.schedule
+
+        // Warm-up movements are not sets and file nothing.
+        #expect(schedule.setOrdinal(of: 0) == nil)
+        #expect(schedule.setEnding(before: 1) == nil)
+
+        let workIndices = schedule.phases.indices.filter { schedule.phases[$0].isWork }
+        #expect(workIndices.map { schedule.setOrdinal(of: $0) } == [0, 1, 2])
+
+        // Each rest files against the set it just followed. The first rest is
+        // the setup pause after the warm-up — no set precedes it, so it files
+        // nothing.
+        let restIndices = schedule.phases.indices.filter { schedule.phases[$0].isRest }
+        #expect(restIndices.map { schedule.setEnding(before: $0) } == [nil, 0, 1])
+    }
+
+    @Test("Counted reps replace the clock; an uncounted move keeps it")
+    func repsReplaceTime() {
+        let routine = IntervalRoutine(name: "Mixed", work: 40, rest: 20, rounds: 4,
+                                      moves: [named("Beam row"), named("Dumbbell press")])
+        // Sets run row, press, row, press. Only the rows were counted.
+        let entries = WhoopSummary.entries(for: routine, reps: [12, 0, 10, 0])
+        #expect(entries[0].measure == "12, 10 reps")
+        #expect(entries[1].measure == "2 × 40s")
+    }
+
+    @Test("Sets with the same count read as sets, and a sided move counts turns")
+    func evenSetsAndSides() {
+        let plain = IntervalRoutine(name: "Row", work: 40, rest: 20, rounds: 3,
+                                    moves: [named("Beam row")])
+        #expect(WhoopSummary.entries(for: plain, reps: [10, 10, 10]).first?.measure
+                == "3 sets × 10 reps")
+
+        // Six intervals, one per side of three turns.
+        let sided = IntervalRoutine(name: "Lower", work: 40, rest: 20, rounds: 3,
+                                    moves: [named("Split squat")])
+        #expect(sided.schedule.workPhaseCount == 6)
+        #expect(WhoopSummary.entries(for: sided, reps: [8, 8, 8, 8, 8, 8]).first?.measure
+                == "3 sets × 8 reps each side")
+    }
+
+    @Test("Counting nothing leaves the summary exactly as it was")
+    func noneCounted() {
+        let routine = IntervalRoutine(name: "Row", work: 40, rest: 20, rounds: 2,
+                                      moves: [named("Beam row")])
+        #expect(WhoopSummary.entries(for: routine, reps: [0, 0]).first?.measure == "2 × 40s")
+        #expect(WhoopSummary.entries(for: routine).first?.measure == "2 × 40s")
+    }
+}
+
+// MARK: - The rep history
+
+@Suite("What a session leaves for the history")
+struct SetHistoryTests {
+
+    @Test("Only the moves she counted are remembered, with their loads")
+    func onlyCountedMoves() {
+        let routine = IntervalRoutine(name: "Mixed", work: 40, rest: 20, rounds: 4,
+                                      moves: [named("Ring goblet squat"), named("Dumbbell press")])
+        // Sets run squat, press, squat, press; only the squats were counted.
+        let counted = WhoopSummary.counted(for: routine, reps: [10, 0, 8, 0])
+        #expect(counted.count == 1)
+        #expect(counted[0].move.name == "Ring goblet squat")
+        #expect(counted[0].reps == [10, 8])
+        #expect(counted[0].move.loadPounds == 10)
+    }
+
+    @Test("A sided move keeps one entry per side, and reports the turns")
+    func sidedKeepsBothSides() {
+        let routine = IntervalRoutine(name: "Lower", work: 40, rest: 20, rounds: 2,
+                                      moves: [named("Split squat")])
+        let counted = WhoopSummary.counted(for: routine, reps: [8, 7, 6, 6])
+        #expect(counted[0].reps == [8, 7, 6, 6])
+
+        let log = SetLog(sourceID: UUID(), move: counted[0].move, reps: counted[0].reps)
+        #expect(log.turns == 2, "four intervals is two turns, both sides")
+        #expect(log.best == 8)
+        #expect(log.total == 27)
+    }
+
+    @Test("Counting nothing leaves no history behind")
+    func nothingCounted() {
+        let routine = IntervalRoutine(name: "Row", work: 40, rest: 20, rounds: 2,
+                                      moves: [named("Beam row")])
+        #expect(WhoopSummary.counted(for: routine, reps: [0, 0]).isEmpty)
+        #expect(WhoopSummary.counted(for: routine, reps: []).isEmpty)
     }
 }

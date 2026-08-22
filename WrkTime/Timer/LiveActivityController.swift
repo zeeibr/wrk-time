@@ -94,7 +94,11 @@ final class LiveActivityController {
             round: phase.round,
             position: phase.position(rounds: engine.routine.roundCount,
                                      flowCount: engine.schedule.flowPhaseCount),
-            moveName: phase.move?.name ?? kind.label,
+            // "Split squat · Left side" — the side is part of what the lock
+            // screen has to say, or both intervals read as the same set twice.
+            moveName: phase.move.map { move in
+                phase.side.map { "\(move.name) · \($0)" } ?? move.name
+            } ?? kind.label,
             phaseEnds: ends,
             phaseBegan: began,
             nextUp: nextDescription(engine.nextPhase),
@@ -108,7 +112,8 @@ final class LiveActivityController {
     private func nextDescription(_ phase: Phase?) -> String {
         guard let phase else { return "Finish" }
         if let move = phase.move {
-            return "\(move.name), \(phase.duration.clockString)"
+            let side = phase.side.map { " · \($0.lowercased())" } ?? ""
+            return "\(move.name)\(side), \(phase.duration.clockString)"
         }
         // A move-less work interval is a plain interval, not a rest.
         return "\(phase.isRest ? "Rest" : "Work") \(phase.duration.clockString)"

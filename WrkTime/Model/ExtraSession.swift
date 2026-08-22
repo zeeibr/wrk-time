@@ -44,35 +44,63 @@ enum ExtraSession {
                       pace: Pace,
                       avoiding ruledOut: Set<String>,
                       notRepeating done: [String] = [],
+                      including extras: [Move] = [],
+                      flowExtras: [Move] = [],
+                      loads: [String: Double] = [:],
                       on date: Date = .now) -> IntervalRoutine {
         // The current week's shape, so the extra feels like the plan rather than
         // a different app. Taken from the same arithmetic `OfflinePlanner` uses
         // so the two cannot drift.
         let shape = OfflinePlanner.shape(week: week, pace: pace)
-        let rounds = max(minimumRounds, Int((Double(shape.rounds) * roundFraction).rounded()))
+        var rounds = max(minimumRounds, Int((Double(shape.rounds) * roundFraction).rounded()))
+
+        // The warm-up first, because the floor below counts it: finishing the
+        // whole offer is one session.
+        let warmUp = WarmUp.afterPractice(on: date, avoiding: ruledOut,
+                                          library: MoveLibrary.flow + flowExtras)
+
+        // An extra session counts toward the form's smaller ticks only at
+        // `RoutineRun.substantialSeconds`, so an offer written shorter than
+        // that would be one the record ignores — her ask is that the extras
+        // "are all 7 mins so they count". Rounds are raised until the whole
+        // thing clears the floor. The final rest is dropped, hence `+ rest`
+        // inside the division.
+        let flowSeconds = Double(warmUp.count) * WarmUp.seconds
+        let perTurn = shape.work + shape.rest
+        if perTurn > 0, flowSeconds < RoutineRun.substantialSeconds {
+            let needed = Int(((RoutineRun.substantialSeconds - flowSeconds + shape.rest) / perTurn)
+                .rounded(.up))
+            rounds = min(max(rounds, needed), PlanValidator.roundCeiling)
+        }
 
         var rotation = MoveLibrary.rotation(
             of: moves,
             avoiding: ruledOut,
-            excluding: Set(done.map { MovePreference.key($0) }))
+            excluding: Set(done.map { MovePreference.key($0) }),
+            plus: extras,
+            // An extra is not the programme — it is what is left once the plan
+            // is done — so it varies by the day rather than repeating for
+            // progression the way a planned session does.
+            varying: Rotation.dayIndex(date))
 
         // If everything is either ruled out or already done today, repeating is
         // better than handing back an empty rotation — that would be a plain
         // interval timer presented as a session. Refusals still hold; only the
         // done-today exclusion is relaxed.
         if rotation.isEmpty {
-            rotation = MoveLibrary.rotation(of: moves, avoiding: ruledOut)
+            rotation = MoveLibrary.rotation(of: moves, avoiding: ruledOut, plus: extras,
+                                            varying: Rotation.dayIndex(date))
         }
 
         return IntervalRoutine(name: title(for: rotation),
                                work: shape.work,
                                rest: shape.rest,
                                rounds: rounds,
-                               moves: rotation)
+                               moves: rotation.map { $0.applyingLoad(from: loads) })
             // Opens with flow, like every other session in the app, drawn from
             // what the morning practice did not use today so nothing repeats
             // within a day.
-            .warmingUp(with: WarmUp.afterPractice(on: date, avoiding: ruledOut))
+            .warmingUp(with: warmUp)
     }
 
     /// "Extra · beam" — named after the kit so she can see what it needs before

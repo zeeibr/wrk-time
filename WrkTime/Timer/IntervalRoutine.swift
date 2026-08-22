@@ -35,6 +35,27 @@ enum MoveKind: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// How a move that cannot be done all at once divides.
+///
+/// Her ask, in her words: moves "that need to be done on both sides/both ways
+/// should have a double timer situation in the session so were getting the full
+/// time on each side." So a sided move takes one full work interval per side —
+/// the second side is added to the session, never carved out of the first.
+enum Sided: String, Codable, Sendable {
+    /// One leg or arm at a time — a lunge, a split squat.
+    case sides
+    /// One direction and then the other — a halo, a circle.
+    case directions
+
+    /// What each of the two work intervals is called.
+    var labels: (first: String, second: String) {
+        switch self {
+        case .sides: ("Left side", "Right side")
+        case .directions: ("One way", "Other way")
+        }
+    }
+}
+
 /// A movement the user can actually do with the kit they own.
 struct Move: Identifiable, Hashable, Codable {
     var id: UUID = UUID()
@@ -56,16 +77,23 @@ struct Move: Identifiable, Hashable, Codable {
     /// disk undecodable. Optional decodes as nil and reads as `.strength`.
     var kindRaw: MoveKind?
 
+    /// Set when the move is done one side or one direction at a time.
+    /// Optional for the same reason `kindRaw` is; nil means the move is done
+    /// all at once.
+    var sidedRaw: String?
+
     var kind: MoveKind { kindRaw ?? .strength }
+    var sided: Sided? { sidedRaw.flatMap(Sided.init(rawValue:)) }
 
     init(id: UUID = UUID(), name: String, equipment: Equipment, kind: MoveKind = .strength,
-         cue: String, loadPounds: Double? = nil) {
+         cue: String, loadPounds: Double? = nil, sided: Sided? = nil) {
         self.id = id
         self.name = name
         self.equipment = equipment
         self.cue = cue
         self.loadPounds = loadPounds
         self.kindRaw = kind
+        self.sidedRaw = sided?.rawValue
     }
 
     var symbol: String { equipment.symbol }
@@ -154,8 +182,17 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
 
     /// How many work intervals this routine holds, however it is shaped. The
     /// header counts against this, so "Round 3 / 7" is true of a sequence too.
+    ///
+    /// For the fixed shape this counts the sided expansion: a turn on a move
+    /// done one side at a time is two work intervals, and every surface that
+    /// reads this — the header, the haptics, the completion figure — must
+    /// agree with the schedule about how many there are.
     var roundCount: Int {
-        isSequence ? sequence.filter(\.isWork).count * sequenceRepeats : rounds
+        if isSequence { return sequence.filter(\.isWork).count * sequenceRepeats }
+        guard rounds > 0, !moves.isEmpty else { return rounds }
+        return (1...rounds).reduce(0) { count, turn in
+            count + (moves[(turn - 1) % moves.count].sided != nil ? 2 : 1)
+        }
     }
 
     var warmUp: [Move] { warmUpMoves ?? [] }
@@ -175,6 +212,48 @@ struct IntervalRoutine: Identifiable, Hashable, Codable {
         var copy = self
         copy.steps = steps.isEmpty ? nil : steps
         copy.sequenceRepeatsRaw = steps.isEmpty ? nil : max(repeats, 1)
+        return copy
+    }
+
+    /// A name derived from what the routine is — "Rings · 8 × 40/45",
+    /// "Flow · 6 movements" — for rows that were saved as "Untitled" before
+    /// the builder learned to do this itself. An almanac names real things.
+    var derivedName: String {
+        if rounds == 0, moves.isEmpty, !warmUp.isEmpty {
+            return warmUp.count == 1 ? "Flow · 1 movement" : "Flow · \(warmUp.count) movements"
+        }
+        let shape = isSequence
+            ? "\(sequence.count) \(sequence.count == 1 ? "interval" : "intervals")"
+            : "\(rounds) × \(Int(clampedWork))/\(Int(rest))"
+        guard let kit = moves.first?.equipment else { return "Timer · \(shape)" }
+        let single = moves.allSatisfy { $0.equipment == kit }
+        return "\(single ? kit.shortLabel : "Mixed") · \(shape)"
+    }
+
+    /// The same routine with `sided` stamped from the library onto moves
+    /// stored before the flag existed.
+    ///
+    /// Stored routines are JSON written by whatever build wrote them, so a
+    /// week planned before sidedness would run its split squat as one
+    /// unlabelled interval while a new week runs two — the same move meaning
+    /// two different things depending on when it was written. Same precedent
+    /// as `PlanRepair`: what is already written is brought up to what the
+    /// library now knows. Applied where stored routines are read back — never
+    /// to an interrupted run, whose saved schedule must stay exactly the one
+    /// she is resumed into.
+    func adoptingLibrarySidedness() -> IntervalRoutine {
+        var copy = self
+        copy.moves = moves.map { move in
+            guard move.sidedRaw == nil,
+                  let known = MoveLibrary.all.first(where: {
+                      MovePreference.key($0.name) == MovePreference.key(move.name)
+                  }),
+                  known.sidedRaw != nil
+            else { return move }
+            var move = move
+            move.sidedRaw = known.sidedRaw
+            return move
+        }
         return copy
     }
 
@@ -210,6 +289,9 @@ struct Phase: Equatable {
     /// in the practice for flow.
     let round: Int
     let move: Move?
+    /// "Left side", "Other way" — set on the work intervals of a sided move,
+    /// so every surface reading this phase says which side it is.
+    var side: String? = nil
     let duration: TimeInterval
     /// Seconds from routine start at which this phase begins and ends.
     let start: TimeInterval
@@ -260,12 +342,32 @@ struct RoutineSchedule: Equatable {
             cursor += flowLength
         }
 
+        // Time to get the kit out, when work follows the warm-up. The flow
+        // runs empty-handed and round one usually does not; a rest phase
+        // between them is the register that already does this job — it shows
+        // "Next up" with the first move, asks for no reps because no set
+        // precedes it, and is not a round. The morning practice never gets
+        // one: all flow, nothing to set up for.
+        let opensWork = routine.isSequence
+            ? routine.sequence.contains { $0.isWork && $0.clamped > 0 }
+            : routine.rounds > 0
+        if !built.isEmpty, opensWork {
+            let setup = WarmUp.setupSeconds
+            built.append(Phase(kind: .rest, round: 1, move: nil,
+                               duration: setup, start: cursor, end: cursor + setup))
+            cursor += setup
+        }
+
         // A written-out sequence: every interval its own length, in the order
         // she wrote them, with no assumption that work and rest alternate.
         // Moves are taken from the rotation in turn as work intervals arrive,
         // exactly as rounds do.
         if routine.isSequence {
             var round = 0
+            // A sided move claims two of the work steps she wrote — one per
+            // side — rather than adding steps she did not ask for. Her
+            // sequence's shape is hers; only the move assignment expands.
+            let cycle = Self.sidedCycle(of: moves)
             // The cadence, however many times she asked for it. Rounds keep
             // counting across passes rather than restarting, so "Round 7 / 12"
             // is true of a three-work cadence run four times.
@@ -275,8 +377,9 @@ struct RoutineSchedule: Equatable {
                     guard length > 0 else { continue }
                     if step.isWork {
                         round += 1
-                        let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
-                        built.append(Phase(kind: .work, round: round, move: move,
+                        let slot = cycle.isEmpty ? nil : cycle[(round - 1) % cycle.count]
+                        built.append(Phase(kind: .work, round: round, move: slot?.move,
+                                           side: slot?.side,
                                            duration: length, start: cursor, end: cursor + length))
                     } else {
                         built.append(Phase(kind: .rest, round: max(round, 1), move: nil,
@@ -299,14 +402,31 @@ struct RoutineSchedule: Equatable {
             return
         }
 
-        for round in 1...routine.rounds {
-            let move = moves.isEmpty ? nil : moves[(round - 1) % moves.count]
+        // `rounds` counts turns through the rotation; a sided turn becomes two
+        // full work intervals, one per side. The second side is added to the
+        // session — never carved out of the first, and never a round removed
+        // from anyone else.
+        var slots: [(move: Move?, side: String?)] = []
+        for turn in 1...routine.rounds {
+            guard let move = moves.isEmpty ? nil : moves[(turn - 1) % moves.count] else {
+                slots.append((nil, nil))
+                continue
+            }
+            if let sided = move.sided {
+                slots.append((move, sided.labels.first))
+                slots.append((move, sided.labels.second))
+            } else {
+                slots.append((move, nil))
+            }
+        }
 
-            built.append(Phase(kind: .work, round: round, move: move,
+        for (index, slot) in slots.enumerated() {
+            let round = index + 1
+            built.append(Phase(kind: .work, round: round, move: slot.move, side: slot.side,
                                duration: work, start: cursor, end: cursor + work))
             cursor += work
 
-            let isLast = round == routine.rounds
+            let isLast = index == slots.count - 1
             if !(isLast && routine.dropsFinalRest), routine.rest > 0 {
                 built.append(Phase(kind: .rest, round: round, move: nil,
                                    duration: routine.rest, start: cursor, end: cursor + routine.rest))
@@ -316,6 +436,16 @@ struct RoutineSchedule: Equatable {
 
         phases = built
         total = cursor
+    }
+
+    /// The rotation with every sided move expanded to one entry per side, in
+    /// order. One definition — the fixed shape, the sequence and `roundCount`
+    /// must agree on it exactly.
+    static func sidedCycle(of moves: [Move]) -> [(move: Move, side: String?)] {
+        moves.flatMap { move -> [(move: Move, side: String?)] in
+            guard let sided = move.sided else { return [(move, nil)] }
+            return [(move, sided.labels.first), (move, sided.labels.second)]
+        }
     }
 
     /// The phase containing `elapsed`, or nil once the routine is over.
@@ -333,6 +463,24 @@ struct RoutineSchedule: Equatable {
     }
 
     var workPhaseCount: Int { phases.filter(\.isWork).count }
+
+    /// Which set a phase is, counting work intervals only — the index reps are
+    /// filed under. Nil for a rest or a flow movement, which are not sets.
+    ///
+    /// One definition, because three places need to agree on it: the screen
+    /// filing a number during the rest that follows a set, the record that
+    /// stores them, and the summary that reads them back out.
+    func setOrdinal(of index: Int) -> Int? {
+        guard phases.indices.contains(index), phases[index].isWork else { return nil }
+        return phases[..<index].filter(\.isWork).count
+    }
+
+    /// The set the rest at `index` follows, if it follows one.
+    func setEnding(before index: Int) -> Int? {
+        guard phases.indices.contains(index) else { return nil }
+        let earlier = phases[..<index].filter(\.isWork).count
+        return earlier > 0 ? earlier - 1 : nil
+    }
     var flowPhaseCount: Int { phases.filter(\.isFlow).count }
 
     /// Where round one starts. The header reads "Warm-up 2 / 4" before this and

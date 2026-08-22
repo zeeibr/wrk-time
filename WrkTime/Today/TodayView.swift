@@ -1,16 +1,18 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// The document register.
 ///
 /// Reading order is deliberate: what today is, what it asks of you, the control
-/// that starts it, then the supporting figures. Fasting appears once, as a cell
-/// beside weight — it is an input to the plan, not the point of the app.
+/// that starts it, then the supporting figures.
 struct TodayView: View {
     @Query(sort: \PlannedSession.scheduledFor) private var sessions: [PlannedSession]
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
-    @Query private var fastWindows: [FastWindow]
     @Query(sort: \LoggedSet.date, order: .reverse) private var loggedSets: [LoggedSet]
+    /// Observed, not fetched — a run recorded by the timer must appear here the
+    /// moment it lands, or the day's extra work reads as never recorded.
+    @Query(sort: \RoutineRun.finishedAt, order: .reverse) private var routineRuns: [RoutineRun]
     @Query(sort: \Block.startDate, order: .reverse) private var blocks: [Block]
 
     @AppStorage(PlannerService.Memo.explanation) private var planExplanation = ""
@@ -24,6 +26,10 @@ struct TodayView: View {
     /// finished session never got its `completedAt` and never became a mark.
     /// Stacking presentations on one view is a known way to lose exactly that.
     @State private var running: RunningWorkout?
+    /// Whether today's finished session has been put on the clipboard.
+    @State private var copiedForWhoop = false
+    /// The finished session's move list, folded by default — it is history.
+    @State private var showFinishedMoves = false
 
     enum RunningWorkout: Identifiable, Equatable {
         static func == (a: Self, b: Self) -> Bool { a.id == b.id }
@@ -36,8 +42,12 @@ struct TodayView: View {
         /// by `ExtraSession`, never written to the store as a planned session —
         /// it earns no mark.
         case extra(IntervalRoutine)
-        /// One she built herself, started from Today rather than the Timer tab.
+        /// One she built herself, started from Today rather than the Moves tab.
         case saved(SavedRoutine, IntervalRoutine)
+        /// A past run done again, from the copy the run carries — its saved
+        /// routine is gone or it was an extra composed on the spot. Recorded
+        /// as her own workout, like anything run from a record of her own.
+        case rerun(IntervalRoutine)
         /// One the process died under, picked up where it stopped.
         case resumed(ActiveSession)
 
@@ -47,6 +57,7 @@ struct TodayView: View {
             case .practice: "practice"
             case .extra: "extra"
             case .saved(let r, _): "saved-\(r.id)"
+            case .rerun(let r): "rerun-\(r.id)"
             case .resumed: "resumed"
             }
         }
@@ -59,6 +70,7 @@ struct TodayView: View {
             case .practice(let r): r
             case .extra(let r): r
             case .saved(_, let r): r
+            case .rerun(let r): r
             case .resumed(let a): a.routine
             }
         }
@@ -70,7 +82,7 @@ struct TodayView: View {
             case .session(let s, _): .session(s.id)
             case .practice: .practice
             case .extra: .extra
-            case .saved: .routine
+            case .saved, .rerun: .routine
             case .resumed(let a): a.subject
             }
         }
@@ -144,7 +156,7 @@ struct TodayView: View {
                                 symbol: move.symbol,
                                 name: move.name,
                                 equipment: move.equipmentLabel,
-                                measure: "\(Int(routine.clampedWork))s ×\(routine.rounds / max(routine.moves.count, 1))"
+                                measure: rotationMeasure(for: move, in: routine)
                             )
                             // Tap the move to see it and to say what you think
                             // of it.
@@ -160,7 +172,7 @@ struct TodayView: View {
                         Rule()
 
                         PrimaryButton(title: "Begin session",
-                                      subtitle: "\(routine.rounds) rounds · \(routine.totalDuration.durationString)") {
+                                      subtitle: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)") {
                             running = .session(session, routine)
                         }
                         .padding(.top, 14)
@@ -173,7 +185,51 @@ struct TodayView: View {
 
                 IndexedSection(number: "03", label: "Kept") {
                     SectionHead(title: "Loose work", note: keptNote)
-                        .padding(.bottom, keptToday.isEmpty ? 10 : 4)
+                        .padding(.bottom, keptToday.isEmpty && runsToday.isEmpty ? 10 : 4)
+
+                    // Whole workouts she took beyond the plan today, listed with
+                    // the loose sets because this section is already the day's
+                    // off-plan record. Volume, never a mark — and a way back
+                    // in: tapping a run reopens its routine to do again. Rows
+                    // from before runs carried their routine stay plain.
+                    ForEach(runsToday) { run in
+                        let reopen = RoutineRuns.reopen(run, in: context)
+                        let row = VStack(spacing: 0) {
+                            Rule()
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(run.name)
+                                    .font(.almanacBody)
+                                    .foregroundStyle(Palette.ink)
+                                Spacer(minLength: 8)
+                                Text("\(run.seconds.durationString) · \(run.finishedAt.formatted(date: .omitted, time: .shortened))")
+                                    .almanacLabel(Palette.mute, small: true)
+                                    .tabular()
+                                if reopen != nil {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(Palette.mute)
+                                }
+                            }
+                            .padding(.vertical, 9)
+                        }
+
+                        // A plain row when there is nothing to reopen — a
+                        // disabled button dims its label, and an old ledger
+                        // line is a fact, not a failure.
+                        if let reopen {
+                            Button {
+                                running = reopen.saved.map { .saved($0, reopen.routine) }
+                                    ?? .rerun(reopen.routine)
+                            } label: {
+                                row.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityHint("Runs this routine again")
+                        } else {
+                            row.accessibilityElement(children: .combine)
+                        }
+                    }
 
                     ForEach(keptToday) { set in
                         VStack(spacing: 0) {
@@ -219,35 +275,25 @@ struct TodayView: View {
                     HStack(alignment: .top, spacing: 16) {
                         GrowthForm(marksByWeek: marksByWeek, weeks: weekCount,
                                    currentWeek: currentWeek,
+                                   minorsByWeek: minorsByWeek,
                                    sessionsPerWeek: marksPerWeek,
-                                   blockSeed: blocks.first?.formSeed ?? 0)
+                                   blockSeed: blocks.first?.formSeed ?? 0,
+                                   livedWeeksOnly: true,
+                                   dayOfWeek: dayOfBlockWeek)
                             .frame(width: 84, height: 84)
                         VStack(alignment: .leading, spacing: 7) {
                             seasonLine("Marks earned", "\(completedCount) / \(marksInBlock)")
                             seasonLine("This week", "\(marksThisWeek) / \(marksPerWeek)")
                             seasonLine("Week", "\(currentWeek) of \(weekCount)")
+                            // The weight rides here as a fourth line rather
+                            // than holding a section of its own — a lone
+                            // ledger row restating Signals' headline was a
+                            // whole section spent saying one number twice.
+                            seasonLine(weeklyRateString ?? "Weight · 7-day mean",
+                                       latestWeightString == "—" ? "—" : "\(latestWeightString) lb")
                         }
                     }
                     .padding(.bottom, 4)
-                }
-
-                IndexedSection(number: "05", label: "Signals") {
-                    Rule(firm: true)
-                    HStack(alignment: .top, spacing: 14) {
-                        StatCell(label: weeklyRateString ?? "Weight · 7-day mean",
-                                 value: latestWeightString,
-                                 unit: "lb")
-                        StatCell(label: "Fasting",
-                                 value: fastingString,
-                                 emphasis: Palette.moss)
-                    }
-                    .padding(.top, 12)
-
-                    Text(fastingFootnote)
-                        .font(.almanacBodySmall)
-                        .foregroundStyle(Palette.mute)
-                        .padding(.top, 10)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.horizontal, 20)
@@ -314,7 +360,7 @@ struct TodayView: View {
             // screen besides.
             counter("\(Int((routine.totalDuration / 60).rounded()))", "Minutes")
             divider
-            counter("\(routine.rounds)", "Rounds")
+            counter("\(routine.roundCount)", "Rounds")
             divider
             counter("\(Int(routine.clampedWork))/\(Int(routine.rest))", "Work / rest")
         }
@@ -437,7 +483,8 @@ struct TodayView: View {
     @ViewBuilder
     private var practiceSection: some View {
         let done = MorningPractices.done(in: context)
-        let routine = Practice.routine(on: .now, avoiding: refusedFlow)
+        let routine = Practice.routine(on: .now, avoiding: refusedFlow,
+                                       library: MoveLibrary.flow + CustomMoves.flow(in: context))
 
         IndexedSection(number: "01", label: "Morning") {
             SectionHead(title: "The practice",
@@ -448,17 +495,21 @@ struct TodayView: View {
                 .font(.almanacBody)
                 .foregroundStyle(Palette.mute)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 12)
+                .padding(.bottom, done ? 0 : 12)
 
-            ForEach(Array(routine.warmUp.enumerated()), id: \.element.id) { index, move in
-                BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
-                         equipment: move.equipmentLabel,
-                         measure: "\(Int(Practice.seconds))s")
-                    .onTapGesture { inspecting = move }
-            }
-            Rule()
-
+            // Once it is done, the section folds to its sentence. The eight
+            // movement rows are for this morning's doing, and this screen is
+            // about the next thirteen minutes — a finished practice keeping
+            // the fold all afternoon was the day's tallest piece of history.
             if !done {
+                ForEach(Array(routine.warmUp.enumerated()), id: \.element.id) { index, move in
+                    BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
+                             equipment: move.equipmentLabel,
+                             measure: "\(Int(Practice.seconds))s")
+                        .onTapGesture { inspecting = move }
+                }
+                Rule()
+
                 PrimaryButton(title: "Begin the practice",
                               subtitle: "\(routine.warmUp.count) movements · \(routine.totalDuration.durationString)") {
                     running = .practice(routine)
@@ -505,28 +556,116 @@ struct TodayView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let routine = session.routine {
-                ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
-                    BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
-                             equipment: move.equipmentLabel,
-                             measure: "\(Int(routine.clampedWork))s")
-                        .onTapGesture { inspecting = move }
+                // The moves fold away once the session is history — what stays
+                // in view is what she still does something with: the Whoop
+                // copy and what else today offers. The list is one tap back
+                // for checking a load or opening a move's history.
+                Button {
+                    showFinishedMoves.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("The moves")
+                            .almanacLabel(Palette.mute, small: true)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.mute)
+                            .rotationEffect(.degrees(showFinishedMoves ? 0 : -90))
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(showFinishedMoves ? "Expanded" : "Collapsed")
+
+                if showFinishedMoves {
+                    ForEach(Array(routine.moves.enumerated()), id: \.element.id) { index, move in
+                        BlockRow(index: index + 1, symbol: move.symbol, name: move.name,
+                                 equipment: move.equipmentLabel,
+                                 measure: "\(Int(routine.clampedWork))s")
+                            .onTapGesture { inspecting = move }
+                    }
                 }
                 Rule()
+
+                // The same list the finish screen offers, still here after it
+                // has been dismissed — logging into Whoop is a thing she does
+                // when she gets to it, not in the minute she stops moving.
+                if !routine.moves.isEmpty {
+                    copyForWhoop(routine, finishedAt: session.completedAt ?? .now,
+                                 reps: session.repCounts ?? [])
+                }
             }
 
             moreToday
         }
     }
 
+    /// Whoop's API only reads, so Muscular Load has to be told by her. This
+    /// hands over the session as text she can paste into Whoop's assistant.
+    private func copyForWhoop(_ routine: IntervalRoutine, finishedAt: Date,
+                              reps: [Int]) -> some View {
+        Button {
+            UIPasteboard.general.string = WhoopSummary.text(for: routine,
+                                                           finishedAt: finishedAt,
+                                                           reps: reps)
+            Haptics.transport()
+            // Acknowledges, then goes back to being an offer. This row lives
+            // on a screen she returns to all day; a "Copied" that never
+            // reverts stops telling her anything and hides the action.
+            copiedForWhoop = true
+            Task {
+                try? await Task.sleep(for: .seconds(2.5))
+                copiedForWhoop = false
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: copiedForWhoop ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 13, weight: .medium))
+                Text(copiedForWhoop ? "Copied — paste it into Whoop"
+                                    : "Copy the moves for Whoop")
+                    .font(.almanacBody)
+                Spacer()
+            }
+            .foregroundStyle(Palette.moss)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Copies this session's moves and loads to the clipboard")
+    }
+
+    /// Says which session this was when it is not the one today was written
+    /// for — a session pulled forward on a rest day is the plan working, and
+    /// the line should read as that rather than as a day that got confused.
     private func finishedLine(_ session: PlannedSession) -> String {
         guard let at = session.completedAt else { return "Finished." }
         let time = at.formatted(date: .omitted, time: .shortened)
-        return "Finished at \(time). \(marksThisWeek.marksPhrase) on the season this week."
+        let marks = "\(marksThisWeek.marksPhrase) on the season this week."
+
+        guard !Calendar.current.isDateInToday(session.scheduledFor) else {
+            return "Finished at \(time). \(marks)"
+        }
+        let day = session.scheduledFor.formatted(.dateTime.weekday(.wide))
+        return session.scheduledFor > at
+            ? "\(day)'s session, done early at \(time). \(marks)"
+            : "\(day)'s session, picked up at \(time). \(marks)"
     }
 
     /// A session scheduled for today that has been finished.
+    /// A session she finished **today**, whatever day it was written for.
+    ///
+    /// This used to ask which session was *scheduled* today and complete, so a
+    /// rest day she filled by pulling tomorrow's session forward — which the
+    /// rest-day copy offers her, in as many words — showed the rest-day text
+    /// afterwards and nothing else. The work was done, the mark was earned,
+    /// and Today said nothing about it: no record of it on the day, and no way
+    /// to copy the moves for Whoop, which is the surface that made it visible.
+    ///
+    /// Today's own session wins when there is one, so a day with both reads as
+    /// the day the plan describes.
     private var finishedToday: PlannedSession? {
-        sessions.first { Calendar.current.isDateInToday($0.scheduledFor) && $0.isComplete }
+        FinishedSessions.today(sessions)
     }
 
     // MARK: - More today
@@ -562,6 +701,9 @@ struct TodayView: View {
                 running = .session(offer.session, routine)
             }
             .padding(.top, 14)
+
+            repeatOffer
+                .padding(.top, 10)
         } else {
             Spacer(minLength: 16)
             SectionHead(title: "More today", note: "No mark")
@@ -571,6 +713,8 @@ struct TodayView: View {
                 .foregroundStyle(Palette.mute)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 10)
+
+            repeatOffer
 
             let extra = extraSession
             Button { running = .extra(extra) } label: {
@@ -594,6 +738,28 @@ struct TodayView: View {
                     .accessibilityHint("Starts your own routine")
                 }
             }
+        }
+    }
+
+    /// The session she finished today, offered once more. Her ask: repeat the
+    /// day's session — whichever it was, today's own or the next one done
+    /// early, which is exactly what `finishedToday` already answers.
+    ///
+    /// Run as an extra, deliberately: the mark was earned by the first pass
+    /// and `mark` froze that session's routine, so the repeat runs the
+    /// routine as it was actually done — her loads, her warm-up — and lands
+    /// as a `RoutineRun`, which is how the planner hears about the volume.
+    @ViewBuilder
+    private var repeatOffer: some View {
+        if let done = finishedToday, let routine = done.routine {
+            Button { running = .extra(routine) } label: {
+                offerRow(title: "\(routine.name) · again",
+                         detail: "\(routine.roundCount) rounds · \(routine.totalDuration.durationString)",
+                         note: "The session you finished today, one more time. No mark — the first pass earned it.")
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Repeats the session you finished today")
         }
     }
 
@@ -634,7 +800,10 @@ struct TodayView: View {
         return ExtraSession.build(week: block?.currentWeek ?? 1,
                                   pace: block?.pace ?? .building,
                                   avoiding: ruledOut,
-                                  notRepeating: doneToday)
+                                  notRepeating: doneToday,
+                                  including: CustomMoves.strength(in: context),
+                                  flowExtras: CustomMoves.flow(in: context),
+                                  loads: MoveOverrides.table(in: context))
     }
 
     private var savedRoutines: [SavedRoutine] {
@@ -695,7 +864,7 @@ struct TodayView: View {
     /// land before anything else can go wrong. Health is a nicety and can be
     /// awaited afterwards.
     private func finish(_ workout: RunningWorkout, _ outcome: WorkoutTimerView.Outcome) {
-        guard case .completed(let start, let end, let skipped) = outcome else {
+        guard case .completed(let start, let end, let skipped, _) = outcome else {
             // Walked away from: no mark, but it has just as much to say about
             // which move drove her out.
             if case .abandoned(let skipped) = outcome { skippedToReview = skipped }
@@ -710,7 +879,11 @@ struct TodayView: View {
         switch workout.subject {
         case .session(let id):
             guard let session = sessions.first(where: { $0.id == id }) else { break }
-            mark(session, start: start, end: end)
+            // Reps are not written here. The timer owns them start to finish —
+            // it is the only screen that knows them, and the last set is
+            // counted after this has already run. Two writers for one field is
+            // how they end up disagreeing.
+            mark(session, ran: workout.routine, start: start, end: end)
         case .practice:
             MorningPractices.record(workout.routine.warmUp, in: context)
             try? context.save()
@@ -730,7 +903,9 @@ struct TodayView: View {
             // Written by a build before a run said what it was. Today's
             // session is the old behaviour and the only guess available; it is
             // at least never a practice, so it cannot invent a mark from one.
-            if let session = todaysSession { mark(session, start: start, end: end) }
+            if let session = todaysSession {
+                mark(session, ran: workout.routine, start: start, end: end)
+            }
         }
         // Held rather than presented. `report()` now fires from the engine at
         // the moment the session ends, which on the completed path is while
@@ -749,7 +924,14 @@ struct TodayView: View {
     /// inside a `Task` that raced the cover's dismissal, and a finished session
     /// could end up with no `completedAt` at all — the work simply vanished.
     /// The mark is the point of finishing; Health is a nicety.
-    private func mark(_ session: PlannedSession, start: Date, end: Date) {
+    private func mark(_ session: PlannedSession, ran: IntervalRoutine,
+                      start: Date, end: Date) {
+        // Frozen at the moment it becomes a record: `ran` is the routine the
+        // timer actually counted her through, her load overrides included.
+        // Without this the row kept the library's defaults and re-read every
+        // later change, so stepping the halo up to the 8 lb ring would rewrite
+        // what a finished session claims she lifted.
+        session.routineData = (try? JSONEncoder().encode(ran)) ?? session.routineData
         session.completedAt = end
         try? context.save()
         let sync = HealthSync(health: HealthKitService(), context: context)
@@ -810,12 +992,41 @@ struct TodayView: View {
         loggedSets.filter { Calendar.current.isDateInToday($0.date) }
     }
 
+    private var runsToday: [RoutineRun] {
+        routineRuns.filter { Calendar.current.isDateInToday($0.finishedAt) }
+    }
+
+    /// "40s ×3", or "40s ×3 each side" when the move runs once per side — the
+    /// row says up front that this one takes two intervals a turn.
+    private func rotationMeasure(for move: Move, in routine: IntervalRoutine) -> String {
+        let turns = routine.rounds / max(routine.moves.count, 1)
+        let base = "\(Int(routine.clampedWork))s ×\(turns)"
+        return move.sided != nil ? base + " each side" : base
+    }
+
     /// States the count, and says plainly that it is not a mark — so the number
     /// here and the number on the season can differ without looking like a bug.
     private var keptNote: String {
+        var parts: [String] = []
+        if !runsToday.isEmpty {
+            parts.append(runsToday.count == 1 ? "1 workout" : "\(runsToday.count) workouts")
+        }
         let reps = keptToday.reduce(0) { $0 + $1.reps }
-        guard !keptToday.isEmpty else { return "Off the plan" }
-        return "\(reps) reps · no mark"
+        if reps > 0 { parts.append("\(reps) reps") }
+        guard !parts.isEmpty else { return "Off the plan" }
+        return parts.joined(separator: " · ") + " · no mark"
+    }
+
+    /// Which day of the block's week today is, 0–6 — the same start-of-day
+    /// arithmetic the week bins use, so the highlighted segment and the
+    /// binned marks cannot disagree about where the week is.
+    private var dayOfBlockWeek: Int? {
+        guard let start = blocks.first?.startDate else { return nil }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day],
+                                           from: calendar.startOfDay(for: start),
+                                           to: calendar.startOfDay(for: .now)).day ?? 0
+        return days >= 0 ? days % 7 : nil
     }
 
     /// Read from the block, so the week Today draws and the week the planner
@@ -846,6 +1057,38 @@ struct TodayView: View {
 
     private var marksThisWeek: Int {
         marksByWeek.indices.contains(currentWeek - 1) ? marksByWeek[currentWeek - 1] : 0
+    }
+
+    /// Her own substantial workouts as tick positions — binned by the same
+    /// start-of-day arithmetic marks use, then placed by `tickPositions` so
+    /// each tick follows the session it was performed after, same-day extras
+    /// clustered close. Her spec, and the drawing just draws it.
+    private var minorsByWeek: [[Double]] {
+        var sessionTimes = Array(repeating: [Date](), count: weekCount)
+        var extraTimes = Array(repeating: [Date](), count: weekCount)
+        guard let start = blocks.first?.startDate else {
+            return Array(repeating: [], count: weekCount)
+        }
+        let calendar = Calendar.current
+        let first = calendar.startOfDay(for: start)
+        func week(of date: Date) -> Int? {
+            let days = calendar.dateComponents([.day], from: first,
+                                               to: calendar.startOfDay(for: date)).day ?? 0
+            guard days >= 0 else { return nil }
+            let bin = days / 7
+            return bin < weekCount ? bin : nil
+        }
+        for session in sessions {
+            guard let done = session.completedAt, let bin = week(of: done) else { continue }
+            sessionTimes[bin].append(done)
+        }
+        for run in routineRuns where run.isSubstantial {
+            guard let bin = week(of: run.finishedAt) else { continue }
+            extraTimes[bin].append(run.finishedAt)
+        }
+        return (0..<weekCount).map {
+            GrowthForm.tickPositions(sessions: sessionTimes[$0], extras: extraTimes[$0])
+        }
     }
 
     /// The denominators follow the pace she chose rather than a fixed six.
@@ -925,12 +1168,27 @@ struct TodayView: View {
         guard let rate = trend.weeklyRate else { return nil }
         return String(format: "%+.1f lb this week", rate)
     }
+}
 
-    private var fastingString: String {
-        fastWindows.first?.summaryLine ?? "Not tracking"
-    }
-
-    private var fastingFootnote: String {
-        "Your eating window is one of three inputs to the projected rate, alongside session volume and sleep."
+/// Which session a day should show as finished.
+///
+/// Out of the view because the rule has a wrinkle worth stating once and
+/// testing: it is decided by **when she finished**, not by the day the session
+/// was written for. A rest day filled by pulling the next session forward —
+/// which the rest-day copy offers her in as many words — was showing the
+/// rest-day text afterwards and nothing else, because the question being asked
+/// was "which session scheduled today is complete". The work was done and the
+/// mark was earned; the day said nothing about it.
+enum FinishedSessions {
+    static func today(_ sessions: [PlannedSession], now: Date = .now,
+                      calendar: Calendar = .current) -> PlannedSession? {
+        let done = sessions.filter {
+            guard let at = $0.completedAt else { return false }
+            return calendar.isDate(at, inSameDayAs: now)
+        }
+        // The session today was written for wins, so a day holding both reads
+        // as the day the plan describes rather than as whatever finished last.
+        return done.first { calendar.isDate($0.scheduledFor, inSameDayAs: now) }
+            ?? done.max { ($0.completedAt ?? .distantPast) < ($1.completedAt ?? .distantPast) }
     }
 }

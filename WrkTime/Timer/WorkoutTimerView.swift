@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// The field register.
 ///
@@ -19,6 +20,12 @@ struct WorkoutTimerView: View {
     /// way to stop that has to be findable twice, not once.
     @AppStorage("cueSoundEnabled") private var soundEnabled = true
     @State private var stage: Stage = .arriving
+    /// Whether the finished session has been put on the clipboard for Whoop.
+    @State private var copiedForWhoop = false
+    /// Reps she counted, by set — the work interval's ordinal in the schedule.
+    /// Sparse on purpose: a set she did not count stays uncounted rather than
+    /// being filled in with a plausible number.
+    @State private var reps: [Int: Int] = [:]
     /// Seconds left of the lead-in, shown in place of the count.
     @State private var leadIn = 3
     /// 0 while the ground is still down, 1 once it has risen.
@@ -39,7 +46,7 @@ struct WorkoutTimerView: View {
         /// `skipped` travels with the ending so Today can ask about it. It is
         /// carried on both cases: a session she bailed out of has just as much
         /// to say about which move drove her out.
-        case completed(start: Date, end: Date, skipped: [String])
+        case completed(start: Date, end: Date, skipped: [String], reps: [Int])
         case abandoned(skipped: [String])
     }
 
@@ -288,7 +295,7 @@ struct WorkoutTimerView: View {
         let seconds = Int(phase.duration.rounded())
         let words = switch phase.kind {
         case .flow: "\(phase.move?.name ?? "Flow"). \(seconds) seconds. No rush."
-        case .work: "Work. \(seconds) seconds."
+        case .work: "Work\(phase.side.map { ", \($0.lowercased())" } ?? ""). \(seconds) seconds."
         case .rest: "Rest. \(seconds) seconds."
         }
         AccessibilityNotification.Announcement(words).post()
@@ -338,11 +345,13 @@ struct WorkoutTimerView: View {
         // A planned session is not recorded here: it earns a mark, which needs
         // the session row, which only the presenter has.
         if let source = subject.recordedSource {
-            RoutineRuns.record(routine, source: source,
-                               seconds: end.timeIntervalSince(start), in: context)
+            recordedRun = RoutineRuns.record(routine, source: source,
+                                             seconds: end.timeIntervalSince(start),
+                                             reps: countedReps, in: context)
         }
 
-        onEnd(.completed(start: start, end: end, skipped: engine.skippedMoves))
+        onEnd(.completed(start: start, end: end, skipped: engine.skippedMoves,
+                         reps: countedReps))
     }
 
     @Environment(\.scenePhase) private var scenePhase
@@ -419,8 +428,19 @@ struct WorkoutTimerView: View {
                     .accessibilityValue(accessibilityCount)
                     .accessibilityAddTraits(.updatesFrequently)
 
-                Text(phaseCaption)
-                    .almanacLabel(secondary)
+                HStack(spacing: 8) {
+                    // Saffron means live, and a running work interval is the
+                    // one live thing on this screen — the mockup's Work pill,
+                    // reduced to its mark.
+                    if engine.currentPhase?.isWork == true, engine.status == .running {
+                        Rectangle()
+                            .fill(Palette.saffron)
+                            .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
+                    }
+                    Text(phaseCaption)
+                        .almanacLabel(secondary)
+                }
             }
             .padding(.horizontal, 22)
             // Both layers take the same offset, so the two copies stay in the
@@ -434,12 +454,26 @@ struct WorkoutTimerView: View {
             // line at the very bottom. It gets the same billing as the current
             // move instead.
             if let phase = engine.currentPhase, let move = phase.move {
-                moveBlock(move, eyebrow: phase.isFlow ? phaseWord : nil,
+                // The side a sided move is on gets the eyebrow — the one line
+                // that has to be readable at a glance mid-set.
+                moveBlock(move, eyebrow: phase.isFlow ? phaseWord : phase.side,
                           foreground: foreground, secondary: secondary)
             } else if let next = engine.nextPhase, let move = next.move {
                 moveBlock(move, eyebrow: next.isFlow && engine.routine.roundCount > 0
-                                          ? "Warm-up next" : "Next up",
+                                          ? "Warm-up next"
+                                          : next.side.map { "Next up · \($0.lowercased())" } ?? "Next up",
                           foreground: foreground, secondary: secondary)
+            }
+
+            // Counting the set she has just finished, during the rest that
+            // follows it — the one moment she is standing still and it is
+            // still fresh. Steppers rather than a keyboard: a number pad in
+            // the field register, on a forty-second rest, with the hands this
+            // has just been done with, is a way of not recording anything.
+            if let set = restingAfterSet {
+                repCounter(for: set, foreground: foreground, secondary: secondary)
+                    .padding(.top, 16)
+                    .padding(.horizontal, 22)
             }
 
             upNext(foreground: foreground, secondary: secondary)
@@ -475,10 +509,11 @@ struct WorkoutTimerView: View {
 
             // A mark is a finished *session*. The practice keeps its own record
             // and deliberately earns none, so claiming one here would be the
-            // screen contradicting the season it points at.
-            Text(engine.routine.roundCount > 0
-                 ? "One mark on the season."
-                 : "Kept in the practice's own record.")
+            // screen contradicting the season it points at — and so would
+            // claiming one for a routine or an extra, which are recorded as
+            // her own work. The subject knows which this was; the round count
+            // does not.
+            Text(completionRecordNote)
                 .font(.almanacBody)
                 .foregroundStyle(Palette.mute)
                 .padding(.top, 8)
@@ -491,6 +526,77 @@ struct WorkoutTimerView: View {
             .overlay(alignment: .top) { Rule() }
             .overlay(alignment: .bottom) { Rule() }
             .padding(.bottom, 2)
+
+            // The last set has no rest after it, so it is the one set that
+            // could not be counted while she was working. Asked for here, once,
+            // rather than left as the gap in every list she pastes.
+            if let set = lastSet, let phase = lastWorkPhase, let move = phase.move {
+                VStack(alignment: .leading, spacing: 0) {
+                    Rule()
+                    HStack(spacing: 14) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text([("Last set"), move.name, phase.side]
+                                .compactMap { $0 }.joined(separator: " · "))
+                                .almanacLabel(Palette.mute, small: true)
+                            Text(reps[set].map(String.init) ?? "—")
+                                .font(Face.slab(26))
+                                .tabular()
+                                .foregroundStyle(Palette.ink)
+                        }
+                        Spacer(minLength: 8)
+                        FieldButton(systemName: "minus", label: "One fewer rep",
+                                    foreground: Palette.ink) {
+                            reps[set] = max((reps[set] ?? 0) - 1, 0)
+                            applyReps()
+                            Haptics.transport()
+                        }
+                        FieldButton(systemName: "plus", label: "One more rep",
+                                    foreground: Palette.ink) {
+                            reps[set] = (reps[set] ?? 7) + 1
+                            applyReps()
+                            Haptics.transport()
+                        }
+                    }
+                    .padding(.vertical, 10)
+                    Rule()
+                }
+                .padding(.top, 18)
+                .accessibilityElement(children: .contain)
+            }
+
+            // Whoop computes Muscular Load from what it is told, and its API
+            // only reads — nothing can be written in. So the session goes to
+            // the clipboard in her words instead, ready to paste into Whoop's
+            // own assistant rather than typed again from memory.
+            if !engine.routine.moves.isEmpty {
+                Button {
+                    UIPasteboard.general.string = WhoopSummary.text(
+                        for: engine.routine,
+                        seconds: engine.schedule.total,
+                        reps: countedReps)
+                    Haptics.transport()
+                    copiedForWhoop = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        copiedForWhoop = false
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: copiedForWhoop ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 13, weight: .medium))
+                        Text(copiedForWhoop ? "Copied — paste it into Whoop"
+                                            : "Copy the moves for Whoop")
+                            .font(.almanacBody)
+                        Spacer()
+                    }
+                    .foregroundStyle(Palette.moss)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
+                .accessibilityHint("Copies this session's moves and loads to the clipboard")
+            }
 
             Spacer()
 
@@ -571,6 +677,21 @@ struct WorkoutTimerView: View {
                     .foregroundStyle(foreground)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
+                // What to pick up, on the one screen where she is picking it
+                // up. Every other surface — Today, the library, the move
+                // sheet, the builder — has carried `equipmentLabel` all along
+                // and this one never did, which was survivable only while the
+                // moves she saw most were the ring ones, whose cues name the
+                // weight in prose. Fifty-five of the seventy-five loaded moves
+                // do not, so most of the library reached the field register
+                // with the load nowhere on screen.
+                //
+                // It cannot live in the cue instead. `MoveOverride` lets her
+                // change a load, and a sentence that has been rewritten around
+                // a number is a worse place to keep that number than a line
+                // that simply reads it.
+                Text(move.equipmentLabel)
+                    .almanacLabel(secondary)
                 Text(move.cue)
                     .font(.almanacBody)
                     .foregroundStyle(secondary)
@@ -579,6 +700,113 @@ struct WorkoutTimerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 22)
+    }
+
+    /// The row `report()` wrote, so a count made after the ending lands on it
+    /// rather than on a second record.
+    @State private var recordedRun: RoutineRun?
+
+    /// Files her counts against whatever this workout was recorded as.
+    ///
+    /// Called once at the ending and again whenever the last set is counted on
+    /// the finish screen — the one set with no rest after it, and so the one
+    /// set with nowhere to be counted during the workout.
+    ///
+    /// Deliberately *not* the thing that records the workout: that stays in
+    /// `report()`, where the ending is detected, because a screen she dismisses
+    /// quickly must never be what decides whether the session was written down.
+    /// This only revisits a field on a row that already exists, so it is
+    /// additive and safe to never run.
+    private func applyReps() {
+        let counts = countedReps
+        guard counts.contains(where: { $0 > 0 }) else { return }
+        var source: UUID?
+        switch subject {
+        case .session(let id):
+            let wanted = FetchDescriptor<PlannedSession>(
+                predicate: #Predicate { $0.id == id })
+            (try? context.fetch(wanted))?.first?.repCounts = counts
+            source = id
+        default:
+            recordedRun?.repCounts = counts
+            source = recordedRun?.id
+        }
+        try? context.save()
+        // And per move, which is the shape the history is read in. Rewritten
+        // rather than appended, so counting the last set corrects this
+        // session's rows instead of adding a second set of them.
+        SetLogs.record(routine, reps: counts, sourceID: source, in: context)
+    }
+
+    /// Her counts laid out by set, zero where a set went uncounted — the shape
+    /// `WhoopSummary` and the stored record both read.
+    private var countedReps: [Int] {
+        guard !reps.isEmpty else { return [] }
+        return (0..<engine.schedule.workPhaseCount).map { reps[$0] ?? 0 }
+    }
+
+    /// The final set of the session, when there is one to count.
+    private var lastSet: Int? {
+        let count = engine.schedule.workPhaseCount
+        guard count > 0, !engine.routine.moves.isEmpty else { return nil }
+        return count - 1
+    }
+
+    private var lastWorkPhase: Phase? {
+        engine.schedule.phases.last(where: \.isWork)
+    }
+
+    /// The set this rest follows, when the screen is resting after real work.
+    /// Nil through the warm-up, through a set itself, and at the very end.
+    private var restingAfterSet: Int? {
+        guard let index = engine.currentIndex,
+              engine.currentPhase?.isRest == true,
+              let set = engine.schedule.setEnding(before: index)
+        else { return nil }
+        return set
+    }
+
+    /// What she just did, in her own number. Counting is hers — the app times
+    /// the work and cannot see the reps — and Whoop wants sets and reps rather
+    /// than intervals, which is what this is for.
+    ///
+    /// Named after the move it files to. The rest screen leads with the *next*
+    /// move — its plate, its name, its cue — and an unlabelled stepper sitting
+    /// under that block read as counting the move above it, when it counts the
+    /// one she just put down. The finish screen's "Last set · Bicep curl"
+    /// already solved this; same pattern here.
+    private func repCounter(for set: Int, foreground: Color, secondary: Color) -> some View {
+        let counted = reps[set] ?? 0
+        let workPhases = engine.schedule.phases.filter(\.isWork)
+        let phase = workPhases.indices.contains(set) ? workPhases[set] : nil
+        let label = [phase?.move?.name, phase?.side, "reps just done"]
+            .compactMap(\.self).joined(separator: " · ")
+        return HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).almanacLabel(secondary)
+                Text(counted > 0 ? "\(counted)" : "—")
+                    .font(Face.slab(30))
+                    .tabular()
+                    .foregroundStyle(foreground)
+            }
+            Spacer(minLength: 8)
+            FieldButton(systemName: "minus", label: "One fewer rep",
+                        foreground: foreground) {
+                reps[set] = max((reps[set] ?? 0) - 1, 0)
+                Haptics.transport()
+            }
+            FieldButton(systemName: "plus", label: "One more rep",
+                        foreground: foreground) {
+                // Opens at eight rather than one: a first press means "I did a
+                // set", not "I did one rep", and eight is the middle of what
+                // forty seconds of these moves comes to.
+                reps[set] = (reps[set] ?? 7) + 1
+                Haptics.transport()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Reps just done")
+        .accessibilityValue(counted > 0 ? "\(counted)" : "Not counted")
     }
 
     private func header(foreground: Color, secondary: Color) -> some View {
@@ -699,6 +927,16 @@ struct WorkoutTimerView: View {
         }
     }
 
+    /// What this ending was recorded as, read from the subject rather than
+    /// guessed from the shape. "One mark on the season" over a Timer-tab
+    /// routine was the screen promising a mark the store rightly never wrote.
+    private var completionRecordNote: String {
+        if subject.recordedSource != nil { return "Kept with your own workouts." }
+        return engine.routine.roundCount > 0
+            ? "One mark on the season."
+            : "Kept in the practice's own record."
+    }
+
     private var positionLine: String {
         guard let phase = engine.currentPhase else {
             return "Round \(engine.routine.roundCount) / \(engine.routine.roundCount)"
@@ -725,7 +963,8 @@ struct WorkoutTimerView: View {
     /// routine used to announce every one of its work intervals as "Rest".
     private func nextDescription(_ phase: Phase) -> String {
         if let move = phase.move {
-            return "\(move.name) · \(phase.duration.clockString)"
+            let side = phase.side.map { " · \($0.lowercased())" } ?? ""
+            return "\(move.name)\(side) · \(phase.duration.clockString)"
         }
         return phase.isRest ? "Rest \(phase.duration.clockString)"
                             : "Work \(phase.duration.clockString)"

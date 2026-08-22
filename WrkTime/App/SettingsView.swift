@@ -15,6 +15,12 @@ struct SettingsView: View {
     @State private var movesPerSession = Tuning.movesPerSession
     @State private var practiceMovements = Tuning.practiceMovements
     @State private var plateSeconds = Tuning.plateSeconds
+    /// Mirrors `Tuning.ownedEquipment` for the same reason the steppers mirror
+    /// their numbers: `UserDefaults` written from here does not publish.
+    @AppStorage(Tuning.ownedEquipmentKey) private var ownedRaw = ""
+    private var owned: Set<Equipment> { Tuning.decodeOwned(ownedRaw) }
+    /// What switching a drawer off did to the weeks already written.
+    @State private var kitNote: String?
 
     /// Writes the setting, then reads back what it actually took, so a value
     /// that hits a bound shows the bound rather than what was asked for.
@@ -49,6 +55,34 @@ struct SettingsView: View {
         shapeNote = summary.sessionsChanged == 0 ? nil
             : summary.sessionsChanged == 1 ? "One session was resized."
             : "\(summary.sessionsChanged) sessions were resized."
+    }
+
+    /// How many moves a drawer carries, so the row says what switching it off
+    /// actually costs before she does it.
+    private func detail(for equipment: Equipment) -> String {
+        let count = MoveLibrary.moves(for: equipment).count
+        let moves = count == 1 ? "1 move" : "\(count) moves"
+        return "\(equipment.shortLabel) · \(moves)"
+    }
+
+    /// Switching a drawer off rewrites the sessions already written, the same
+    /// way ruling a move out does — recording the change and leaving Thursday
+    /// still asking for a band would be the app agreeing with her and doing
+    /// nothing. Switching one back on changes nothing already written; the
+    /// next week the planner sees it again.
+    private func store(_ equipment: Equipment, owned isOwned: Bool) {
+        var kit = Tuning.ownedEquipment
+        if isOwned { kit.insert(equipment) } else { kit.remove(equipment) }
+        Tuning.ownedEquipment = kit
+
+        guard !isOwned else {
+            kitNote = "\(equipment.label) is back. The next week written will use it."
+            return
+        }
+        let names = MoveLibrary.moves(for: equipment).map(\.name)
+        let summary = PlanRepair.replace(names, in: context)
+        try? context.save()
+        kitNote = summary.note ?? "Nothing already written was using it."
     }
 
     private func storePractice(_ value: Int) {
@@ -293,7 +327,47 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
 
-                    IndexedSection(number: "05", label: "Week") {
+                    IndexedSection(number: "05", label: "Kit") {
+                        SectionHead(title: "What you have",
+                                    note: "\(Equipment.switchable.filter(\.isOwned).count) of \(Equipment.switchable.count)")
+                            .padding(.bottom, 10)
+
+                        Text("Switch something off and it leaves the plans, the rotations and the suggestions until you switch it back. Your own body is always here, so it is not on the list.")
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 4)
+
+                        ForEach(Equipment.switchable) { equipment in
+                            VStack(spacing: 0) {
+                                Rule()
+                                Toggle(isOn: Binding(
+                                    get: { owned.contains(equipment) },
+                                    set: { store(equipment, owned: $0) })) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(equipment.label)
+                                            .font(.almanacBody)
+                                            .foregroundStyle(Palette.ink)
+                                        Text(detail(for: equipment))
+                                            .almanacLabel(Palette.mute, small: true)
+                                    }
+                                }
+                                .tint(Palette.moss)
+                                .padding(.vertical, 10)
+                            }
+                        }
+                        Rule()
+
+                        if let kitNote {
+                            Text(kitNote)
+                                .font(.almanacBodySmall)
+                                .foregroundStyle(Palette.saffronInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 12)
+                        }
+                    }
+
+                    IndexedSection(number: "06", label: "Week") {
                         SectionHead(title: "Requests so far", note: usageNote)
                             .padding(.bottom, 10)
                         Text("Claude is asked when there is something to adapt to — a session missed, an opinion recorded, or a check-in every \(PlanTrigger.everyNWeeks) weeks. A clean week steps on from the last one for nothing, because the progression is arithmetic the app already does. Rewriting below always asks.")

@@ -75,7 +75,8 @@ enum OfflinePlanner {
                                 rest: rest,
                                 rounds: rounds,
                                 moves: substituting(
-                                    template.rotation(of: rotation, avoiding: excluded),
+                                    template.rotation(of: rotation, avoiding: excluded,
+                                                      varying: position),
                                     avoiding: excluded))
         }
 
@@ -164,24 +165,40 @@ enum OfflinePlanner {
         let title: String
         let moves: [DraftMove]
 
-        /// The first `count` moves, and if the template is shorter than that,
-        /// topped up from the rest of the library on the same kit. A rotation
-        /// is never padded with a repeat.
-        func rotation(of count: Int, avoiding excluded: Set<String> = []) -> [DraftMove] {
+        /// The template's own moves, and if it is shorter than `count`, topped
+        /// up from the library. A rotation is never padded with a repeat.
+        ///
+        /// `turn` is the session's place in the week. The templates hold three
+        /// moves and a rotation is five by default, so **every** offline
+        /// session is topped up — and this used to walk the library from the
+        /// top, which meant all five sessions of the week ended with the same
+        /// two movements, week after week. The turn is what tells them apart.
+        ///
+        /// The week number is deliberately *not* in it. Repeating a week is
+        /// how a movement gets easier before the numbers do — the explanation
+        /// the planner writes says exactly that — so the same session in the
+        /// next week should ask for the same moves and a shorter rest.
+        func rotation(of count: Int, avoiding excluded: Set<String> = [],
+                      varying turn: Int = 0) -> [DraftMove] {
             guard count > moves.count else { return Array(moves.prefix(count)) }
-            var out = moves
-            var used = Set(moves.map { $0.name.lowercased() })
-            for move in MoveLibrary.all where move.kind == .strength {
-                guard out.count < count else { break }
-                guard !used.contains(move.name.lowercased()) else { continue }
-                // A longer rotation must not reach past a refusal to fill
-                // itself — the top-up is where that would happen unnoticed.
-                guard !MovePreference.anyCovers(excluded, move.name) else { continue }
-                used.insert(move.name.lowercased())
-                out.append(DraftMove(name: move.name, equipment: move.equipment.rawValue,
-                                     cue: move.cue, loadPounds: move.loadPounds ?? 0))
+            // The one builder — `MoveLibrary.rotation` — rather than a second
+            // spelling of it. This one walked `MoveLibrary.all` where the
+            // builder walks `available`, so a top-up could name a drawer she
+            // had switched off; `PlanValidator` rejects a week **whole**, so
+            // two filler moves were able to throw away the offline week that
+            // is supposed to be the floor everything else falls back to.
+            let kit = Set(moves.compactMap { Equipment(rawValue: $0.equipment) })
+            let topUp = MoveLibrary.rotation(of: count - moves.count,
+                                             preferring: kit,
+                                             avoiding: excluded,
+                                             excluding: Set(moves.map {
+                                                 MovePreference.key($0.name)
+                                             }),
+                                             varying: turn)
+            return moves + topUp.map {
+                DraftMove(name: $0.name, equipment: $0.equipment.rawValue,
+                          cue: $0.cue, loadPounds: $0.loadPounds ?? 0)
             }
-            return out
         }
 
         static let rotation: [Template] = [

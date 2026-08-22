@@ -64,6 +64,51 @@ enum Tuning {
                                         forKey: Key.plateSeconds) }
     }
 
+    // MARK: What she actually owns
+
+    /// The kit she has to hand, by raw value.
+    ///
+    /// This is **not** a way to add equipment — `Equipment` stays a closed
+    /// enum, and nothing outside it can ever be named. It is a way to say
+    /// "not yet" about something already in it: the band was in the app
+    /// before it was in the house, and a plan that programs a pull-apart she
+    /// cannot do is worse than one that leaves the pull side to the rings.
+    ///
+    /// Stored as the *owned* set rather than the missing one, so a case added
+    /// to the enum later is off until she says otherwise — the safe direction.
+    /// Nil means she has never touched this, which reads as "everything",
+    /// because that is what the app assumed for its whole life before now.
+    /// Stored as one comma-joined string rather than an array, so a view can
+    /// hold it in `@AppStorage` and redraw the moment it changes. `UserDefaults`
+    /// does not publish, and the drawer she just switched off has to leave the
+    /// Moves tab without waiting for a relaunch — `@AppStorage` supports a
+    /// `String` and not a `[String]`, and that is the whole reason for the
+    /// shape.
+    static let ownedEquipmentKey = "ownedEquipmentList"
+
+    static var ownedEquipment: Set<Equipment> {
+        get { decodeOwned(UserDefaults.standard.string(forKey: ownedEquipmentKey)) }
+        set {
+            UserDefaults.standard.set(
+                newValue.union(Equipment.alwaysOwned).map(\.rawValue).sorted().joined(separator: ","),
+                forKey: ownedEquipmentKey)
+        }
+    }
+
+    /// One reader for the stored string, so the view's `@AppStorage` copy and
+    /// this one cannot disagree about what it means.
+    static func decodeOwned(_ raw: String?) -> Set<Equipment> {
+        guard let raw, !raw.isEmpty else { return Set(Equipment.allCases) }
+        return Set(raw.split(separator: ",").compactMap { Equipment(rawValue: String($0)) })
+            .union(Equipment.alwaysOwned)
+    }
+
+    /// Whether she has ever said anything about her kit. Used only to decide
+    /// whether the one-time seed should speak.
+    static var hasSetEquipment: Bool {
+        UserDefaults.standard.string(forKey: ownedEquipmentKey) != nil
+    }
+
     // MARK: -
 
     private enum Key {
@@ -87,5 +132,10 @@ enum Tuning {
         UserDefaults.standard.removeObject(forKey: Key.movesPerSession)
         UserDefaults.standard.removeObject(forKey: Key.practiceMovements)
         UserDefaults.standard.removeObject(forKey: Key.plateSeconds)
+        // Deliberately not the kit. This puts the three *numbers* back where
+        // they started; what she owns is a fact about her house, not a setting
+        // with a sensible default, and clearing it here made a test that
+        // resets tuning silently hand the band back to every suite running
+        // beside it.
     }
 }

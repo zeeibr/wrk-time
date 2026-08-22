@@ -87,7 +87,10 @@ enum PlanRepair {
                     // day does not fill up with dumbbells.
                     preferring: Set(routine.moves.map(\.equipment)),
                     avoiding: barred,
-                    excluding: Set(routine.moves.map { MovePreference.key($0.name) }))
+                    excluding: Set(routine.moves.map { MovePreference.key($0.name) }),
+                    // The session's own day, so growing Tuesday and Thursday
+                    // does not hand them both the same two moves.
+                    varying: Rotation.dayIndex(session.scheduledFor))
             }
 
             guard routine.moves.count != (session.routine?.moves.count ?? 0) else { continue }

@@ -17,7 +17,7 @@ A **34-year-old woman, new to fitness**. She is the only user.
 That is a first-class planning input, not a demographic note, and the original
 spec did not have it. Three things follow.
 
-**Progression cannot come from load.** The kit tops out at 15 lb. Progression
+**Progression barely comes from load.** The kit tops out at 18 lb, in coarse steps. Progression
 comes from tempo (slower eccentrics), range, density (shorter rests), volume
 (more rounds), and unilateral variants. A planner reaching for "add weight" has
 nowhere to go and will stall by week three.
@@ -41,7 +41,12 @@ form already encodes that: one mark is one *finished* session.
 
 The kit, precisely:
 
-- Two **2 lb** Peloton dumbbells
+- Dumbbell pairs at **2, 3 and 5 lb**
+- One single **10 lb** dumbbell, held in both hands — bought for core work
+  (Russian twists, side bends). There is exactly one of it; a move that
+  assumes a 10 lb pair is wrong.
+- One **18 lb** kettlebell
+- A light **resistance band**, bought for posture work
 - One **15 lb** Bala Beam
 - Bala Power Rings at **5, 8 and 10 lb** — three *different* weights, not a
   matched set. "One in each hand" is only true for a pair she chooses, and a
@@ -70,7 +75,7 @@ it.
 **Cycle-aware programming.** For someone training seriously in their thirties
 this is the single most relevant remaining input, and it is deliberately *not*
 assumed. It must be **opt-in**, never inferred, and if enabled it belongs in the
-same category as fasting and recovery: an input among several, never the thing
+same category as recovery: an input among several, never the thing
 driving the plan. Do not build it until she asks for it.
 
 Do not otherwise assume anything about her goals. Nothing in this app should
