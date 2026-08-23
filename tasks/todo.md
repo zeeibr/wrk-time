@@ -234,7 +234,7 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       SessionLinkTests, OwnershipTests.
 - [x] Phase 3 (agent C) — WatchWorkout (HKWorkoutSession), Signals
       heart-rate line.
-- [ ] Phase 4 (agent D) — WatchTodayView, WatchSnapshots, complications,
+- [x] Phase 4 (agent D) — WatchTodayView, WatchSnapshots, complications,
       WatchTodayTests, screenshots.
 - [ ] Integration — merge the four, wire WatchTimerView to SessionLink +
       WatchWorkout + snapshot running fields, full suite, paired-simulator
