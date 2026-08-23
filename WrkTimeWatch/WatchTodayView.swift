@@ -131,6 +131,10 @@ struct WatchTodayView: View {
             readActiveSession()
             listen()
             WatchSnapshots.refresh(in: context)
+            // The one place the watch asks for Health. Asked here, on a
+            // screen she is reading, so the sheet never lands mid-session;
+            // a no-op once she has answered it.
+            _ = await WatchWorkout.requestAuthorization()
         }
         .onChange(of: running) { _, value in
             guard value == nil else { return }

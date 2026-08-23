@@ -628,10 +628,13 @@ struct WatchTimerView: View {
     private func beginWorkout() {
         guard owner == .watch else { return }
         let start = sessionStart ?? .now
-        Task {
-            _ = await WatchWorkout.requestAuthorization()
-            await workout.start(at: start)
-        }
+        // No authorization request here — the ask happens once, on Today,
+        // where a system sheet has a calm screen to land on. Three seconds
+        // into a lead-in is the wrong moment to be asked anything, and on
+        // the watch simulator the mid-start sheet reliably knocked the app
+        // back to the clock face. Without authorization the workout simply
+        // collects nothing, which is the designed quiet failure.
+        Task { await workout.start(at: start) }
     }
 
     /// Everything that hangs off the engine's callbacks, in one named place.
