@@ -881,15 +881,21 @@ reconnect resend are covered by `SessionLinkTests` rather than by hand —
 a 20-second rest window is shorter than a screenshot round-trip — and
 belong on the device-pass list below.
 
-**The device pass (open).** Her watch is a **Series 6, 40 mm** — the
-deployment floor (watchOS 11) is exactly what it supports. To verify on
-hardware: install over Wi-Fi (`xcodebuild build … -destination
-'id=E56EBBEC…' -allowProvisioningUpdates`, then `xcrun devicectl device
-install app`); the watch app rides inside the iPhone app and installs from
-the Watch app (or automatically) when paired. Then: a wrist-started
-session recorded once with heart rate on Signals; a phone session
-mirrored; reps counted from the crown landing in the one record; the
-haptic vocabulary actually felt — the watch's cues are as unverified as
-the phone's were before 27 July. CloudKit on the watch needs her iCloud
-account signed in on the watch; the simulator ran local-only, which is the
-designed degradation.
+**Installed on her hardware, 23 August 2026.** Her watch is a **Series 6,
+40 mm** — the deployment floor (watchOS 11) is exactly what it supports.
+The iPhone build (`-allowProvisioningUpdates`, then `xcrun devicectl
+device install app`) landed on her iPhone 17 Pro over Wi-Fi with the
+watch app embedded, and the watch app then installed **directly onto the
+watch** the same way — `devicectl` accepts the watch as a device, so
+there was no waiting on the Watch app's sync
+(`xcrun devicectl device install app --device FD92461F-… …/Watch/WrkTimeWatch.app`).
+`device info apps` confirms `com.zee.wrktime.watchkitapp 0.1` on the
+wrist.
+
+**Still hers to verify on the body, in rough order:** the haptic
+vocabulary (as unverified on the wrist as the phone's cues were before
+27 July); a wrist-started session recorded once, with its heart rate on
+Signals afterward; a phone session mirrored on the arm mid-set; reps from
+the crown landing in the one record; the complication on her watch face.
+CloudKit on the watch needs her iCloud account signed in there — the
+simulators ran local-only, which is the designed degradation.

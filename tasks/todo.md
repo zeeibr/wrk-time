@@ -241,5 +241,7 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       fixed; the Health ask moved to Today (one-shot). 389 tests green.
       Paired-sim verification: mirror live, pause/resume from the wrist,
       watch-owned practice recorded once and read back; 40mm Today pass.
-- [ ] Phase 5 — device pass (her watch: Series 6 40mm, paired to the
-      iPhone 17 Pro), HANDOFF/CLAUDE.md/one-pager/todo updates, push.
+- [x] Phase 5 — installed on her iPhone 17 Pro and directly on her
+      Series 6 over Wi-Fi (devicectl, both confirmed); HANDOFF, CLAUDE.md,
+      the one-pager and this file updated. On-body checks are hers:
+      haptics, heart rate, the crown, the complication.
