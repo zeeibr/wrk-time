@@ -39,6 +39,10 @@ struct WatchTodayView: View {
     @State private var showMirror = false
     /// The wire to the phone. Shared — see `SessionLink.shared`.
     @State private var link = SessionLink.shared
+    /// Whether the Health authorization sheet has been offered. One-shot by
+    /// stored flag rather than by authorization state, because an
+    /// undetermined state re-asks forever.
+    @AppStorage("watchAskedHealth") private var askedForHealth = false
 
     // MARK: - What can be running
 
@@ -132,9 +136,14 @@ struct WatchTodayView: View {
             listen()
             WatchSnapshots.refresh(in: context)
             // The one place the watch asks for Health. Asked here, on a
-            // screen she is reading, so the sheet never lands mid-session;
-            // a no-op once she has answered it.
-            _ = await WatchWorkout.requestAuthorization()
+            // screen she is reading, so the sheet never lands mid-session —
+            // and asked once: on a device the answer makes later calls
+            // no-ops anyway, and on the simulator, where the sheet never
+            // draws, re-asking on every open would take the screen with it.
+            if !askedForHealth {
+                askedForHealth = true
+                _ = await WatchWorkout.requestAuthorization()
+            }
         }
         .onChange(of: running) { _, value in
             guard value == nil else { return }
