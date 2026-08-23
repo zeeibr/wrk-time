@@ -37,6 +37,14 @@ struct WatchTimerView: View {
     @State private var sessionStart: Date?
     /// One ending per session, however many places notice it.
     @State private var reported = false
+    /// The wire to the phone. The shared instance, never a fresh one —
+    /// `WCSession`'s delegate is weak, and a link made per view-init goes
+    /// silently quiet while every send still reports success.
+    @State private var link = SessionLink.shared
+    /// The workout session that keeps the app running with the screen off
+    /// and collects heart rate. Its builder writes the Health workout, which
+    /// is why nothing else on either device writes one for this session.
+    @State private var workout = WatchWorkout()
     /// The row `report()` wrote, so a count made after the ending lands on it
     /// rather than on a second record.
     @State private var recordedRun: RoutineRun?
@@ -192,6 +200,7 @@ struct WatchTimerView: View {
             // never runs. See `IntervalEngine.onEnded`, and the bug shape in
             // CLAUDE.md that it exists to close.
             engine.onEnded = { _ in report() }
+            link.onMessage = { message in handle(message) }
             guard stage == .arriving else { return }
             Task { await beginSession() }
         }
@@ -199,6 +208,8 @@ struct WatchTimerView: View {
             // Also ends the lead-in: its loop checks the stage between ticks.
             stage = .ended
             engine.pause()
+            // The link outlives the screen; the handler must not.
+            link.onMessage = nil
         }
         .onChange(of: engine.currentPhase) { _, _ in persist() }
         .onChange(of: engine.status) { _, status in
@@ -580,6 +591,8 @@ struct WatchTimerView: View {
             stage = .running
             bindCues()
             engine.restore(to: resuming.elapsedNow(), running: resuming.running)
+            beginWorkout()
+            persist()
             return
         }
 
@@ -596,7 +609,22 @@ struct WatchTimerView: View {
         sessionStart = .now
         bindCues()
         engine.start()
+        beginWorkout()
         persist()
+    }
+
+    /// The workout session, started where the engine starts. It keeps the
+    /// app running with the screen off and collects heart rate; only a
+    /// session the watch owns opens one, because the builder's
+    /// `finishWorkout` writes the Health workout and the owner is the one
+    /// device allowed to.
+    private func beginWorkout() {
+        guard owner == .watch else { return }
+        let start = sessionStart ?? .now
+        Task {
+            _ = await WatchWorkout.requestAuthorization()
+            await workout.start(at: start)
+        }
     }
 
     /// Everything that hangs off the engine's callbacks, in one named place.
@@ -620,14 +648,74 @@ struct WatchTimerView: View {
     /// device that records.
     private func persist() {
         guard stage == .running, engine.status != .finished else { return }
+        ActiveSessionStore.save(snapshot())
+        // Folded in here rather than sprinkled over the call sites, so every
+        // place that saves also speaks — the shape in CLAUDE.md: an effect
+        // that must happen for every instance lives where the instance is
+        // detected. Same seam as the phone's.
+        announce()
+    }
+
+    /// Where the session is, in the one shape both the disk and the phone
+    /// read.
+    private func snapshot() -> ActiveSession {
         var session = ActiveSession(routine: routine,
                                     startedAt: sessionStart ?? .now,
                                     elapsed: engine.elapsed,
                                     running: engine.status == .running,
                                     savedAt: .now)
         session.setSubject(subject)
-        session.owner = .watch
-        ActiveSessionStore.save(session)
+        session.owner = owner
+        return session
+    }
+
+    /// Which device records this session. The watch owns what it starts; a
+    /// session it is resuming keeps the owner it was saved with.
+    private var owner: DeviceRole { resuming?.owner ?? .watch }
+
+    /// Tell the phone where the session is. Only the owner speaks.
+    private func announce() {
+        guard owner == .watch, stage == .running, engine.status != .finished else { return }
+        link.send(.running(snapshot(), owner: .watch))
+    }
+
+    /// What the phone asked for. One place, and everything goes through
+    /// exactly the path the equivalent tap on this screen goes through — the
+    /// same `reps` dictionary, the same engine methods, the same haptics —
+    /// so there is still only one place a record is written.
+    private func handle(_ message: SessionLinkMessage) {
+        // Only the owner acts. A mirror asked to pause would pause its own
+        // copy of the clock and drift from the device that is recording.
+        guard owner == .watch else { return }
+        switch message {
+        case .reps(let setOrdinal, let count):
+            reps[setOrdinal] = count
+            if engine.status == .finished { applyReps() }
+        case .transport(let action):
+            switch action {
+            case .pause:
+                engine.pause()
+                WatchHaptics.paused()
+            case .resume:
+                engine.resume()
+                WatchHaptics.resumed()
+            case .skip:
+                engine.skip()
+                WatchHaptics.skipped()
+            case .endSet:
+                engine.endSet()
+                WatchHaptics.transport()
+            case .end:
+                engine.end(reason: .abandoned)
+                dismiss()
+            }
+        case .whatIsRunning:
+            announce()
+        case .running, .ended:
+            // The owner is the one who says these. Hearing one back means the
+            // other device is confused, and the cure is to keep running.
+            break
+        }
     }
 
     // MARK: - Recording
@@ -642,7 +730,18 @@ struct WatchTimerView: View {
         // Either way the session is over, so the stored copy goes — it exists
         // only to survive a crash, never to outlive an ending.
         ActiveSessionStore.clear()
-        guard engine.endReason == .completed,
+        // A session the phone started is recorded by the phone; this screen
+        // would only ever be a mirror of it, and a mirror returns before
+        // anything is written — the two-writers case of the shape in
+        // CLAUDE.md.
+        guard owner == .watch else { return }
+        let completed = engine.endReason == .completed
+        link.send(.ended(subjectID: endedSubjectID, completed: completed))
+        // The workout closes with the session, whatever the reason — an
+        // abandoned session still wore the heart-rate strap.
+        let workoutEnd = min(.now, (sessionStart ?? .now).addingTimeInterval(engine.schedule.total))
+        Task { await workout.end(at: completed ? workoutEnd : .now) }
+        guard completed,
               let start = sessionStart ?? engine.startDate else {
             onEnd(.abandoned(skipped: engine.skippedMoves))
             return
@@ -668,6 +767,11 @@ struct WatchTimerView: View {
 
         onEnd(.completed(start: start, end: end, skipped: engine.skippedMoves,
                          reps: countedReps))
+    }
+
+    private var endedSubjectID: UUID? {
+        if case .session(let id) = subject { return id }
+        return nil
     }
 
     /// Files her counts against whatever this workout was recorded as.
