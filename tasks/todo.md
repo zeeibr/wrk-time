@@ -236,8 +236,10 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       heart-rate line.
 - [x] Phase 4 (agent D) — WatchTodayView, WatchSnapshots, complications,
       WatchTodayTests, screenshots.
-- [ ] Integration — merge the four, wire WatchTimerView to SessionLink +
-      WatchWorkout + snapshot running fields, full suite, paired-simulator
-      mirror check, 40mm small-face pass.
+- [x] Integration — all four merged; WatchTimerView wired to SessionLink,
+      WatchWorkout and the snapshot; WatchMirrorView built; stale mirror row
+      fixed; the Health ask moved to Today (one-shot). 389 tests green.
+      Paired-sim verification: mirror live, pause/resume from the wrist,
+      watch-owned practice recorded once and read back; 40mm Today pass.
 - [ ] Phase 5 — device pass (her watch: Series 6 40mm, paired to the
       iPhone 17 Pro), HANDOFF/CLAUDE.md/one-pager/todo updates, push.
