@@ -33,6 +33,10 @@ struct WorkoutTimerView: View {
     /// them resumes only what was running.
     @State private var pausedForForm = false
     @State private var liveActivity = LiveActivityController()
+    /// The wire to the watch — the process's one link, never a fresh one.
+    /// Inert on a phone with no paired watch, so this screen behaves exactly
+    /// as it did before the watch existed.
+    @State private var link = SessionLink.shared
     @State private var audio = SessionAudio()
     /// Persisted, because `.playback` sounds through the silent switch and the
     /// way to stop that has to be findable twice, not once.
@@ -162,6 +166,10 @@ struct WorkoutTimerView: View {
             SessionCues(audio: audio).bind(to: engine)
             engine.restore(to: resuming.elapsedNow(), running: resuming.running)
             liveActivity.start(routine: routine, engine: engine)
+            // A restored session is where it is right now, on disk and on the
+            // wrist alike. Waiting for the next phase boundary to say so
+            // would leave the watch a round behind.
+            persist()
             return
         }
 
@@ -190,13 +198,41 @@ struct WorkoutTimerView: View {
     /// no warning at all.
     private func persist() {
         guard stage == .running, engine.status != .finished else { return }
+        ActiveSessionStore.save(snapshot())
+        // The disk and the wire record the same thing — where the session is
+        // — and they must record it at the same moments. Announcing from the
+        // call sites instead would be six places to remember and one to
+        // forget, which is the shape in CLAUDE.md: an effect that must happen
+        // for every instance belongs where the instance is detected.
+        announce()
+    }
+
+    /// Where the session is, in the one shape both the disk and the watch
+    /// read. Written once because a snapshot that disagreed with itself
+    /// between the two would be a session that jumped on the wrist.
+    private func snapshot() -> ActiveSession {
         var session = ActiveSession(routine: routine,
                                     startedAt: sessionStart ?? .now,
                                     elapsed: engine.elapsed,
                                     running: engine.status == .running,
                                     savedAt: .now)
         session.setSubject(subject)
-        ActiveSessionStore.save(session)
+        session.owner = owner
+        return session
+    }
+
+    /// Which device records this session.
+    ///
+    /// The phone owns what it starts. A session it is *resuming* keeps the
+    /// owner it was saved with — a watch-owned session picked up here is a
+    /// mirror, and mirrors write nothing.
+    private var owner: DeviceRole { resuming?.owner ?? .phone }
+
+    /// Tell the watch where the session is. Only the owner speaks; a mirror
+    /// announcing its own copy would be two devices claiming one workout.
+    private func announce() {
+        guard owner == .phone, stage == .running, engine.status != .finished else { return }
+        link.send(.running(snapshot(), owner: .phone))
     }
 
     private var field: some View {
@@ -292,6 +328,7 @@ struct WorkoutTimerView: View {
             // same update that ends the session, so a handler living on it
             // never runs. See `IntervalEngine.onEnded`.
             engine.onEnded = { _ in report() }
+            link.onMessage = { message in handle(message) }
             guard stage == .arriving else { return }
             Task { await beginSession() }
         }
@@ -302,6 +339,9 @@ struct WorkoutTimerView: View {
             engine.pause()
             liveActivity.end()
             audio.end()
+            // The link outlives this screen, so it must not still be holding
+            // a handler that would pause an engine nobody is watching.
+            link.onMessage = nil
         }
         // One Live Activity update per phase, not per second — the widget
         // renders its own countdown from the phase bounds.
@@ -342,6 +382,53 @@ struct WorkoutTimerView: View {
         }
     }
 
+    /// What the watch asked for.
+    ///
+    /// One place, because a message that arrived and was acted on in two
+    /// would be acted on twice. Everything here goes through exactly the path
+    /// the equivalent tap on this screen goes through — the same `reps`
+    /// dictionary, the same engine methods, the same haptics — so a count
+    /// made on the wrist is indistinguishable from one made with a thumb, and
+    /// there is still only one place a record is written.
+    private func handle(_ message: SessionLinkMessage) {
+        // Only the owner acts. A mirror asked to pause would pause its own
+        // copy of the clock and drift from the device that is recording.
+        guard owner == .phone else { return }
+        switch message {
+        case .reps(let setOrdinal, let count):
+            // Exactly what the local stepper writes, and nothing more: during
+            // the session the number is held, and `report()` files it. After
+            // the ending this is the finish screen's stepper, which revisits
+            // the row already written rather than creating one.
+            reps[setOrdinal] = count
+            if engine.status == .finished { applyReps() }
+        case .transport(let action):
+            switch action {
+            case .pause:
+                engine.pause()
+                Haptics.paused()
+            case .resume:
+                engine.resume()
+                Haptics.resumed()
+            case .skip:
+                engine.skip()
+                Haptics.skipped()
+            case .endSet:
+                engine.endSet()
+                Haptics.transport()
+            case .end:
+                engine.end(reason: .abandoned)
+                dismiss()
+            }
+        case .whatIsRunning:
+            announce()
+        case .running, .ended:
+            // The owner is the one who says these. Hearing one back means the
+            // other device is confused, and the cure is to keep running.
+            break
+        }
+    }
+
     /// Tell VoiceOver at the boundary — never every second. A count that
     /// announces itself continuously is unusable; one that never announces
     /// leaves a blind user unable to know the round changed at all, which is
@@ -368,6 +455,14 @@ struct WorkoutTimerView: View {
         // only to survive a crash, never to outlive an ending.
         ActiveSessionStore.clear()
         liveActivity.end()
+        // A session the watch started is recorded by the watch, at its own
+        // `onEnded`, and this screen is only a mirror of it. Writing here as
+        // well would put two rows on one workout — the two-writers case of the
+        // shape in CLAUDE.md — so a mirror returns before anything is written,
+        // announces nothing, and tells its presenter nothing to act on.
+        guard owner == .phone else { return }
+        link.send(.ended(subjectID: endedSubjectID,
+                         completed: engine.endReason == .completed))
         guard engine.endReason == .completed, let start = sessionStart ?? engine.startDate else {
             onEnd(.abandoned(skipped: engine.skippedMoves))
             return
@@ -408,6 +503,13 @@ struct WorkoutTimerView: View {
 
         onEnd(.completed(start: start, end: end, skipped: engine.skippedMoves,
                          reps: countedReps))
+    }
+
+    /// The planned session that ended, when this was one. Nil for a practice,
+    /// a saved routine, an extra or a test — none of which carry an id.
+    private var endedSubjectID: UUID? {
+        if case .session(let id) = subject { return id }
+        return nil
     }
 
     @Environment(\.scenePhase) private var scenePhase
