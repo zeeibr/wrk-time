@@ -1,3 +1,6 @@
+// Shared with the watch targets for `TodaySnapshot`'s sake; ActivityKit has
+// no watchOS module, so this file is a no-op there.
+#if canImport(ActivityKit)
 import ActivityKit
 import Foundation
 
@@ -52,3 +55,4 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         var duration: TimeInterval { phaseEnds.timeIntervalSince(phaseBegan) }
     }
 }
+#endif

@@ -1848,7 +1848,9 @@ struct MoveStrip: View {
                     Text(move.name).font(.almanacBody).foregroundStyle(Palette.ink)
                     Spacer()
                 }
-                Rule()
+                // A hairline; `Rule` is a phone-side component and this
+                // file also builds for the watch.
+                Rectangle().fill(Palette.rule).frame(height: 0.5)
             }
         }
         .padding(20)
