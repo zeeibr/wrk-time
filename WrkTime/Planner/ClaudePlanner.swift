@@ -189,10 +189,24 @@ struct ClaudePlanner: Sendable {
                 // A normal assistant turn followed by a user turn — not a
                 // prefill, which Opus 5 rejects. The last message is the user's.
                 messages.append(["role": "assistant", "content": raw])
+                // An empty or short rotation gets more than the reason: the
+                // first live call taught that a model that could not spell
+                // the session it wanted writes no moves at all, twice, unless
+                // the way out — a second implement, bodyweight — is stated in
+                // the turn that hands the week back.
+                let short = lastReason.contains("has no moves") || lastReason.contains("came back with")
+                let reminder = short ? """
+
+
+                Every session's `moves` array must hold exactly \(moveCount) names \
+                from the library list, spelled exactly as listed. If one implement \
+                cannot cover the patterns, take a second implement or bodyweight \
+                for the missing slot — never leave the array short or empty.
+                """ : ""
                 messages.append(["role": "user", "content": """
                 That week was rejected and not used. \(lastReason)
 
-                Write it again in full, with exactly \(context.pace.sessionsPerWeek) sessions of \(Tuning.movesPerSession) moves each.
+                Write it again in full, with exactly \(context.pace.sessionsPerWeek) sessions of \(moveCount) moves each.\(reminder)
                 """])
             }
         }
@@ -615,7 +629,11 @@ struct ClaudePlanner: Sendable {
         - Every move is named exactly as the library lists it, and only a move \
           on the kit she owns. The load comes from the library, not from you. \
           A session's `moves` array holds exactly the number of names asked \
-          for, in running order — never fewer, never empty.
+          for, in running order — never fewer, never empty. An empty array is \
+          the one answer that throws the whole week away. If the implement you \
+          had in mind cannot cover a pattern, take the pattern from a second \
+          implement — two are allowed — or from bodyweight; do not leave the \
+          array short because the ideal name is not in the library.
         - With any bell above 13 lb in an intervals round, write 30 on and 30 \
           off.
         - A rest day is part of the plan. Spread the rest days; do not stack \
