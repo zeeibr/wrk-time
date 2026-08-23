@@ -849,9 +849,14 @@ struct MoveLibraryView: View {
         let strength = MoveLibrary.available
             .filter { $0.kind == .strength }
             .filter { patternFilter == nil || MoveTaxonomy.pattern(for: $0.name) == patternFilter }
+        // Kneeling is its own section, not a sub-head of the mat: the
+        // position exists to take the legs out so the trunk holds her up,
+        // and that is a thing to be able to find. It still runs inside the
+        // floor block of a session, so she goes down once.
         let blocks: [(String, String, (MovePosition) -> Bool)] = [
             ("Standing", "Standing", { $0 == .standing }),
-            ("Mat", "On the mat", { $0 != .standing }),
+            ("Kneeling", "Kneeling", { $0 == .kneeling }),
+            ("Mat", "On the mat", { $0 == .floor }),
         ]
         for (label, title, holds) in blocks {
             let moves = strength.filter { holds(MoveTaxonomy.position(for: $0.name) ?? .standing) }
@@ -867,8 +872,7 @@ struct MoveLibraryView: View {
     /// pattern. Kneeling moves open the mat section and say so.
     private func subhead(at index: Int, in moves: [Move]) -> String? {
         func head(_ move: Move) -> String {
-            let pattern = MoveTaxonomy.pattern(for: move.name)?.label ?? "Hers"
-            return MoveTaxonomy.position(for: move.name) == .kneeling ? "Kneeling · \(pattern)" : pattern
+            MoveTaxonomy.pattern(for: move.name)?.label ?? "Hers"
         }
         let now = head(moves[index])
         guard index > 0 else { return now }
@@ -887,7 +891,7 @@ struct MoveLibraryView: View {
                     Button {
                         patternFilter = on ? nil : pattern
                         // Narrowing to a pattern is asking to see it.
-                        if !on { expandedSections.formUnion(["Standing", "On the mat"]) }
+                        if !on { expandedSections.formUnion(["Standing", "Kneeling", "On the mat"]) }
                     } label: {
                         Text(pattern.label)
                             .font(.almanacBodySmall)

@@ -870,7 +870,11 @@ struct MovePicker: View {
         for move in strength {
             let position = MoveTaxonomy.position(for: move.name) ?? .standing
             let pattern = MoveTaxonomy.pattern(for: move.name)?.label ?? "Other"
-            let title = position == .standing ? pattern : "On the mat · \(pattern)"
+            let title = switch position {
+            case .standing: pattern
+            case .kneeling: "Kneeling · \(pattern)"
+            case .floor: "On the mat · \(pattern)"
+            }
             if let index = out.firstIndex(where: { $0.title == title }) {
                 out[index].moves.append(move)
             } else {
