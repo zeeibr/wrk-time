@@ -245,3 +245,23 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       Series 6 over Wi-Fi (devicectl, both confirmed); HANDOFF, CLAUDE.md,
       the one-pager and this file updated. On-body checks are hers:
       haptics, heart rate, the crown, the complication.
+
+### Review — 23 August 2026
+
+The plan ran as written: Phase 0 by hand (carve-out, two targets in the
+hand-written pbxproj, each its own commit), phases 1–4 as four parallel
+agents, integration and the wiring by hand, verification by hand on the
+paired simulators with screenshots. 389 tests in 67 suites, none able to
+reach the API. Installed on her iPhone 17 Pro and directly on her
+Series 6 over Wi-Fi, both confirmed by devicectl.
+
+Verified live: the mirror (same count, pause/resume from the wrist), a
+watch-owned practice recorded once and read back, interrupted-session
+recovery on the watch, the 40mm face, the Health ask as a real sheet.
+Found and fixed during verification: a mirror row that outlived its
+session, and the Health authorization sheet firing mid-lead-in.
+
+Hers, on the body: haptics, heart rate on Signals after a wrist session,
+reps from the crown, the complication, iCloud sign-in on the watch.
+Reps-from-wrist and reconnect resend are unit-tested, not hand-driven —
+a 20-second rest is shorter than a screenshot round-trip.

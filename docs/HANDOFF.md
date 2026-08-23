@@ -334,12 +334,13 @@ the first time.
 | Repeating the session finished today | Built | `TodayView.repeatOffer` |
 | Today drawn as a saffron arc on the current ring | Built | `GrowthForm.ringSegment` in `WrkTime/Today/GrowthForm.swift` |
 | Seeded routines — posture, core, upper body, triceps | Built | `WrkTimeApp.seed…Routine` |
-| **Watch app** | **Not started** | — |
+| **Watch app** — timer, Today, mirror, workout/HR, complications | Built, on her watch (23 Aug 2026, §below) | `WrkTimeWatch/`, `Core/` |
 | **`LiveActivityIntent`** | **Not started** — lock screen is read-only | — |
 | Cycle-aware programming | Deliberately not built — opt-in only, awaiting her decision | — |
 
-283 tests in 48 suites. Builds and runs on the iPhone 17 Pro simulator and on a
-physical iPhone 17 Pro.
+389 tests in 67 suites. Builds and runs on the iPhone 17 Pro simulator, on a
+physical iPhone 17 Pro, and — since 23 August 2026 — on her Apple Watch
+Series 6.
 
 The extra-workout ticks (Aug 15 2026): a tick no longer lands at an arbitrary
 slot — `GrowthForm.tickPositions` places each `RoutineRun` just past the dot of
@@ -355,7 +356,9 @@ for testability should carry the same keyword.
 
 **The audio cues and the haptic vocabulary have never been heard or felt.**
 They were written to spec and the app only reached a physical device on
-27 July. This is the most likely thing to be subtly wrong.
+27 July. This is the most likely thing to be subtly wrong. The watch's
+haptics (`WatchHaptics`, 23 Aug 2026) join the same list: chosen from
+`WKHapticType` to spec, installed on her watch, never felt.
 
 **CoreHaptics** is not used: the patterns are distinct via `UIFeedbackGenerator`,
 but the continuous ramp for skip and true intensity control need CoreHaptics and
@@ -880,6 +883,16 @@ card picks the same session back up owner-intact. Reps-from-the-wrist and
 reconnect resend are covered by `SessionLinkTests` rather than by hand —
 a 20-second rest window is shorter than a screenshot round-trip — and
 belong on the device-pass list below.
+
+**Also that day, from a message mid-build:** wearing the Apple Watch
+alongside the Whoop doubled every walk on Signals — both devices write the
+same walk to Health as their own workout, and both copies counted toward
+the weekly minutes and the planner's volume. `RecordedWalk.deduplicated`
+merges overlapping recordings into one walk counting the **union** of
+their time (never the sum, never only the longer one), naming every device
+that saw it; a minute of grace covers disagreeing clocks, and walks
+further apart stay two. Applied at the query in `HealthKitService.walks`,
+tested in `RecordedWalkTests`.
 
 **Installed on her hardware, 23 August 2026.** Her watch is a **Series 6,
 40 mm** — the deployment floor (watchOS 11) is exactly what it supports.
