@@ -232,7 +232,7 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       WatchScheduleTests, screenshots.
 - [ ] Phase 2 (agent B) — SessionLink over WCSession, phone-side install,
       SessionLinkTests, OwnershipTests.
-- [ ] Phase 3 (agent C) — WatchWorkout (HKWorkoutSession), Signals
+- [x] Phase 3 (agent C) — WatchWorkout (HKWorkoutSession), Signals
       heart-rate line.
 - [ ] Phase 4 (agent D) — WatchTodayView, WatchSnapshots, complications,
       WatchTodayTests, screenshots.
