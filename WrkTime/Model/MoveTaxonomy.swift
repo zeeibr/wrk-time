@@ -105,11 +105,13 @@ enum MovePosition: Int, CaseIterable, Codable, Comparable {
 
 enum MoveTaxonomy {
     static func pattern(for name: String) -> MovePattern? {
+        if let movement = MovementCatalog.movement(for: name) { return movement.pattern }
         let key = MoveAliases.resolve(name)
         return table[key]?.0 ?? registry.read(key)?.0
     }
 
     static func position(for name: String) -> MovePosition? {
+        if let movement = MovementCatalog.movement(for: name) { return movement.position }
         let key = MoveAliases.resolve(name)
         return table[key]?.1 ?? registry.read(key)?.1
     }

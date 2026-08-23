@@ -8,7 +8,8 @@ import Foundation
 /// Custom moves carry their own `muscles` string, written by the review.
 enum MoveMuscles {
     static func groups(for name: String) -> String? {
-        table[MoveAliases.resolve(name)]
+        if let movement = MovementCatalog.movement(for: name) { return movement.muscles }
+        return table[MoveAliases.resolve(name)]
     }
 
     private static let table: [String: String] = [

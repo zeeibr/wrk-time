@@ -30,7 +30,10 @@ struct MoveForm: Equatable {
     var stopIf: String
 
     static func notes(for name: String) -> MoveForm? {
-        table[MoveAliases.resolve(name)]
+        if let (movement, variant) = MovementCatalog.byVariantName[MovePreference.key(name)] {
+            return variant.form ?? movement.form
+        }
+        return table[MoveAliases.resolve(name)]
     }
 
     /// The line that is always true: effort is not the stop signal.

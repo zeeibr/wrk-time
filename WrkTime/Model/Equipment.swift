@@ -177,7 +177,37 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
 /// The starting move library. The planner may add moves, but only ones whose
 /// equipment is in `Equipment`, and only within the 60-second work ceiling.
 enum MoveLibrary {
-    static let all: [Move] = [
+    /// The library: the movement catalog's variants first, then whatever in
+    /// the hand-written list has not been ported yet. During the port both
+    /// exist and a name in the catalog wins, so a family can move over
+    /// without a gap or a double. `LibrarySnapshotTests` holds the list as
+    /// it was the day the port began and proves nothing changed on the way.
+    static let all: [Move] = {
+        let ported = Set(MovementCatalog.all.flatMap { $0.variants.map { MovePreference.key($0.name) } })
+        let catalog = MovementCatalog.all.flatMap(\.moves)
+        let legacy = literals.filter { !ported.contains(MovePreference.key($0.name)) }
+        // Order as the hand-written list had it, so every walk of the
+        // library still lands where it always did.
+        var byKey: [String: Move] = [:]
+        for move in catalog { byKey[MovePreference.key(move.name)] = move }
+        var out: [Move] = []
+        var seen: Set<String> = []
+        for move in literals {
+            let key = MovePreference.key(move.name)
+            seen.insert(key)
+            out.append(byKey[key] ?? move)
+        }
+        // A movement the catalog knows that the literals never had — new
+        // kit on an old movement — goes at the end.
+        for move in catalog where !seen.contains(MovePreference.key(move.name)) { out.append(move) }
+        _ = legacy
+        return out
+    }()
+
+    /// The hand-written library, being ported family by family into
+    /// `MovementCatalog`. A row here whose name the catalog also holds is
+    /// ignored; delete it once its family is ported.
+    static let literals: [Move] = [
         Move(name: "Beam front squat", equipment: .beam,
              cue: "Beam across the collarbones. Three counts down, one to stand.",
              loadPounds: 15),
