@@ -228,7 +228,7 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       empty watch app builds for the watchOS simulator.
 - [x] Walk dedupe (her ask, mid-build): overlapping Health walk recordings
       merge to one entry counting the union of time, sources named.
-- [ ] Phase 1 (agent A) — WatchTimerView, WatchHaptics, TimerFace,
+- [x] Phase 1 (agent A) — WatchTimerView, WatchHaptics, TimerFace,
       WatchScheduleTests, screenshots.
 - [x] Phase 2 (agent B) — SessionLink over WCSession, phone-side install,
       SessionLinkTests, OwnershipTests.

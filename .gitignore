@@ -25,3 +25,4 @@ Secrets.xcconfig
 .build/
 .swiftpm/
 Packages/
+.claude/
