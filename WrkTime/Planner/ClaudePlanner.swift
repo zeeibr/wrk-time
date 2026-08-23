@@ -189,33 +189,48 @@ struct ClaudePlanner: Sendable {
                 // A normal assistant turn followed by a user turn — not a
                 // prefill, which Opus 5 rejects. The last message is the user's.
                 messages.append(["role": "assistant", "content": raw])
-                // An empty or short rotation gets more than the reason: the
-                // first live call taught that a model that could not spell
-                // the session it wanted writes no moves at all, twice, unless
-                // the way out — a second implement, bodyweight — is stated in
-                // the turn that hands the week back.
-                let short = lastReason.contains("has no moves") || lastReason.contains("came back with")
-                let reminder = short ? """
-
-
-                Every session's `moves` array must hold exactly \(moveCount) names \
-                from the library list, spelled exactly as listed. If one implement \
-                cannot cover the patterns, take a second implement or bodyweight \
-                for the missing slot — never leave the array short or empty.
-                """ : ""
-                messages.append(["role": "user", "content": """
-                That week was rejected and not used. \(lastReason)
-
-                Write it again in full, with exactly \(context.pace.sessionsPerWeek) sessions of \(moveCount) moves each.\(reminder)
-                """])
+                messages.append(["role": "user", "content": Self.repairAsk(
+                    reason: lastReason,
+                    sessions: context.pace.sessionsPerWeek,
+                    moves: moveCount)])
             }
         }
 
         throw PlannerError.rejected(lastReason)
     }
 
+    /// The whole contract, not just the failure.
+    ///
+    /// The reminder used to be conditional — stated only for a short or
+    /// empty rotation — and a live day showed why that is not enough: a
+    /// repair turn handed one broken rule fixes it and trips a different
+    /// one. Her first rewrite fell on "has no moves", her second on "asks
+    /// for 3 implements", and each repair was arguing about the previous
+    /// failure. Every hard rule rides along every time, so one repair can
+    /// be the last.
+    static func repairAsk(reason: String, sessions: Int, moves: Int) -> String {
+        """
+        That week was rejected and not used. \(reason)
+
+        Write it again in full, and check every rule before you answer: \
+        exactly \(sessions) sessions, each on its own day. Every session's \
+        `moves` array holds exactly \(moves) names — never fewer, never \
+        empty — each spelled exactly as the library lists it. A session's \
+        loaded moves come from at most two implements, and bodyweight is \
+        free and never counts; if one implement cannot cover the patterns, \
+        take a second implement or bodyweight for the missing slot. The \
+        35 lb bell goes only under the hinge.
+        """
+    }
+
     /// How many times to ask before giving the week to the offline planner.
-    static let attempts = 2
+    ///
+    /// Three, not two: with the repair turn restating the whole contract, a
+    /// second repair almost always lands, and one more request is small
+    /// against a paid week thrown away. Raised after the day two rewrites
+    /// running burned both attempts and fell back — the week should right
+    /// itself before she has to care.
+    static let attempts = 3
 
     /// How long to wait for one answer.
     ///
@@ -624,8 +639,10 @@ struct ClaudePlanner: Sendable {
           conditioning days.
         - A session's rotation is the brief's shape in the brief's order: a \
           hinge, a squat or lunge, a row, a push or press, then the floor to \
-          close. One implement per session by default, two at most; a session \
-          that needs three is rejected and the week with it.
+          close. One implement per session by default, two at most — count \
+          them before you answer; bodyweight is free and never counts. A \
+          session whose loaded moves span three implements is rejected and \
+          the week with it.
         - Every move is named exactly as the library lists it, and only a move \
           on the kit she owns. The load comes from the library, not from you. \
           A session's `moves` array holds exactly the number of names asked \
@@ -714,9 +731,27 @@ struct ClaudePlanner: Sendable {
             guard let names = byPattern[pattern], !names.isEmpty else { return nil }
             return "- \(pattern.label): " + names.joined(separator: "; ")
         }
+        // And the same names again, grouped by what they are done on. The
+        // two-implement rule is combinatorial — the grammar cannot say it, so
+        // the prompt must make it cheap to satisfy: a session is composed by
+        // choosing at most two of these lines plus anything from bodyweight.
+        // Learned the expensive way: a live week failed on "asks for 3
+        // implements" when the only implement map the model had was whatever
+        // the names implied. Names stay exactly as the enum has them —
+        // grouping is by line, never by decorating a name, which is what once
+        // made every rotation come back empty.
+        var byKit: [Equipment: [String]] = [:]
+        for move in strength { byKit[move.equipment, default: []].append(move.name) }
+        let kitLines = Equipment.allCases.compactMap { kit -> String? in
+            guard let names = byKit[kit], !names.isEmpty else { return nil }
+            return "- \(kit.label): " + names.joined(separator: "; ")
+        }
         return "THE LIBRARY, BY PATTERN — use these names exactly as written\n"
             + lines.joined(separator: "\n")
             + "\nDone on the mat (they close a session): " + mat.joined(separator: "; ")
+            + "\n\nTHE SAME LIBRARY, BY IMPLEMENT — a session's loaded moves come from at "
+            + "most two of these lines; bodyweight is free and never counts\n"
+            + kitLines.joined(separator: "\n")
             + "\nEvery move carries its own load from the library; you name the move and nothing else."
     }
 }

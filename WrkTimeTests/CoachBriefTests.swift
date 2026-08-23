@@ -46,6 +46,38 @@ struct CoachBriefTests {
         #expect(position?["enum"] as? [String] == ["standing", "kneeling", "floor"])
     }
 
+    @Test("The prompt maps the library by implement, names unadorned")
+    func libraryByImplement() {
+        let section = ClaudePlanner.librarySection
+        // The two-implement rule is combinatorial and the grammar cannot say
+        // it, so the prompt must: the same names again, one line per
+        // implement, bodyweight declared free. A live week once failed on
+        // "asks for 3 implements" with no implement map in the prompt at all.
+        #expect(section.contains("BY IMPLEMENT"))
+        #expect(section.contains("bodyweight is free and never counts"))
+        #expect(section.contains("- Kettlebells · 9, 13, 18, 35 lb: "))
+        // Grouped by line, never by decorating a name — decorated names are
+        // what once made every rotation come back empty.
+        #expect(!section.contains("(18 lb)"))
+        #expect(!section.contains(" [mat]"))
+    }
+
+    @Test("The repair turn restates the whole contract")
+    func repairRestatesEverything() {
+        // One named rule invites a week that fixes it and trips another —
+        // an empty rotation was repaired into a three-implement session on
+        // consecutive rewrites. Every hard rule rides along every time.
+        let ask = ClaudePlanner.repairAsk(reason: "\"Full body · beam\" has no moves.",
+                                          sessions: 5, moves: 5)
+        #expect(ask.contains("exactly 5 sessions"))
+        #expect(ask.contains("exactly 5 names"))
+        #expect(ask.contains("never fewer, never empty"))
+        #expect(ask.contains("at most two implements"))
+        #expect(ask.contains("bodyweight is free"))
+        #expect(ask.contains("35 lb bell goes only under the hinge"))
+        #expect(!ask.contains("!"), "the coach never exclaims")
+    }
+
     @Test("The week's schema asks for a mode on every session")
     func schemaMode() {
         let schema = ClaudePlanner.schema(sessions: 5, moves: 5) as NSDictionary
