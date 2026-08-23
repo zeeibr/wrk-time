@@ -214,6 +214,6 @@ Nothing has been sent to the model. The week on her phone runs in the new
 order without a rewrite; the weight value no longer wraps; the move picker
 lists by pattern.
 
-Open, and why: EMOM ticks on the field are a design pass; three-red-days
-withholding needs recovery history the app does not keep; the first live
-calls need her key on the device and her approval, each time.
+Closed the same night: EMOM ticks, the recovery log, the live calls (all
+three passed after one prompt fix), installed on her phone over Wi-Fi.
+Nothing open.

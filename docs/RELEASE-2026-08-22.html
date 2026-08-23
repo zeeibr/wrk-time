@@ -1,0 +1,124 @@
+<title>Almanac, the August build</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --oat: #ebe7dc; --paper: #f3f0e7; --ink: #101a14; --moss: #3b5a46;
+    --sage: #8ea692; --mute: #5c6a61; --rule: #cfcabb; --saffron: #d7961c;
+    --accent-ink: #8a5e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --oat: #0f1a14; --paper: #15221a; --ink: #ebe7dc; --moss: #9db7a2;
+      --sage: #6d8572; --mute: #a7b3aa; --rule: #2a3a30; --saffron: #e2a52e;
+      --accent-ink: #e2a52e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --oat: #0f1a14; --paper: #15221a; --ink: #ebe7dc; --moss: #9db7a2;
+    --sage: #6d8572; --mute: #a7b3aa; --rule: #2a3a30; --saffron: #e2a52e;
+    --accent-ink: #e2a52e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--oat); color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.55; }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 24px 72px; }
+  .mast { display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--ink); padding-bottom: 8px; }
+  .mono { font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace; font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  h1 { font-family: "Zilla Slab", Georgia, serif; font-weight: 600; font-size: 40px;
+    line-height: 1.08; margin: 28px 0 10px; text-wrap: balance; }
+  .lede { font-size: 18px; color: var(--mute); max-width: 60ch; margin: 0 0 36px; }
+  h2 { font-family: "Zilla Slab", Georgia, serif; font-weight: 600; font-size: 26px;
+    margin: 44px 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--ink);
+    display: flex; justify-content: space-between; align-items: baseline; }
+  h2 .mono { font-weight: 400; }
+  h3 { font-family: "Zilla Slab", Georgia, serif; font-weight: 500; font-size: 19px; margin: 22px 0 4px; }
+  p { margin: 6px 0; max-width: 66ch; }
+  ul { margin: 6px 0 0; padding-left: 0; list-style: none; max-width: 66ch; }
+  li { padding: 7px 0; border-bottom: 1px solid var(--rule); }
+  li strong { font-weight: 500; }
+  .live { color: var(--accent-ink); }
+  .mark { display: inline-block; width: 8px; height: 8px; background: var(--saffron); margin-right: 8px; vertical-align: 1px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; font-weight: 500; color: var(--mute); padding: 10px 10px 8px 0; border-bottom: 1px solid var(--ink); }
+  td { vertical-align: top; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--rule); }
+  td:first-child { font-weight: 500; width: 22%; }
+  td.was { color: var(--mute); }
+  .note { background: var(--paper); border: 1px solid var(--rule); padding: 14px 16px; margin-top: 28px; max-width: 66ch; }
+  .note .mono { display: block; margin-bottom: 6px; }
+  .foot { margin-top: 40px; padding-top: 10px; border-top: 1px solid var(--ink); font-size: 13px; color: var(--mute); }
+</style>
+
+<div class="page">
+  <div class="mast"><span class="mono">Almanac</span><span class="mono">22 August 2026 · build notes</span></div>
+  <h1>What the app does now, and what changed</h1>
+  <p class="lede">Plain words, no jargon. The first half is how it works today; the second half is what is different from the version on your phone this morning.</p>
+
+  <h2>How it works <span class="mono">In plain terms</span></h2>
+
+  <div class="grid">
+    <div>
+      <h3>Your week</h3>
+      <p>Five workouts: three of <strong>sets</strong> (the muscle-building ones), one <strong>on the minute</strong> (short hard sets with the heavy bells), one of <strong>intervals</strong> (the sweaty one, for your heart). Each starts with a few gentle warm-up moves, then one kettlebell or beam standing up, then you go down to the mat once and finish there. You never fetch a third thing.</p>
+
+      <h3>The coach</h3>
+      <p>One written brief is the coach's entire opinion — read by the thing that writes your week, the thing that checks a move you add, and the chat. Change the brief, change the coach. <strong>It only ever suggests.</strong> Anything it wants to change shows up as a card you tap or ignore.</p>
+
+      <h3>Ask the coach</h3>
+      <p>A line under the headline on Today. It knows your week and your numbers. Ask about a load, a sore back, a move. About a cent a message.</p>
+
+      <h3>Going heavier</h3>
+      <p>When every set of a move reaches 12 reps, two workouts running, the app offers the next weight. It never changes it for you. Big jumps come with a "harder at this weight first" step. <strong>The 35 lb bell is for the deadlift only</strong>, and only once the 18 earns it.</p>
+    </div>
+    <div>
+      <h3>Where you are</h3>
+      <p>A short <strong>baseline</strong> — six moves, one set each — every four weeks, and a two-move <strong>weekly check</strong> after a workout. They count as extras, never as one of your sessions, and they set your working weights.</p>
+
+      <h3>Form</h3>
+      <p>Every strength move has five lines: set up, the movement, what you should feel, what goes wrong, when to stop. On the move's page and a <strong>Form</strong> button on the timer, which pauses the clock and counts you back in.</p>
+
+      <h3>What counts</h3>
+      <p>A <strong>mark</strong> is a finished planned session. Your own routines, extras and tests are kept as volume and earn no mark. Finished sessions never change afterwards.</p>
+
+      <h3>Your rules</h3>
+      <p>A move you rule out stays out, variants included. Your saved routines are never touched. No food, no fasting, no medical advice. Sharp pain, joint pain, or pain still there next morning ends the set — burning muscle does not.</p>
+    </div>
+  </div>
+
+  <h2>What changed <span class="mono">This version vs the last</span></h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Area</th><th>Was</th><th>Now</th></tr></thead>
+    <tbody>
+      <tr><td>On your phone</td><td class="was">A build from late July. Three weeks of work had never been committed or installed.</td><td>Everything below, installed over Wi-Fi tonight.</td></tr>
+      <tr><td>Kit</td><td class="was">Kettlebell 18 only; single 10 only; a band that was never bought.</td><td>Kettlebells 9 · 13 · 18 · 35, singles 10 · 15. Band off for good.</td></tr>
+      <tr><td>The timer</td><td class="was">Did not say which weight to pick up.</td><td>Shows the exact implement and weight under every move.</td></tr>
+      <tr><td>Order of a session</td><td class="was">Mat, then standing with the beam, then mat, then dumbbells — fetching and getting up all session.</td><td>One bell standing, then the mat to finish. Setup time added when you fetch. Already-written weeks run in the new order too.</td></tr>
+      <tr><td>Moves tab</td><td class="was">Grouped by equipment — four rows for "row".</td><td>Grouped by where your body is (standing / on the mat) and the movement, with filters. Equipment is a line on the row.</td></tr>
+      <tr><td>Ways to work</td><td class="was">Timed intervals only.</td><td>Sets · on the minute · intervals. Your own routines can use any of them.</td></tr>
+      <tr><td>Going heavier</td><td class="was">A speed rule: 18 reps a minute.</td><td>12 reps on every set, twice, in a sets workout. Intervals never count. Bridges for big jumps. The 35 locked to the deadlift.</td></tr>
+      <tr><td>Tests</td><td class="was">None.</td><td>Baseline every four weeks, a weekly two-move check, both extras.</td></tr>
+      <tr><td>Form</td><td class="was">One cue line.</td><td>Five form lines on all 96 moves, plus the Form button on the timer.</td></tr>
+      <tr><td>The coach's brain</td><td class="was">Two separate prompts in code that disagreed with each other.</td><td>One brief, reviewed by three experts, read by planner, reviewer and chat.</td></tr>
+      <tr><td>Chat</td><td class="was">None.</td><td>Ask the coach on Today, with proposal cards.</td></tr>
+      <tr><td>Recovery</td><td class="was">Read each day, remembered nowhere.</td><td>Three rough days running holds any weight increase and any test.</td></tr>
+      <tr><td>Extras</td><td class="was">—</td><td>"After a meal" ten-minute flow. Gym vocabulary in Settings → Words.</td></tr>
+      <tr><td>Live checks</td><td class="was">—</td><td>Reviewer, chat and planner all run against the real model tonight and passed.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="mono">Worth knowing</span>
+    <span class="mark"></span>Saffron in the app means <span class="live">live</span> — a running round, today's mark — and nothing else.<br>
+    During testing, "Beam good morning" was ruled out on the simulator only. Your phone's data is as it was.<br>
+    The brief lives at <code>docs/COACH-BRIEF.md</code>; §10 gates the 35 on your counts. If you want it sooner, change it there.
+  </div>
+
+  <div class="foot">Almanac · one person, one coach · nothing here is medical advice</div>
+</div>
