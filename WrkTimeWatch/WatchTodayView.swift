@@ -98,7 +98,13 @@ struct WatchTodayView: View {
             VStack(alignment: .leading, spacing: 14) {
                 masthead
 
-                if let mirrored { phoneRow(mirrored) }
+                // `ranOut` re-checked at every redraw: the row's copy keeps
+                // its own clock, and a phone that stopped announcing — ended
+                // while nothing here was listening — must not leave a session
+                // on offer that no longer exists.
+                if let mirrored, !mirrored.ranOut(), !mirrored.isStale() {
+                    phoneRow(mirrored)
+                }
                 if let resumable { resumeRow(resumable) }
 
                 sessionSection
@@ -142,6 +148,13 @@ struct WatchTodayView: View {
         }
         .onChange(of: showMirror) { _, up in
             guard !up else { return }
+            // The mirror closing usually means the session ended, and the
+            // `.ended` that closed it landed while the cover held the link's
+            // handler — this screen never heard it. Drop the row rather than
+            // trust a frozen copy; if the session is in fact still running,
+            // the owner answers the `whatIsRunning` below within a message
+            // and the row comes straight back.
+            mirrored = nil
             relisten()
         }
         .onChange(of: scenePhase) { _, phase in
