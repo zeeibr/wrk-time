@@ -88,9 +88,15 @@ enum LoadProgression {
         return log.reps.allSatisfy { $0 >= repTarget }
     }
 
+    /// Nil while recovery has read "ease" for three days running — the
+    /// brief withholds the offer, and the step waits for a better week
+    /// rather than landing on a tired one. The counts still stand; the
+    /// offer returns when the streak breaks.
     @MainActor
-    static func suggestion(for move: Move, in context: ModelContext) -> Suggestion? {
-        guard let current = move.loadPounds,
+    static func suggestion(for move: Move, in context: ModelContext,
+                           withheld: Bool = RecoveryLog.isWithholding()) -> Suggestion? {
+        guard !withheld,
+              let current = move.loadPounds,
               let next = nextLoad(for: move),
               ready(move: move, history: SetLogs.history(for: move, in: context))
         else { return nil }

@@ -480,6 +480,7 @@ struct WorkoutTimerView: View {
                          countOffset: CGFloat, measures: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             header(foreground: foreground, secondary: secondary)
+            minuteTicks(foreground: foreground, secondary: secondary)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(countString)
@@ -983,6 +984,33 @@ struct WorkoutTimerView: View {
         }
         .padding(.horizontal, 22)
         .padding(.top, 10)
+    }
+
+    /// On the minute: one tick per minute under the header, so the session's
+    /// length is visible as a row of marks rather than a number — the minute
+    /// she is in saffron (live), the ones done in the foreground, the ones
+    /// ahead in the secondary. Drawn in both layers so it inverts with the
+    /// knockout like everything else.
+    @ViewBuilder
+    private func minuteTicks(foreground: Color, secondary: Color) -> some View {
+        if engine.routine.mode == .emom, engine.routine.rounds > 0 {
+            let done = engine.completedWorkRounds
+            let current = engine.currentPhase.map { $0.round } ?? done
+            HStack(spacing: 5) {
+                ForEach(1...engine.routine.rounds, id: \.self) { minute in
+                    Rectangle()
+                        .fill(minute == current && engine.status == .running && stage == .running
+                              ? Palette.saffron
+                              : minute <= done ? foreground : secondary.opacity(0.45))
+                        .frame(width: 6, height: minute == current ? 14 : 10)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Minute \(current) of \(engine.routine.rounds)")
+        }
     }
 
     private func upNext(foreground: Color, secondary: Color) -> some View {

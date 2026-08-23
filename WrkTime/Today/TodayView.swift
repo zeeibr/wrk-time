@@ -338,7 +338,9 @@ struct TodayView: View {
             // A test is never offered on a day the numbers say to ease off.
             // `.hold` is the neutral state — the plan as written — and
             // missing data lands there too; only a measured bad day withholds.
-            recoveryHolding = await health.recoverySnapshot().guidance == .ease
+            let guidance = await health.recoverySnapshot().guidance
+            RecoveryLog.record(guidance)
+            recoveryHolding = guidance == .ease
         }
         // Cleared once the cover closes, so a second run does not silently
         // resume the session that was just finished or abandoned.

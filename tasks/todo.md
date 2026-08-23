@@ -142,8 +142,8 @@ Decisions proposed:
       (pause / slow lower / 1.5 reps / unilateral) — one intensifier per move per
       block — and the next load second. Both are still her tap.
 - [x] Loosely counted rows (no `setSeconds`) and interval rows never qualify.
-- [ ] Withhold after 3 red Whoop days — recovery history is not stored
-      (one snapshot a day); the planner sees both and may say so (Phase 6).
+- [x] Withhold after 3 ease days — `RecoveryLog` keeps a fortnight of daily
+      readings; missing days never count.
 - [x] Tests replace `repsPerMinuteCeiling` cases.
 
 ### Her asks, 22 Aug afternoon
@@ -174,7 +174,7 @@ Decisions proposed:
 - [x] Moves tab by position with a compact row: name · pattern · load line ·
       small strip. Section numerals stay (Almanac).
 - [x] Timer sets field (held still, count up, Done).
-- [ ] EMOM minute ticks on the field edge.
+- [x] EMOM minute ticks under the header.
 - [x] Today card states the mode in one line of the existing voice.
 - [ ] Drawings for the deferred kettlebell/core moves remain deferred unless
       you want them prioritized.

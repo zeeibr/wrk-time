@@ -116,3 +116,42 @@ struct HeavyBellTests {
         #expect(throws: Never.self) { try PlanValidator.routines(from: draft) }
     }
 }
+
+@Suite("Three red days withhold the step")
+struct RecoveryLogTests {
+    private func defaults() -> UserDefaults {
+        let d = UserDefaults(suiteName: "recovery-log-test-\(UUID().uuidString)")!
+        d.removePersistentDomain(forName: "recovery-log-test")
+        return d
+    }
+    private func day(_ ago: Int) -> Date { Calendar.current.date(byAdding: .day, value: -ago, to: .now)! }
+
+    @Test("A streak counts consecutive ease days ending today; a gap ends it")
+    func streak() {
+        let d = defaults()
+        RecoveryLog.record(.ease, on: day(2), defaults: d)
+        RecoveryLog.record(.ease, on: day(1), defaults: d)
+        RecoveryLog.record(.ease, on: day(0), defaults: d)
+        #expect(RecoveryLog.easeStreak(defaults: d) == 3)
+        #expect(RecoveryLog.isWithholding(defaults: d))
+        RecoveryLog.record(.hold, on: day(1), defaults: d)
+        #expect(RecoveryLog.easeStreak(defaults: d) == 1)
+        #expect(!RecoveryLog.isWithholding(defaults: d))
+    }
+
+    @Test("A day with no reading is not a red day")
+    func missingIsNotRed() {
+        let d = defaults()
+        RecoveryLog.record(.ease, on: day(2), defaults: d)
+        RecoveryLog.record(.ease, on: day(0), defaults: d)
+        #expect(RecoveryLog.easeStreak(defaults: d) == 1)
+    }
+
+    @Test("Old days are dropped")
+    func pruned() {
+        let d = defaults()
+        RecoveryLog.record(.ease, on: day(20), defaults: d)
+        RecoveryLog.record(.hold, on: day(0), defaults: d)
+        #expect((d.dictionary(forKey: RecoveryLog.key) ?? [:]).count == 1)
+    }
+}

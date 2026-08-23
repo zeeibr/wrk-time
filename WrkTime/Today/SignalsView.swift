@@ -46,6 +46,7 @@ struct SignalsView: View {
             let health = HealthKitService()
             _ = await health.requestAuthorization()
             recovery = await health.recoverySnapshot()
+            RecoveryLog.record(recovery.guidance)
             walks = await health.walks(since: Date.now.addingTimeInterval(-14 * 86_400))
             loaded = true
         }

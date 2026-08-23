@@ -784,7 +784,8 @@ the second call wrote a four-session week in the brief's shape — sets,
 sets, on the minute, intervals — that the validator accepted first time.
 A debug-only print of a rejected raw week now exists in `plan`.
 
-Still open: EMOM minute ticks on the field edge (design), withholding a
-step-up after three red days (no recovery history is stored), custom
-moves in the sampler's tried count.
+Closed the same night: EMOM minute ticks under the timer header;
+`RecoveryLog` keeps a fortnight of daily guidance so three "ease" days
+running withhold a step-up (missing days never count); the sampler
+already counted her additions. Nothing on the roadmap is open.
 
