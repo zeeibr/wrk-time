@@ -211,7 +211,14 @@ struct WatchTimerView: View {
             // The link outlives the screen; the handler must not.
             link.onMessage = nil
         }
-        .onChange(of: engine.currentPhase) { _, _ in persist() }
+        .onChange(of: engine.currentPhase) { _, _ in
+            persist()
+            // The complication draws the running phase from the snapshot and
+            // lets the system tick to the phase's end date, so it needs one
+            // rebase per boundary — after persist(), which writes the stored
+            // session the snapshot reads.
+            WatchSnapshots.refresh(in: context)
+        }
         .onChange(of: engine.status) { _, status in
             // Deliberately not the place the ending is reported from. This
             // handler only runs while the field is on screen, which a finished

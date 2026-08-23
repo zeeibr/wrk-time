@@ -35,6 +35,10 @@ struct WatchTodayView: View {
     /// until then this is read from the stored session and only when it is
     /// phone-owned. See `phoneRow`.
     @State private var mirrored: ActiveSession?
+    /// Whether the mirror screen is up over this one.
+    @State private var showMirror = false
+    /// The wire to the phone. Shared — see `SessionLink.shared`.
+    @State private var link = SessionLink.shared
 
     // MARK: - What can be running
 
@@ -112,8 +116,14 @@ struct WatchTodayView: View {
                 record(run, outcome)
             }
         }
+        .fullScreenCover(isPresented: $showMirror) {
+            if let mirrored {
+                WatchMirrorView(session: mirrored)
+            }
+        }
         .task {
             readActiveSession()
+            listen()
             WatchSnapshots.refresh(in: context)
         }
         .onChange(of: running) { _, value in
@@ -128,6 +138,11 @@ struct WatchTodayView: View {
             // readily as completed, because the complication must stop
             // counting down either way.
             WatchSnapshots.refresh(in: context)
+            relisten()
+        }
+        .onChange(of: showMirror) { _, up in
+            guard !up else { return }
+            relisten()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .background else { return }
@@ -284,23 +299,28 @@ struct WatchTodayView: View {
 
     /// A session the phone is running, mirrored here.
     ///
-    /// **Integrator: this is the block to rewire.** Phase 2 owns
-    /// `SessionLink`; until it lands there is no live channel, so the only
-    /// honest source is the stored session, and only when it says the phone
-    /// owns it. Replace `readActiveSession`'s phone branch with the link's
-    /// `.running(_, owner: .phone)` and this row becomes live. Tapping it must
-    /// open the timer as a **read-only mirror** — it records nothing, because
-    /// the phone started it and the phone will write it down. Until then it
-    /// states the fact and offers no tap, which is better than a tap that
-    /// would write a second record.
+    /// Live from the link: the phone's `.running(_, owner: .phone)`
+    /// announcements replace whatever the stored session said, and `.ended`
+    /// takes the row down. Tapping opens `WatchMirrorView` — a read-only
+    /// mirror that records nothing, because the phone started this session
+    /// and the phone will write it down.
     private func phoneRow(_ session: ActiveSession) -> some View {
         section("On your phone") {
-            Text(session.routine.name)
-                .font(Self.slab(16))
-                .foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(session.summary())
-                .almanacLabel(Palette.mute, small: true)
+            Button {
+                showMirror = true
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.routine.name)
+                        .font(Self.slab(16))
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(session.summary())
+                        .almanacLabel(Palette.mute, small: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -326,6 +346,38 @@ struct WatchTodayView: View {
         let stored = ActiveSessionStore.load()
         resumable = stored?.owner == .watch ? stored : nil
         mirrored = stored?.owner == .phone ? stored : nil
+    }
+
+    /// Hear the phone while this screen is the one on top.
+    ///
+    /// The timer and the mirror each take the link's one handler when they
+    /// are presented and clear it when they go; this screen listens the rest
+    /// of the time, and asks outright, so a session started on the phone
+    /// shows up here within a message rather than on the next launch.
+    private func listen() {
+        link.onMessage = { message in
+            switch message {
+            case .running(let session, owner: .phone):
+                guard !session.isStale(), !session.ranOut() else { return }
+                mirrored = session
+            case .ended:
+                mirrored = nil
+                showMirror = false
+            case .running, .reps, .transport, .whatIsRunning:
+                // Not this screen's to answer. A watch-owned .running is the
+                // timer's own announcement leaking back; counts and transport
+                // belong to whichever screen owns a session.
+                break
+            }
+        }
+        link.send(.whatIsRunning)
+    }
+
+    /// Take the handler back after a cover goes down — a tick later, so the
+    /// cover's own `onDisappear` (which clears the handler) has run first
+    /// and cannot run after this and leave the screen deaf.
+    private func relisten() {
+        Task { @MainActor in listen() }
     }
 
     // MARK: - Recording
