@@ -806,10 +806,13 @@ the review and summarised here as the next block of work:
    proving its family against `LibrarySnapshotTests` before merging: 77
    movements, 101 variants, every one byte-identical to the old row. The
    literals and the three tables were then deleted; `MoveAliases` with them.
-3. Optional `movementID` / `holdRaw` on `Move`, adopted on read — **open**.
-   Useful for grouping the move sheet's history by movement.
-4. Re-key drawings on (movement, implement) — **open**; strips still match
-   by name containment, which works but keeps `deferred` as a patch.
+3. `Move.movementID` (Optional, stamped by the catalog, read back through
+   the catalog by name when nil) — done. The move sheet's history now reads
+   the movement whole across implements, other implements' rows labelled.
+4. Drawings: the matcher now requires a strip's kit to agree with the
+   move's, and `PlateKeyTests` holds the drawn set (108) as a fixture —
+   done. A full re-key on (movement, implement) was judged not worth a
+   hundred-strip relabel while containment plus the kit check holds.
 New kit today: one `Equipment` case, its ladder and `holds`, then a
 `Variant` line under each movement it is done on.
 

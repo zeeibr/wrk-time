@@ -689,7 +689,12 @@ enum MovePlates {
         for move in MoveLibrary.all {
             let key = MovePreference.key(move.name)
             guard !deferred.contains(key) else { continue }
-            if let strip = sorted.first(where: { key.contains($0.key) }) {
+            // Longest key wins, and a strip with kit in its hands is only
+            // ever given to a move on that kit: "Single-dumbbell row" on the
+            // single must not draw the pair's row, whatever the name says.
+            if let strip = sorted.first(where: { strip in
+                key.contains(strip.key) && (strip.equipment == nil || strip.equipment == move.equipment)
+            }) {
                 table[key] = strip
             }
         }

@@ -82,8 +82,19 @@ struct Move: Identifiable, Hashable, Codable {
     /// all at once.
     var sidedRaw: String?
 
+    /// The movement this is a variant of (`MovementCatalog`), stored so a
+    /// variant can one day be renamed without losing what it was. Optional
+    /// for the reason every stored addition is; nil is read back through
+    /// the catalog by name, which is how every routine on disk today works.
+    var movementID: String?
+
     var kind: MoveKind { kindRaw ?? .strength }
     var sided: Sided? { sidedRaw.flatMap(Sided.init(rawValue:)) }
+    /// The movement, from the stored id or the catalog by name.
+    var movement: Movement? {
+        if let movementID, let found = MovementCatalog.byID[movementID] { return found }
+        return MovementCatalog.movement(for: name)
+    }
 
     init(id: UUID = UUID(), name: String, equipment: Equipment, kind: MoveKind = .strength,
          cue: String, loadPounds: Double? = nil, sided: Sided? = nil) {

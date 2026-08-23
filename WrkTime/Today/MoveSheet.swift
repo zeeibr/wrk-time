@@ -130,11 +130,15 @@ struct MoveSheet: View {
     /// offered is the plainest one — the best set, and when it was.
     @ViewBuilder
     private var history: some View {
-        let logs = SetLogs.history(for: move, in: context)
+        let logs = SetLogs.history(forMovementOf: move, in: context)
         if !logs.isEmpty {
             Rule().padding(.top, 18)
             HStack(alignment: .firstTextBaseline) {
-                Text("Counted").almanacLabel(Palette.mute, small: true)
+                // The movement whole — this row and the same movement on
+                // any other implement — so the ring and the bell read as
+                // one line of progress rather than two strangers.
+                Text(move.movement.map { "Counted · \($0.display.lowercased())" } ?? "Counted")
+                    .almanacLabel(Palette.mute, small: true)
                 Spacer(minLength: 8)
                 Text(bestLine(logs)).almanacLabel(Palette.mute, small: true).tabular()
             }
@@ -152,7 +156,10 @@ struct MoveSheet: View {
                             .font(.almanacBody)
                             .foregroundStyle(Palette.ink)
                         Spacer(minLength: 8)
-                        if let pounds = log.loadPounds, pounds > 0 {
+                        // Another implement's row says which it was.
+                        if MovePreference.key(log.moveName) != MovePreference.key(move.name) {
+                            Text(log.moveName).almanacLabel(Palette.mute, small: true)
+                        } else if let pounds = log.loadPounds, pounds > 0 {
                             Text("\(Int(pounds)) lb")
                                 .almanacLabel(Palette.mute, small: true)
                                 .tabular()

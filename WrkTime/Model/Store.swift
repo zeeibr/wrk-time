@@ -712,6 +712,18 @@ enum SetLogs {
             // here.
             .filter { MovePreference.key($0.moveName) == key && ($0.reps.max() ?? 0) > 0 }
     }
+
+    /// The movement's history on every implement — the row on the beam and
+    /// the ring and the bell together, oldest first. The step-up rule still
+    /// reads one variant at its own load; this is for her to see the
+    /// movement whole.
+    static func history(forMovementOf move: Move, in context: ModelContext) -> [SetLog] {
+        guard let id = move.movement?.id else { return history(for: move, in: context) }
+        let names = MovementCatalog.variantNames(of: id)
+        return ((try? context.fetch(FetchDescriptor<SetLog>(
+            sortBy: [SortDescriptor(\.date)]))) ?? [])
+            .filter { names.contains(MovePreference.key($0.moveName)) && ($0.reps.max() ?? 0) > 0 }
+    }
 }
 
 /// A weight reading. Source is recorded because a Health-sourced number and a

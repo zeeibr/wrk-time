@@ -51,8 +51,10 @@ struct Movement: Sendable {
     /// The variants as the rest of the app sees them.
     var moves: [Move] {
         variants.map { v in
-            Move(name: v.name, equipment: v.equipment, kind: kind, cue: v.cue,
-                 loadPounds: v.loadPounds, sided: v.sided)
+            var move = Move(name: v.name, equipment: v.equipment, kind: kind, cue: v.cue,
+                            loadPounds: v.loadPounds, sided: v.sided)
+            move.movementID = id
+            return move
         }
     }
 }
@@ -81,5 +83,13 @@ enum MovementCatalog {
 
     static func movement(for name: String) -> Movement? {
         byVariantName[MovePreference.key(name)]?.0
+    }
+
+    static let byID: [String: Movement] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+
+    /// Every stored name of a movement's variants, for reading history
+    /// across implements.
+    static func variantNames(of id: String) -> Set<String> {
+        Set(byID[id]?.variants.map { MovePreference.key($0.name) } ?? [])
     }
 }
