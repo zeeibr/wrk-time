@@ -51,6 +51,18 @@ tabs: **Today** (the day), **Moves** (the library), **Season** (the record),
   joint, or still there next morning ends the set.
 - Whoop is read only; "Copy for Whoop" puts the session on the clipboard.
 
+## On the wrist
+- The watch runs the same sessions from the same store: today's session,
+  the practice, your routines, the extras and a due test, started and
+  recorded from the wrist with no phone in the room.
+- Whichever device **starts** a session records it — once. The other
+  mirrors it live: same count, pause and skip and Done, reps on the crown.
+- The watch wears the heart-rate strap: a wrist-started session keeps the
+  screen off, collects heart rate, and Signals shows last session's
+  average and peak.
+- Complications show today's session and the marks; a wrist-started
+  session counts down on the watch face.
+
 ## Good to know
 - Form on every strength move: card on the move sheet, **Form** button on
   the timer (pauses; 5 s count-in on close).

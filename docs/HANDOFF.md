@@ -819,3 +819,77 @@ New kit today: one `Equipment` case, its ladder and `holds`, then a
 Do not: change the planner's enum to pairs; rename existing variants;
 generate cues without an override slot; relax "never a pair" for the single.
 
+
+## 23 August 2026 — the watch
+
+`docs/WATCH-PLAN.md` executed in full: Phase 0 by hand, phases 1–4 as four
+parallel agents in worktrees (the timer, the link, the workout, Today and
+the complications), integrated one by one with the full suite between.
+389 tests in 67 suites at the end of it, none of them able to reach the API.
+
+**The architecture is one rule.** A device **owns** a session it started
+(`ActiveSession.ownerRaw`, Optional, nil reads as the phone — every session
+stored before the watch existed was the phone's). The owner's engine is the
+one whose `onEnded` records; the owner's workout builder is the one that
+writes Health; the non-owner never writes anything. Everything live crosses
+`SessionLink` (`Core/SessionLink.swift`, `WCSession` behind an injectable
+transport): the owner announces `.running` from the same `persist()` seam
+that saves the session — an effect that must happen for every instance,
+placed where the instance is detected — and the non-owner speaks
+`.transport` and `.reps`, which the owner routes through exactly the paths
+its own taps take. `OwnershipTests` wires two in-memory stores back to back
+and asserts the record lands once, on the right side.
+
+**`Core/` is the carve-out** — engine, routine, store, catalog, the local
+planners' arithmetic, the validator — a synchronized folder in the phone,
+test and watch targets. The tests stay in `WrkTimeTests` (the test bundle
+compiles against the app, so `Core/` joining it would define every type
+twice). `TimerFace` (`Core/Timer/TimerFace.swift`) is the one spelling of
+the position line, the count and the Done-or-skip choice; the watch reads
+it, and `WatchScheduleTests` pins it to what the phone shows. `PlanDraft`
+now owns `moveSlots` and `ClaudePlanner.moveSlots` forwards to it.
+
+**The watch app** (`WrkTimeWatch/`): `WatchTodayView` reads the same store
+through the same seams (`PlannedSession.routine`, `ExtraSession.build`,
+`Baseline.offer`, `MorningPractices`) and offers the day in the plan's
+order; `WatchTimerView` is the field register at watch size — the knockout
+count, saffron only on a live round, the crown on the rep stepper, haptics
+in `WatchHaptics` mirroring the phone's vocabulary method for method;
+`WatchWorkout` opens an `HKWorkoutSession` so the screen can sleep and the
+heart rate lands in Health; `WatchMirrorView` is the non-owner's screen —
+a display-only engine with no record path, deliberately its own view so
+the difference between mirroring and owning stays visible in the code.
+`WatchSnapshots` writes `TodaySnapshot` into the watch's own app group
+(the phone cannot reach it), and the complications read it; the running
+fields are Optional on `TodaySnapshot` so every stored snapshot keeps
+decoding.
+
+**Watch-only findings worth keeping:** watchOS ships no Superclarendon, so
+`Face.slab` falls back to SF silently — the watch uses New York
+(`design: .serif`) for the slab register; the 50 ms field animation
+cross-fades the masked digits into doubling on a small knockout, so the
+watch drops it; and a per-view `SessionLink()` would re-activate
+`WCSession` per view-init and leave a deallocated weak delegate — the
+shared instance is load-bearing, not a convenience.
+
+**Verified live on paired simulators** (iPhone 17 Pro + Series 10 46mm):
+a phone-started session appears on the watch's Today within a message,
+opens as a mirror with the same count, pauses and resumes from the wrist
+(the phone obeying, the mirror re-basing), and the interrupted-session
+card picks the same session back up owner-intact. Reps-from-the-wrist and
+reconnect resend are covered by `SessionLinkTests` rather than by hand —
+a 20-second rest window is shorter than a screenshot round-trip — and
+belong on the device-pass list below.
+
+**The device pass (open).** Her watch is a **Series 6, 40 mm** — the
+deployment floor (watchOS 11) is exactly what it supports. To verify on
+hardware: install over Wi-Fi (`xcodebuild build … -destination
+'id=E56EBBEC…' -allowProvisioningUpdates`, then `xcrun devicectl device
+install app`); the watch app rides inside the iPhone app and installs from
+the Watch app (or automatically) when paired. Then: a wrist-started
+session recorded once with heart rate on Signals; a phone session
+mirrored; reps counted from the crown landing in the one record; the
+haptic vocabulary actually felt — the watch's cues are as unverified as
+the phone's were before 27 July. CloudKit on the watch needs her iCloud
+account signed in on the watch; the simulator ran local-only, which is the
+designed degradation.

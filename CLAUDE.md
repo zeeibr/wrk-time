@@ -28,7 +28,18 @@ correctly approved a lift with equipment/load/muscles, classified a qi gong
 movement as flow, and the by-muscle suggestions returned addable entries. The
 planner's own first live call remains separately verified per HANDOFF.
 
-Not built: the watch app, `LiveActivityIntent` (the lock screen is read-only),
+Built, 23 August 2026: **the watch app** (`WrkTimeWatch/`, plan in
+`docs/WATCH-PLAN.md`) — the timer in the field register at watch size, the
+watch's own Today, complications, an `HKWorkoutSession` for screen-off and
+heart rate, and `SessionLink` over `WCSession` with one rule carrying all of
+it: **a device owns a session it started, and only the owner writes the
+record and the Health workout.** The non-owner mirrors (`WatchMirrorView`,
+display-only engine, no record path) and speaks `.transport`/`.reps` to the
+owner. Shared code lives in `Core/` (a synchronized folder in the phone,
+test and watch targets); `TimerFace` is the one spelling of the timer's
+strings on both devices.
+
+Not built: `LiveActivityIntent` (the lock screen is read-only),
 and cycle-aware programming (opt-in only, awaiting the user's decision).
 
 **The planner reached the live API on 27 July 2026** and has run against it
