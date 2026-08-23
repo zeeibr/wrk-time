@@ -404,6 +404,21 @@ The remaining failure mode is a *stubbed* session — the model fills the slots 
 has something to say about and pads the rest onto a duplicate day with moves
 named "placeholder". `PlanValidator` catches both signals.
 
+**A constraint the model cannot see is a constraint it will trip (23 August
+2026).** Two rewrites running were rejected live — the first on an empty
+rotation, the second on a session spanning three implements — and the repair
+turn made the second failure out of the first: it restated only the rule just
+broken, so the model fixed "no moves" by reaching for a third implement. Two
+causes, both in the prompt. The two-implement rule is combinatorial (the
+grammar cannot express it) and the prompt never said which move sits on which
+implement, nor that bodyweight is free — the model was left parsing "Ring
+row" for kit. The fix: `librarySection` lists the library a second time
+grouped **by implement** (names exactly as the enum has them — grouping by
+line, never decorating a name, which is what once emptied every rotation);
+the response rules say to count implements before answering; `repairAsk`
+carries the whole contract on every repair; and `attempts` is three. The next
+rewrite validated first try, no repair turn needed.
+
 ---
 
 ## 6. Provisioning, as actually configured
