@@ -83,6 +83,11 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		1A000000000000000000002B /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
+			sourceTree = "<group>";
+		};
 		1A000000000000000000001C /* WrkTimeWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -121,6 +126,7 @@
 		1A0000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				1A000000000000000000002B /* Core */,
 				1A000000000000000000001B /* Shared */,
 				1A0000000000000000000008 /* WrkTime */,
 				1A000000000000000000001C /* WrkTimeWidgets */,
@@ -157,6 +163,7 @@
 				1A0000000000000000000027 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				1A000000000000000000002B /* Core */,
 				1A0000000000000000000008 /* WrkTime */,
 				1A000000000000000000001B /* Shared */,
 			);

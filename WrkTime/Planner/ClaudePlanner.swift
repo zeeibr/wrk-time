@@ -464,7 +464,9 @@ struct ClaudePlanner: Sendable {
     static let slots = ["one", "two", "three", "four", "five"]
     /// The same trick for the rotation. `minItems` is not supported, so "five
     /// moves" has to be five required properties or it is not a requirement.
-    static let moveSlots = ["first", "second", "third", "fourth", "fifth", "sixth"]
+    /// Lives on `PlanDraft`, which is in `Core/` and read on the watch; the
+    /// name here is kept because everything reads it through the planner.
+    static var moveSlots: [String] { PlanDraft.moveSlots }
 
     /// The schema for a week of exactly `sessions` sessions.
     ///

@@ -40,6 +40,18 @@ struct ActiveSession: Codable, Equatable, Sendable {
     var kindRaw: String?
     /// Which planned session this is, when it is one.
     var sessionID: UUID?
+    /// Which device started this session, and so which device records it —
+    /// `DeviceRole.rawValue`. The owner is whoever called `engine.start()`;
+    /// the other device only mirrors, and never writes a record for a session
+    /// it did not start. Optional like every stored field here, and nil
+    /// reads as the phone, which is what every session written before the
+    /// watch existed was.
+    var ownerRaw: String?
+
+    var owner: DeviceRole {
+        get { ownerRaw.flatMap(DeviceRole.init(rawValue:)) ?? .phone }
+        set { ownerRaw = newValue.rawValue }
+    }
 
     /// What a resumed run should be recorded as.
     enum Subject: Equatable {

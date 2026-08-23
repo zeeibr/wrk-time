@@ -194,6 +194,13 @@ struct PlanContext: Sendable {
 /// A week, as the planner writes it. Not yet trusted — `PlanValidator` decides
 /// whether any of this is allowed to become a session.
 struct PlanDraft: Codable, Sendable, Equatable {
+    /// Ordinal slot names for the rotation. `minItems` is not supported by
+    /// structured outputs, so "five moves" has to be five required
+    /// properties or it is not a requirement. Read back by name at decode
+    /// time (`DraftSession`), and by the schema through
+    /// `ClaudePlanner.moveSlots`.
+    static let moveSlots = ["first", "second", "third", "fourth", "fifth", "sixth"]
+
     /// One sentence, in the app's voice, saying what changed and why.
     var explanation: String
     var sessions: [DraftSession]
@@ -323,7 +330,7 @@ struct DraftSession: Codable, Sendable, Equatable {
             // In slot order, and every slot present is taken. Reading the
             // container's own keys instead would put the rotation in whatever
             // order JSON happened to serialise.
-            moves = ClaudePlanner.moveSlots
+            moves = PlanDraft.moveSlots
                 .compactMap { SlotKey(stringValue: $0) }
                 .compactMap { try? slots.decode(DraftMove.self, forKey: $0) }
             guard !moves.isEmpty else {
