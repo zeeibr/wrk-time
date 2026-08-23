@@ -230,7 +230,7 @@ Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
       merge to one entry counting the union of time, sources named.
 - [ ] Phase 1 (agent A) — WatchTimerView, WatchHaptics, TimerFace,
       WatchScheduleTests, screenshots.
-- [ ] Phase 2 (agent B) — SessionLink over WCSession, phone-side install,
+- [x] Phase 2 (agent B) — SessionLink over WCSession, phone-side install,
       SessionLinkTests, OwnershipTests.
 - [x] Phase 3 (agent C) — WatchWorkout (HKWorkoutSession), Signals
       heart-rate line.
