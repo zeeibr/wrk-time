@@ -771,7 +771,20 @@ Then, the same day, the rest of the roadmap:
     no say-so from her. The first live planner, reviewer and chat calls
     are the open item, and each needs her explicit approval.
 
+**Live, 22 August evening, with her key and her say-so (up to three calls
+each):** the reviewer approved "Single-leg Romanian deadlift" on the 13 lb
+bell, sided, with five form lines — one call. The chat answered the 35 lb
+question by the brief's gate and her real record, then proposed "Rule out
+Beam good morning" as a card that applied through `MovePreferences` — two
+calls, a cent each. The planner's first call came back with an empty
+rotation: the prompt's library listed names with loads and tags
+("Kettlebell deadlift (18 lb) [mat]") that the grammar's enum would not
+let the model write. Names are now listed exactly as the enum has them;
+the second call wrote a four-session week in the brief's shape — sets,
+sets, on the minute, intervals — that the validator accepted first time.
+A debug-only print of a rejected raw week now exists in `plan`.
+
 Still open: EMOM minute ticks on the field edge (design), withholding a
 step-up after three red days (no recovery history is stored), custom
-moves in the sampler's tried count, and the first live calls above.
+moves in the sampler's tried count.
 

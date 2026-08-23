@@ -167,8 +167,8 @@ Decisions proposed:
       pattern. Schema gains `mode` per session; validator rejects three
       implements.
 - [x] Prompt rewrite: the brief is the body; kit and library generated.
-- [ ] First live call — planner, reviewer and chat — only with your explicit
-      approval, usage reported. Nothing has been sent.
+- [x] First live calls — reviewer (1), chat (2), planner (2) — all pass after
+      one prompt fix (library names exactly as the enum).
 
 ### Phase 7 — Aesthetics
 - [x] Moves tab by position with a compact row: name · pattern · load line ·

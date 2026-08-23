@@ -24,7 +24,8 @@ struct CoachBriefTests {
         #expect(prompt.contains("10, 15 lb"))
         // And the library by pattern, with the mat marked.
         #expect(prompt.contains("- Hinge: "))
-        #expect(prompt.contains("Dead bug [mat]"))
+        #expect(prompt.contains("Done on the mat"))
+        #expect(!prompt.contains("(18 lb)"), "names must match the enum exactly")
         // The old prose rules are gone.
         #expect(!prompt.contains("45 seconds is the standing default"))
         #expect(!prompt.contains("The kit tops out at"))

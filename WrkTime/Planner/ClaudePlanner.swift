@@ -179,6 +179,11 @@ struct ClaudePlanner: Sendable {
                 return Result(draft: draft, usage: usage)
             } catch {
                 lastReason = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                #if DEBUG
+                // Development builds only: the raw week the validator refused,
+                // so a rejection can be read rather than guessed at.
+                print("[planner] attempt \(attempt + 1) rejected — \(lastReason)\n\(raw)")
+                #endif
                 guard attempt < Self.attempts - 1 else { break }
 
                 // A normal assistant turn followed by a user turn — not a
@@ -606,7 +611,9 @@ struct ClaudePlanner: Sendable {
           close. One implement per session by default, two at most; a session \
           that needs three is rejected and the week with it.
         - Every move is named exactly as the library lists it, and only a move \
-          on the kit she owns. The load comes from the library, not from you.
+          on the kit she owns. The load comes from the library, not from you. \
+          A session's `moves` array holds exactly the number of names asked \
+          for, in running order — never fewer, never empty.
         - With any bell above 13 lb in an intervals round, write 30 on and 30 \
           off.
         - A rest day is part of the plan. Spread the rest days; do not stack \
@@ -667,22 +674,29 @@ struct ClaudePlanner: Sendable {
             + "\nNo band, bench, bar, anchor, box or pull-up bar. A move that needs one is rejected, not adapted."
     }
 
-    /// The working library grouped by pattern, so the rotation can be built \
+    /// The working library grouped by pattern, so the rotation can be built
     /// by coverage rather than by guessing what a name is.
+    ///
+    /// Names exactly as the schema's enum has them — no load, no tag — or
+    /// the model reaches for a name the grammar will not let it write and
+    /// the rotation comes back empty. That happened on the first live call
+    /// after the brief went in. Loads and positions are said separately.
     static var librarySection: String {
         let strength = MoveLibrary.available.filter { $0.kind == .strength }
         var byPattern: [MovePattern: [String]] = [:]
+        var mat: [String] = []
         for move in strength {
             let pattern = MoveTaxonomy.pattern(for: move.name) ?? .accessory
-            let position = MoveTaxonomy.position(for: move.name) ?? .standing
-            let load = move.loadPounds.map { " (\(Int($0)) lb)" } ?? ""
-            let where_ = position == .standing ? "" : " [\(position == .kneeling ? "kneeling" : "mat")]"
-            byPattern[pattern, default: []].append(move.name + load + where_)
+            byPattern[pattern, default: []].append(move.name)
+            if (MoveTaxonomy.position(for: move.name) ?? .standing) != .standing { mat.append(move.name) }
         }
         let lines = MovePattern.allCases.compactMap { pattern -> String? in
             guard let names = byPattern[pattern], !names.isEmpty else { return nil }
             return "- \(pattern.label): " + names.joined(separator: "; ")
         }
-        return "THE LIBRARY, BY PATTERN — a move on the mat is marked [mat]\n" + lines.joined(separator: "\n")
+        return "THE LIBRARY, BY PATTERN — use these names exactly as written\n"
+            + lines.joined(separator: "\n")
+            + "\nDone on the mat (they close a session): " + mat.joined(separator: "; ")
+            + "\nEvery move carries its own load from the library; you name the move and nothing else."
     }
 }
