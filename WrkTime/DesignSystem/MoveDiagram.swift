@@ -356,13 +356,197 @@ extension Pose {
                     arms: [[shoulder, elbow, hand]], legs: [[hip, knee, sole]])
     }
 
+    /// On the back with the legs straight: the leg raise. A second straight
+    /// leg draws the one-leg bridge. `legAngle` is degrees from the floor,
+    /// measured at the hip toward -x; 90 is straight up.
+    static func supineStraight(width: Double = 0.5,
+                               hipLift: Double = 0,
+                               legAngle: Double = 90,
+                               secondLeg: Double? = nil,
+                               secondKneeUp: Double? = nil,
+                               armAngle: Double = 92) -> Pose {
+        var pose = supine(width: width, hipLift: hipLift, kneeUp: 1.2, armAngle: armAngle)
+        let h = Anatomy.head * Anatomy.recumbent
+        let length = (Anatomy.thigh + Anatomy.shin) * Anatomy.recumbent
+        func straight(_ degrees: Double) -> [CGPoint] {
+            let r = degrees * .pi / 180
+            let sole = CGPoint(x: pose.hip.x - cos(r) * length, y: pose.hip.y + sin(r) * length)
+            let knee = CGPoint(x: pose.hip.x - cos(r) * length / 2, y: pose.hip.y + sin(r) * length / 2)
+            return [pose.hip, knee, sole]
+        }
+        pose.legs = [straight(legAngle)]
+        if let secondLeg { pose.legs.insert(straight(secondLeg), at: 0) }
+        if let secondKneeUp {
+            let knee = CGPoint(x: pose.hip.x - 0.9 * h, y: Anatomy.floorY + secondKneeUp * h)
+            pose.legs.insert([pose.hip, knee, CGPoint(x: pose.hip.x - 2.1 * h, y: Anatomy.floorY)], at: 0)
+        }
+        return pose
+    }
+
+    /// A plank, head to +x, the body one straight line from the soles to the
+    /// shoulders. `raise` is the shoulder height in heads; `forearms` rests
+    /// the elbows on the floor, otherwise the arms are straight under the
+    /// shoulders; `freeHand` lifts the near hand to the far shoulder, the
+    /// shoulder tap; `reachUnder` sends it under the chest toward -x.
+    static func plank(width: Double = 1.0,
+                      raise: Double = 1.55,
+                      forearms: Bool = false,
+                      freeHand: Bool = false,
+                      reachUnder: Bool = false) -> Pose {
+        let h = Anatomy.head * Anatomy.recumbent
+        let sole = CGPoint(x: width / 2 - 2.3 * h, y: Anatomy.floorY)
+        let neck = CGPoint(x: width / 2 + 1.55 * h, y: Anatomy.floorY + raise * h)
+        // The body is straight, so the hip sits on the sole–neck line.
+        let hip = CGPoint(x: sole.x + (neck.x - sole.x) * 0.56, y: sole.y + (neck.y - sole.y) * 0.56)
+        let head = CGPoint(x: neck.x + Anatomy.radius * Anatomy.recumbent * 0.95,
+                           y: neck.y + Anatomy.radius * Anatomy.recumbent * 0.3)
+        let knee = CGPoint(x: sole.x + (hip.x - sole.x) * 0.5, y: sole.y + (hip.y - sole.y) * 0.5)
+        let shoulder = CGPoint(x: neck.x - 0.1 * h, y: neck.y - 0.05 * h)
+        var arms: [[CGPoint]] = []
+        if forearms {
+            let elbow = CGPoint(x: shoulder.x + 0.05 * h, y: Anatomy.floorY)
+            arms.append([shoulder, elbow, CGPoint(x: elbow.x + 1.0 * h, y: Anatomy.floorY)])
+        } else {
+            arms.append([shoulder, CGPoint(x: shoulder.x + 0.12 * h, y: (shoulder.y + Anatomy.floorY) / 2),
+                         CGPoint(x: shoulder.x + 0.25 * h, y: Anatomy.floorY)])
+        }
+        if freeHand {
+            arms.append([shoulder, CGPoint(x: shoulder.x - 0.55 * h, y: shoulder.y - 0.55 * h),
+                         CGPoint(x: shoulder.x + 0.15 * h, y: shoulder.y - 0.25 * h)])
+        } else if reachUnder {
+            arms.append([shoulder, CGPoint(x: shoulder.x - 0.5 * h, y: shoulder.y - 0.7 * h),
+                         CGPoint(x: shoulder.x - 1.3 * h, y: Anatomy.floorY + 0.25 * h)])
+        }
+        return Pose(hip: hip, neck: neck, head: head, arms: arms, legs: [[hip, knee, sole]])
+    }
+
+    /// On the belly, head to +x, arms reaching forward. `lift` floats the
+    /// arms and the legs off the mat, in heads — the superman.
+    static func prone(width: Double = 1.0, lift: Double = 0) -> Pose {
+        let h = Anatomy.head * Anatomy.recumbent
+        let deck = Anatomy.floorY + 0.28 * h
+        let hip = CGPoint(x: width / 2 - 0.6 * h, y: deck)
+        let neck = CGPoint(x: hip.x + 1.75 * h, y: deck + lift * 0.5 * h)
+        let head = CGPoint(x: neck.x + Anatomy.radius * Anatomy.recumbent,
+                           y: neck.y + lift * 0.25 * h)
+        let shoulder = CGPoint(x: hip.x + 1.55 * h, y: neck.y)
+        // The arms pass over the head, not through it: the elbow rises past
+        // the disc before the hand reaches on.
+        let arm = [shoulder,
+                   CGPoint(x: shoulder.x + 0.9 * h, y: neck.y + 0.25 * h + lift * 0.7 * h),
+                   CGPoint(x: shoulder.x + 2.0 * h, y: neck.y + 0.3 * h + lift * 1.1 * h)]
+        let leg = [hip,
+                   CGPoint(x: hip.x - 1.2 * h, y: deck + lift * 0.45 * h),
+                   CGPoint(x: hip.x - 2.3 * h, y: deck + lift * 0.8 * h)]
+        return Pose(hip: hip, neck: neck, head: head, arms: [arm], legs: [leg])
+    }
+
+    /// On one side, head to +x, seen from the front. `topLeg` lifts the upper
+    /// leg in degrees from the floor; `hipLift` raises the hips off the mat
+    /// onto the forearm, the side plank, with the free arm reaching up.
+    static func sideLying(width: Double = 1.0, topLeg: Double = 0,
+                          hipLift: Double = 0, armUp: Bool = false) -> Pose {
+        let h = Anatomy.head * Anatomy.recumbent
+        let sole = CGPoint(x: width / 2 - 2.25 * h, y: Anatomy.floorY)
+        let hip = CGPoint(x: width / 2 - 0.4 * h, y: Anatomy.floorY + 0.5 * h + hipLift * h)
+        // Raised, the body is one straight line from the soles through the
+        // hip to the shoulders; flat, the trunk lies level.
+        let slope = hipLift > 0 ? (hip.y - sole.y) / (hip.x - sole.x) : 0
+        let neck = CGPoint(x: hip.x + 1.75 * h, y: hip.y + slope * 1.75 * h + 0.1 * h)
+        let head = CGPoint(x: neck.x + Anatomy.radius * Anatomy.recumbent, y: neck.y + 0.05 * h)
+        let shoulder = CGPoint(x: hip.x + 1.5 * h, y: neck.y - 0.05 * h)
+        let knee = CGPoint(x: sole.x + (hip.x - sole.x) * 0.5, y: (sole.y + hip.y) / 2)
+        var legs = [[hip, knee, sole]]
+        if topLeg > 0, topLeg <= 10 {
+            // Resting on the bottom leg: the same bent line, a little higher.
+            legs.append([hip, CGPoint(x: knee.x, y: knee.y + 0.18 * h), CGPoint(x: sole.x, y: sole.y + 0.18 * h)])
+        } else if topLeg > 0 {
+            let r = topLeg * .pi / 180
+            let length = (Anatomy.thigh + Anatomy.shin) * Anatomy.recumbent
+            let top = CGPoint(x: hip.x - cos(r) * length, y: hip.y + sin(r) * length)
+            legs.append([hip, CGPoint(x: hip.x - cos(r) * length / 2, y: hip.y + sin(r) * length / 2), top])
+        }
+        var arms: [[CGPoint]] = []
+        if hipLift > 0 {
+            arms.append([shoulder, CGPoint(x: shoulder.x + 0.1 * h, y: Anatomy.floorY),
+                         CGPoint(x: shoulder.x + 1.05 * h, y: Anatomy.floorY)])
+        } else {
+            arms.append([shoulder, CGPoint(x: shoulder.x + 0.6 * h, y: neck.y - 0.5 * h),
+                         CGPoint(x: shoulder.x + 1.3 * h, y: Anatomy.floorY + 0.1 * h)])
+        }
+        if armUp {
+            // Up and a little back, clear of the head.
+            arms.append([shoulder, CGPoint(x: shoulder.x - 0.45 * h, y: shoulder.y + 1.05 * h),
+                         CGPoint(x: shoulder.x - 0.85 * h, y: shoulder.y + 2.1 * h)])
+        }
+        return Pose(hip: hip, neck: neck, head: head, arms: arms, legs: legs)
+    }
+
+    /// Sitting on the floor, head to +x, knees up. `lean` tips the torso back
+    /// in degrees; `hipLift` raises the hips onto hands placed behind — the
+    /// reverse tabletop; `armsTo` is where both hands reach, as a fraction
+    /// of a head forward (+) or back (−) of the chest, for the twist.
+    static func seated(width: Double = 1.0, lean: Double = 0, kneeUp: Double = 1.2,
+                       hipLift: Double = 0, handsBehind: Bool = false,
+                       armsTo: Double? = nil) -> Pose {
+        let h = Anatomy.head * Anatomy.recumbent
+        let hip = CGPoint(x: width / 2 - 0.2 * h, y: Anatomy.floorY + 0.35 * h + hipLift * h)
+        let torso = Anatomy.torso * Anatomy.recumbent
+        let r = lean * .pi / 180
+        let neck = CGPoint(x: hip.x - sin(r) * torso, y: hip.y + cos(r) * torso)
+        let head = CGPoint(x: neck.x - sin(r) * Anatomy.radius * Anatomy.recumbent * 1.3,
+                           y: neck.y + cos(r) * Anatomy.radius * Anatomy.recumbent * 1.3)
+        let shoulder = CGPoint(x: hip.x + (neck.x - hip.x) * 0.88, y: hip.y + (neck.y - hip.y) * 0.88)
+        let knee = CGPoint(x: hip.x + 1.0 * h, y: Anatomy.floorY + kneeUp * h)
+        let sole = CGPoint(x: hip.x + 1.9 * h, y: Anatomy.floorY)
+        var arms: [[CGPoint]] = []
+        if handsBehind {
+            arms.append([shoulder, CGPoint(x: shoulder.x - 0.5 * h, y: (shoulder.y + Anatomy.floorY) / 2),
+                         CGPoint(x: shoulder.x - 0.9 * h, y: Anatomy.floorY)])
+        } else {
+            let to = armsTo ?? 1.0
+            let hand = CGPoint(x: shoulder.x + to * h, y: shoulder.y - 0.35 * h)
+            arms.append([shoulder, CGPoint(x: (shoulder.x + hand.x) / 2, y: shoulder.y - 0.7 * h), hand])
+        }
+        return Pose(hip: hip, neck: neck, head: head, arms: arms, legs: [[hip, knee, sole]])
+    }
+
+    /// Kneeling, seen from the side, facing +x: shins along the floor behind,
+    /// thighs up. `sitBack` lowers the hips toward the heels (1 is sitting on
+    /// them), `lean` folds the torso forward — together, child's pose, with
+    /// the arms reaching along the floor.
+    static func kneel(anchorX: Double = 0.25, sitBack: Double = 0, lean: Double = 0,
+                      shoulder: Double = 16, elbow: Double = 8,
+                      armsOnFloor: Bool = false) -> Pose {
+        let h = Anatomy.head
+        let knee = CGPoint(x: anchorX, y: Anatomy.floorY + 0.12 * h)
+        let heel = CGPoint(x: anchorX - Anatomy.shin, y: Anatomy.floorY + 0.12 * h)
+        // The hips ride over the knee when tall and sink toward the heel
+        // when sitting back.
+        let hip = CGPoint(x: knee.x - sitBack * (Anatomy.shin * 0.85),
+                          y: knee.y + Anatomy.thigh * (1 - 0.75 * sitBack))
+        let neck = Anatomy.upward(hip, lean, Anatomy.torso)
+        let head = Anatomy.upward(neck, lean, Anatomy.radius)
+        let shoulderPoint = Anatomy.upward(hip, lean, Anatomy.torso * Anatomy.shoulderRise)
+        let arm: [CGPoint]
+        if armsOnFloor {
+            let hand = CGPoint(x: shoulderPoint.x + 1.6 * h, y: Anatomy.floorY)
+            arm = [shoulderPoint, CGPoint(x: shoulderPoint.x + 0.9 * h, y: (shoulderPoint.y + hand.y) / 2 + 0.05), hand]
+        } else {
+            let elbowPoint = Anatomy.along(shoulderPoint, shoulder, Anatomy.upperArm)
+            arm = [shoulderPoint, elbowPoint, Anatomy.along(elbowPoint, shoulder + elbow, Anatomy.foreArm)]
+        }
+        return Pose(hip: hip, neck: neck, head: head, arms: [arm], legs: [[hip, knee, heel]])
+    }
+
     /// On all fours, head to +x. `curve` is negative for the arched shape and
     /// positive for the rounded one; `reach` puts the opposite arm and leg out
     /// level with the spine.
     static func quadruped(width: Double = 0.5,
                           curve: Double = 0,
                           headDrop: Double = 0,
-                          reach: Bool = false) -> Pose {
+                          reach: Bool = false,
+                          thread: Bool = false) -> Pose {
         let h = Anatomy.head * Anatomy.recumbent
         let spineY = Anatomy.floorY + 2.4 * h
         let hipX = width / 2 - 1.3 * h
@@ -387,6 +571,12 @@ extension Pose {
                          CGPoint(x: neckX + 1.60 * h, y: spineY + 0.40 * h)], at: 0)
             legs.insert([hip, CGPoint(x: hipX - 0.72 * h, y: spineY + 0.22 * h),
                          CGPoint(x: hipX - 1.60 * h, y: spineY + 0.40 * h)], at: 0)
+        }
+        // The needle: the free arm threads under the chest toward the hips,
+        // low, and the head follows it down.
+        if thread {
+            arms.insert([neck, CGPoint(x: neckX - 0.5 * h, y: spineY - 0.9 * h),
+                         CGPoint(x: neckX - 1.5 * h, y: Anatomy.floorY + 0.35 * h)], at: 0)
         }
 
         var pose = Pose(hip: hip, neck: neck, head: head, arms: arms, legs: legs)
@@ -460,22 +650,11 @@ enum MovePlates {
     /// split, deep) — so the ordinary longest-match rule hands it over, which
     /// is the whole reason keys are matched by containment.
     static let deferred: Set<String> = [
-        // NOT YET DRAWN. Reachable with the builders that exist.
-        "russian twist", "tall-kneeling press", "plank pull-through",
-
         // NO PROP FOR IT. The band is a line between the hands under tension,
         // and it genuinely changes the silhouette — `Prop` has no case for it,
         // and inventing one is a drawing decision rather than geometry.
         "band pull-apart", "band face pull", "band w raise",
         "band external rotation", "band seated row", "band overhead press",
-
-        // NO BUILDER FOR THE SHAPE. There is no prone, side-lying, seated or
-        // kneel-back pose, and `supine` places one arm, one leg and a pinned
-        // sole. Each of these needs a builder before it can be drawn at all.
-        "forearm plank", "side plank", "lying leg raise", "bicycle crunch",
-        "plank shoulder tap", "superman", "one-leg bridge", "side leg lift",
-        "reverse tabletop hold", "child's pose reach", "thread the needle",
-        "wall angel",
 
         // THE MOVEMENT IS SMALLER THAN THE PANEL RULE. Consecutive panels must
         // differ by a head diameter to read as a change; a chin tuck moves an
@@ -979,6 +1158,28 @@ enum MovePlates {
                 .holding { [.bells([$0.hand])] },
             .side(anchorX: 0.26, sink: 0.45, lean: 58, shoulder: 2, elbow: 2)
                 .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // Seated and leaning back, the bell in both hands: it swings from one
+        // side of the hips to the other. Side-on the swing reads as the hands
+        // travelling past the knees and back behind the hip.
+        Strip(key: "russian twist", equipment: .singleDumbbell, facing: .front, panels: [
+            .seated(lean: 30, kneeUp: 1.3, armsTo: 1.1).holding { [.bells([$0.hand])] },
+            .seated(lean: 30, kneeUp: 1.3, armsTo: -0.9).holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // Tall kneeling: the legs are taken out so the trunk holds her up, and
+        // the press goes from the chest to straight overhead.
+        Strip(key: "tall-kneeling press", equipment: .singleDumbbell, facing: .side, panels: [
+            .kneel(anchorX: 0.28, shoulder: 30, elbow: -160).holding { [.bells([$0.hand])] },
+            .kneel(anchorX: 0.28, shoulder: 178, elbow: 2).holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // A high plank with the bell on the floor beside one hand; the free
+        // hand reaches under the chest for it and drags it across.
+        Strip(key: "plank pull-through", equipment: .singleDumbbell, facing: .front, panels: [
+            .plank().holding { [.bells([CGPoint(x: $0.hand.x + 0.22, y: Anatomy.floorY + 0.02)])] },
+            .plank(reachUnder: true).holding { [.bells([$0.hand])] }
         ], signature: 1)
     ]
 
@@ -1031,6 +1232,63 @@ enum MovePlates {
         Strip(key: "squat", facing: .side, panels: [
             .side(anchorX: 0.21, sink: 1.00, shoulder: 8, elbow: 6),
             .side(anchorX: 0.21, sink: 0.34, lean: 26, shoulder: 74, elbow: 16)
+        ], signature: 1),
+
+        // MARK: The mat, drawn with the builders added in August 2026
+
+        // A hold: the way in is kneeling, then the line. Signature is the line.
+        Strip(key: "forearm plank", facing: .front, panels: [
+            .quadruped(width: 1.0),
+            .plank(forearms: true)
+        ], signature: 1),
+
+        Strip(key: "side plank", facing: .front, panels: [
+            .sideLying(),
+            .sideLying(hipLift: 0.7, armUp: true)
+        ], signature: 1),
+
+        Strip(key: "lying leg raise", facing: .front, panels: [
+            .supineStraight(width: 1.0, legAngle: 88, armAngle: 92),
+            .supineStraight(width: 1.0, legAngle: 45, armAngle: 92)
+        ], signature: 1),
+
+        // One knee in to the lifted shoulders, the other leg long; then they
+        // swap. The swap is the move, so both panels show a side.
+        Strip(key: "bicycle crunch", facing: .front, panels: [
+            .supineStraight(width: 1.0, legAngle: 42, secondKneeUp: 1.45, armAngle: -30),
+            .supineStraight(width: 1.0, legAngle: 90, secondKneeUp: 0.6, armAngle: -30)
+        ], signature: 0),
+
+        Strip(key: "plank shoulder tap", facing: .front, panels: [
+            .plank(),
+            .plank(freeHand: true)
+        ], signature: 1),
+
+        Strip(key: "superman", facing: .front, panels: [
+            .prone(),
+            .prone(lift: 1.0)
+        ], signature: 1),
+
+        Strip(key: "one-leg bridge", facing: .front, panels: [
+            .supineStraight(width: 1.0, hipLift: 0, legAngle: 55, secondKneeUp: 1.15, armAngle: 92),
+            .supineStraight(width: 1.0, hipLift: 1.05, legAngle: 55, secondKneeUp: 1.15, armAngle: 92)
+        ], signature: 1),
+
+        Strip(key: "side leg lift", facing: .front, panels: [
+            .sideLying(topLeg: 4),
+            .sideLying(topLeg: 38)
+        ], signature: 1),
+
+        Strip(key: "reverse tabletop hold", facing: .front, panels: [
+            .seated(lean: 25, kneeUp: 1.15, handsBehind: true),
+            .seated(lean: 10, kneeUp: 1.15, hipLift: 1.0, handsBehind: true)
+        ], signature: 1),
+
+        // Up on the wall with the elbows bent, then the arms slide up. The
+        // wall is the point, so it is drawn, and the figure stands against it.
+        Strip(key: "wall angel", facing: .side, panels: [
+            .side(anchorX: 0.30, shoulder: 90, elbow: 88).holding { _ in [.wall(x: 0.09)] },
+            .side(anchorX: 0.30, shoulder: 172, elbow: 4).holding { _ in [.wall(x: 0.09)] }
         ], signature: 1)
     ]
 
@@ -1046,6 +1304,18 @@ enum MovePlates {
     // MARK: Flow
 
     private static let flow: [Strip] = [
+        // Sitting back onto the heels with the arms long on the floor; the
+        // reach is the second panel walking the hands further out.
+        Strip(key: "child's pose reach", facing: .side, panels: [
+            .kneel(anchorX: 0.24, sitBack: 0.5, lean: 45, armsOnFloor: true),
+            .kneel(anchorX: 0.18, sitBack: 0.8, lean: 72, armsOnFloor: true)
+        ], signature: 1),
+
+        Strip(key: "thread the needle", facing: .front, panels: [
+            .quadruped(width: 1.0),
+            .quadruped(width: 1.0, headDrop: 0.9, thread: true)
+        ], signature: 1),
+
         Strip(key: "bounce", facing: .front, panels: [
             .front(sink: 0.80, spread: 8, elbow: 34),
             .front(sink: 1.06, spread: 66, elbow: 10, footLift: 0.34)

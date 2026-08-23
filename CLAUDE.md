@@ -396,14 +396,13 @@ These look like oversights and are not:
 - `MovePlates.strip(for:)` is a lookup, not a matcher. It returns nil only for
   a name outside the library — a stored routine from before it closed. A
   diagram of the wrong movement is worse than none.
-- **`MovePlates.deferred` is grouped by *why*, and only one group is a to-do.**
-  88 of 124 moves are drawn. Of the rest: the band has no `Prop` (it is a line
-  between the hands and it changes the silhouette); twelve want a pose builder
-  that does not exist (no prone, side-lying, seated or kneel-back, and `supine`
-  places one arm, one leg and a pinned sole); and the remainder were refused
-  because the movement is smaller than the one-head panel rule or because what
-  names the move is invisible in both projections. Do not "fix" the last two
-  groups by exaggerating a movement to clear the test.
+- **`MovePlates.deferred` is grouped by *why*, and none of it is a to-do.**
+  103 of 124 moves are drawn (August 2026 added `plank`, `prone`, `sideLying`,
+  `seated`, `kneel` and `supineStraight` builders for the mat). Of the rest:
+  the band has no `Prop` and the drawer is off for good; and the remainder
+  were refused because the movement is smaller than the one-head panel rule
+  or because what names the move is invisible in both projections. Do not
+  "fix" those by exaggerating a movement to clear the test.
 - The engine derives state from elapsed wall-clock time against a precomputed
   schedule. It must never accumulate per-tick decrements.
 - The Live Activity is handed phase start/end **dates**, not a countdown, so the

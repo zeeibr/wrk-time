@@ -1095,7 +1095,8 @@ struct MovePlateTests {
         // "Ring goblet squat" and "Beam reverse lunge" used to be here and are
         // now real moves — which is the point of adding to a closed library
         // rather than loosening the match.
-        for name in ["Side plank", "Turkish get-up", "Kettlebell swing",
+        // "Side plank" was the example here until it was drawn in August 2026.
+        for name in ["Chin tuck", "Turkish get-up", "Kettlebell swing",
                      "Barbell back squat", "Shaking", ""] {
             #expect(MovePlates.strip(for: name) == nil, "\(name) resolved to a plate")
         }
@@ -1209,7 +1210,9 @@ struct MovePlateTests {
     /// rather than the floor line.
     static let floorBound = ["hip thrust", "glute bridge", "dead bug", "floor fly",
                              "cat cow", "bird dog", "push-up", "walk", "incline walk",
-                             "floor press", "pullover"]
+                             "floor press", "pullover",
+                             // The mat, August 2026: none of these stand.
+                             "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press"]
 
     @Test("Consecutive panels differ enough to read as a change")
     func panelsDiffer() {
@@ -1247,7 +1250,9 @@ struct MovePlateTests {
          // Supine additions (August 2026): each places its knee rather than
          // solving it, exactly as the glute bridge does.
          "beam triceps extension", "ring bridge", "dead bug press",
-         "dumbbell floor press"].contains(strip.key)
+         "dumbbell floor press",
+         // The mat and the kneel (August 2026) place every joint.
+         "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press"].contains(strip.key)
     }
 }
 
