@@ -2655,7 +2655,10 @@ struct ExtraWorkTests {
     func extraIsShorterAndWarmsUp() {
         let extra = ExtraSession.build(week: 6, pace: .hard, avoiding: [])
         let planned = OfflinePlanner.shape(week: 6, pace: .hard)
-        #expect(extra.roundCount < planned.rounds)
+        // `rounds`, not `roundCount`: the half-rounds rule is on the turns,
+        // and a sided move doubles its turn's work intervals — a day whose
+        // rotation draws three sided moves expands six turns to twelve.
+        #expect(extra.rounds < planned.rounds)
         #expect(extra.roundCount >= ExtraSession.minimumRounds)
         #expect(!extra.warmUp.isEmpty)
         #expect(extra.warmUp.allSatisfy { $0.kind == .flow })
