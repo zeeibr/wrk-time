@@ -50,6 +50,43 @@ struct RecordedWalk: Equatable, Sendable {
     let minutes: Double
     /// What wrote it — "Whoop", "Apple Watch". Shown, never guessed at.
     let source: String
+
+    var end: Date { date.addingTimeInterval(minutes * 60) }
+
+    /// One walk, once, whoever wrote it down.
+    ///
+    /// Whoop and an Apple Watch both write the same physical walk to Health
+    /// as their own workout, so a wrist worn alongside the strap doubled
+    /// every walk on Signals — twice in the list, twice in the week's
+    /// minutes, twice in what the planner is told. Walks whose recordings
+    /// overlap are the same walk: they merge into one entry counting the
+    /// **union** of their time — never the sum, and never only the longer
+    /// recording, since one device can catch minutes the other missed —
+    /// naming every device that saw it.
+    ///
+    /// The minute of grace covers clocks that disagree about when the walk
+    /// started; back-to-back walks further apart than that are genuinely two.
+    static func deduplicated(_ walks: [RecordedWalk],
+                             tolerance: TimeInterval = 60) -> [RecordedWalk] {
+        let sorted = walks.sorted { $0.date < $1.date }
+        var merged: [RecordedWalk] = []
+        for walk in sorted {
+            guard let last = merged.last,
+                  walk.date.timeIntervalSince(last.end) < tolerance else {
+                merged.append(walk)
+                continue
+            }
+            let end = max(last.end, walk.end)
+            var sources = last.source.components(separatedBy: " · ")
+            if !sources.contains(walk.source) { sources.append(walk.source) }
+            merged[merged.count - 1] = RecordedWalk(
+                date: last.date,
+                minutes: end.timeIntervalSince(last.date) / 60,
+                source: sources.joined(separator: " · "))
+        }
+        // Newest first, the order the callers already expect.
+        return merged.sorted { $0.date > $1.date }
+    }
 }
 
 // MARK: - Recovery

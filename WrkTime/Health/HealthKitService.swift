@@ -129,11 +129,13 @@ final class HealthKitService: HealthService, @unchecked Sendable {
             store.execute(query)
         }
 
-        return workouts.map {
+        // Merged, because two devices recording one walk is now the normal
+        // case: Whoop and a worn Apple Watch each write their own workout.
+        return RecordedWalk.deduplicated(workouts.map {
             RecordedWalk(date: $0.startDate,
                          minutes: $0.duration / 60,
                          source: $0.sourceRevision.source.name)
-        }
+        })
     }
 
     private func quantitySamples(type: HKQuantityType, since: Date) async -> [HKQuantitySample] {

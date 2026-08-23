@@ -55,17 +55,6 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		1A0000000000000000000038 /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
-			dstSubfolderSpec = 16;
-			files = (
-				1A0000000000000000000037 /* WrkTimeWatch.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		1A0000000000000000000031 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -75,6 +64,17 @@
 				1A0000000000000000000045 /* WrkTimeWatchWidgetsExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A0000000000000000000038 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				1A0000000000000000000037 /* WrkTimeWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -137,17 +137,17 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
-		1A000000000000000000002B /* Core */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Core;
-			sourceTree = "<group>";
-		};
 		1A000000000000000000001C /* WrkTimeWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				1A0000000000000000000029 /* Exceptions for "WrkTimeWidgets" folder in "WrkTimeWidgetsExtension" target */,
 			);
 			path = WrkTimeWidgets;
+			sourceTree = "<group>";
+		};
+		1A000000000000000000002B /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
 			sourceTree = "<group>";
 		};
 		1A0000000000000000000032 /* WrkTimeWatch */ = {
@@ -253,9 +253,9 @@
 				1A0000000000000000000039 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				1A000000000000000000002B /* Core */,
 				1A0000000000000000000008 /* WrkTime */,
 				1A000000000000000000001B /* Shared */,
+				1A000000000000000000002B /* Core */,
 			);
 			name = WrkTime;
 			productName = WrkTime;
@@ -319,8 +319,8 @@
 				1A0000000000000000000046 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				1A000000000000000000002B /* Core */,
 				1A000000000000000000001B /* Shared */,
+				1A000000000000000000002B /* Core */,
 				1A0000000000000000000032 /* WrkTimeWatch */,
 			);
 			name = WrkTimeWatch;
