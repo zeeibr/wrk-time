@@ -32,6 +32,37 @@ struct TodaySnapshot: Codable {
     var marksThisWeek: Int = 0
     var marksTarget: Int = 4
 
+    // MARK: - The session that is running
+
+    /// The four facts a complication needs about a live session, and nothing
+    /// more. Written by the watch, which is the only process that knows a
+    /// session is running while the screen is off.
+    ///
+    /// Every one of them is Optional, and that is load-bearing twice over.
+    /// This is JSON on disk and the synthesized decoder *throws* on a missing
+    /// key, so a snapshot the phone wrote — it writes none of these — has to
+    /// keep decoding. And nil is the honest reading of "nothing is running":
+    /// the fields are cleared the moment the session ends, so a complication
+    /// can never show a phase that finished an hour ago.
+    var runningTitle: String?
+    /// "Work", "Rest" or "Warm-up". The word the wrist reads, not a raw case.
+    var runningPhase: String?
+    /// When the current phase ends. Handed to the complication as a date so
+    /// the *system* ticks the countdown — the same rule the Live Activity
+    /// follows. Never a per-second timeline.
+    var runningPhaseEnds: Date?
+    /// When the whole session ends, on the schedule as written.
+    var runningEnds: Date?
+
+    /// Whether a session is running as far as this snapshot knows, judged
+    /// against the clock rather than against the flag: a watch killed
+    /// mid-session leaves the fields behind, and a phase that ended an hour
+    /// ago is not a running session.
+    func isRunning(at date: Date = .now) -> Bool {
+        guard runningTitle != nil, let ends = runningEnds else { return false }
+        return ends > date
+    }
+
     func day(for date: Date, calendar: Calendar = .current) -> Day? {
         days.first { calendar.isDate($0.date, inSameDayAs: date) }
     }

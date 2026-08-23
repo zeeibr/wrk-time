@@ -17,19 +17,8 @@ struct WrkTimeWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WatchRootView()
+            WatchTodayView()
         }
         .modelContainer(container)
-    }
-}
-
-/// Phase 0 placeholder; `WatchTodayView` replaces it.
-struct WatchRootView: View {
-    var body: some View {
-        Text("Almanac")
-            .font(.almanacHeading)
-            .foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Palette.oat.ignoresSafeArea())
     }
 }
