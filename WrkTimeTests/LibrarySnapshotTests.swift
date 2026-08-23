@@ -24,17 +24,17 @@ struct LibrarySnapshotTests {
 
     @Test("Every move reads exactly as it did before the port")
     func unchanged() throws {
-        let now = MoveLibrary.all.map(Self.line)
-        let then = LibrarySnapshot.lines
+        // As a set: the port changed the library's order (the catalog's,
+        // then the flow list) and every walk of it is seeded, not positional.
+        let now = Set(MoveLibrary.all.map(Self.line))
+        let then = Set(LibrarySnapshot.lines)
         #expect(now.count == then.count, "\(now.count) moves now, \(then.count) then")
-        for (index, expected) in then.enumerated() where index < now.count {
-            if now[index] != expected {
-                let name = expected.split(separator: "\t").first ?? ""
-                Issue.record("\(name) changed:\n  was \(expected)\n  now \(now[index])")
-            }
+        for expected in then.subtracting(now) {
+            let name = expected.split(separator: "\t").first ?? ""
+            Issue.record("\(name) changed or missing:\n  was \(expected)")
         }
-        for extra in now.dropFirst(then.count) {
-            Issue.record("new move not in the snapshot: \(extra.split(separator: "\t").first ?? "")")
+        for extra in now.subtracting(then) {
+            Issue.record("not in the snapshot: \(extra.split(separator: "\t").first ?? "")")
         }
     }
 

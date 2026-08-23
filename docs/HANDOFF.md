@@ -801,13 +801,17 @@ The target design — a `Movement` table (~55 rows) × `Equipment.holds`
 the review and summarised here as the next block of work:
 
 1. `Equipment.Hold` and `holds` — done.
-2. `MoveAliases` — done for the five single-dumbbell variants; a variant
-   borrows the movement's pattern, muscles and form instead of copying.
-3. Introduce `Movement`; port the ~15 duplicated movements; prove the
-   generated name set equals the hand-written one before deleting literals.
-4. Optional `movementID` / `holdRaw` on `Move`; adopt on read.
-5. Re-key drawings on (movement, implement); shrink `deferred`.
-6. Port the rest. New kit then = one case, one `holds`, one ladder.
+2. `Movement` and `MovementCatalog` — done, the same night, by four
+   parallel agents (lower body, upper body, core and carry, accessory), each
+   proving its family against `LibrarySnapshotTests` before merging: 77
+   movements, 101 variants, every one byte-identical to the old row. The
+   literals and the three tables were then deleted; `MoveAliases` with them.
+3. Optional `movementID` / `holdRaw` on `Move`, adopted on read — **open**.
+   Useful for grouping the move sheet's history by movement.
+4. Re-key drawings on (movement, implement) — **open**; strips still match
+   by name containment, which works but keeps `deferred` as a patch.
+New kit today: one `Equipment` case, its ladder and `holds`, then a
+`Variant` line under each movement it is done on.
 
 Do not: change the planner's enum to pairs; rename existing variants;
 generate cues without an override slot; relax "never a pair" for the single.

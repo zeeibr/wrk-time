@@ -65,7 +65,7 @@ enum MovementCatalog {
 
     /// Registered here, one line per family file.
     static let families: [[Movement]] = [
-        // Families are added as they are ported; see HANDOFF.
+        lowerBody, upperBody, coreAndCarry, accessory
     ]
 
     /// Lookups by the stored name, for the three tables to consult first.

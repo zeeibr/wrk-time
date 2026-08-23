@@ -71,7 +71,8 @@ struct PlanValidatorTests {
         // stronger: the schema asks Claude for a move *name* and nothing else,
         // so the load comes from the closed library rather than from the model.
         // "Ring halo" is the 5 lb ring whatever a draft claims alongside it.
-        let routines = try PlanValidator.routines(from: draft([move(.rings, pounds)]))
+        let halo = DraftMove(name: "Ring halo", equipment: Equipment.rings.rawValue, cue: "Cue", loadPounds: pounds)
+        let routines = try PlanValidator.routines(from: draft([halo]))
         let ring = try #require(routines.first?.routine.moves.first)
         #expect(ring.loadPounds == 5, "took the draft's load instead of the library's")
         #expect(Equipment.rings.availableLoadsPounds.contains(ring.loadPounds ?? 0))

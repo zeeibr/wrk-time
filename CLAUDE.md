@@ -46,12 +46,18 @@ planner's and the reviewer's system prompt; the kit, the library by pattern
 and the response rules are generated from the enums after it, so nothing
 about the kit is typed twice. The local arithmetic follows it too. When a rule here and a rule there disagree, the brief wins.
 
-Three lookups sit beside the library and are never stored fields, so no
-routine on disk changes shape: `MoveMuscles` (display), `MoveTaxonomy`
-(pattern and position — what the rotation builder and the Moves tab
-reason in), and `MoveForm` (five lines of form per strength move, her ask
-as a beginner). Every strength move must have an entry in all three; tests
-enforce it.
+**The strength library is `MovementCatalog`** (`WrkTime/Model/Movements/`,
+one file per family): a `Movement` owns its pattern, position, muscles and
+five form lines once, and its `variants` are the implements it is done on —
+each variant carrying exactly the stored name the app has always used, its
+load, grip (`Equipment.Hold`) and cue. `MoveTaxonomy`, `MoveMuscles` and
+`MoveForm` are thin lookups over the catalog (plus a registry for her own
+reviewed additions); they hold no tables of their own any more. To add a
+movement on new kit, add a variant to its movement. The flow movements stay
+a plain list in `MoveLibrary.literals`. `LibrarySnapshotTests` holds the
+library as it stood the day of the port and fails if any move's name,
+implement, load, sidedness, cue, pattern, position, muscles or form
+changes — regenerate it only on purpose.
 
 **A session has a mode** (`SessionMode`, Optional on the routine; nil is
 intervals): sets — an open set she ends, capped at 90 s, rest from the
