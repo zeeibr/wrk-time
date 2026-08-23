@@ -30,7 +30,7 @@ struct MoveForm: Equatable {
     var stopIf: String
 
     static func notes(for name: String) -> MoveForm? {
-        table[MovePreference.key(name)]
+        table[MoveAliases.resolve(name)]
     }
 
     /// The line that is always true: effort is not the stop signal.

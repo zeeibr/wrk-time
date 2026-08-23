@@ -105,12 +105,12 @@ enum MovePosition: Int, CaseIterable, Codable, Comparable {
 
 enum MoveTaxonomy {
     static func pattern(for name: String) -> MovePattern? {
-        let key = MovePreference.key(name)
+        let key = MoveAliases.resolve(name)
         return table[key]?.0 ?? registry.read(key)?.0
     }
 
     static func position(for name: String) -> MovePosition? {
-        let key = MovePreference.key(name)
+        let key = MoveAliases.resolve(name)
         return table[key]?.1 ?? registry.read(key)?.1
     }
 

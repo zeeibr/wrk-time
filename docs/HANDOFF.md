@@ -789,3 +789,26 @@ Closed the same night: EMOM minute ticks under the timer header;
 running withhold a step-up (missing days never count); the sampler
 already counted her additions. Nothing on the roadmap is open.
 
+## The library redesign (reviewed 22 August, evening)
+
+An architecture review found the library is "a product table pretending to
+be a movement table": ~45 of 95 strength rows are one movement on a
+different implement, with pattern, muscles, form and drawing typed per
+row in six name-keyed lookups, so new kit means new code at seven sites.
+The target design — a `Movement` table (~55 rows) × `Equipment.holds`
+(pair / one hand / two hands) generating named variants, migrating by a
+`LegacyNames` table so nothing on disk renames — is written up in full in
+the review and summarised here as the next block of work:
+
+1. `Equipment.Hold` and `holds` — done.
+2. `MoveAliases` — done for the five single-dumbbell variants; a variant
+   borrows the movement's pattern, muscles and form instead of copying.
+3. Introduce `Movement`; port the ~15 duplicated movements; prove the
+   generated name set equals the hand-written one before deleting literals.
+4. Optional `movementID` / `holdRaw` on `Move`; adopt on read.
+5. Re-key drawings on (movement, implement); shrink `deferred`.
+6. Port the rest. New kit then = one case, one `holds`, one ladder.
+
+Do not: change the planner's enum to pairs; rename existing variants;
+generate cues without an override slot; relax "never a pair" for the single.
+

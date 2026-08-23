@@ -42,6 +42,23 @@ enum Equipment: String, Codable, CaseIterable, Hashable, Identifiable {
         }
     }
 
+    /// How a thing is held. The first axis of the library that is not the
+    /// implement: a row is the same movement with a pair, one hand on a
+    /// bell, or one hand on the single. `oneHand` implies sided.
+    enum Hold: String, Codable, Sendable { case pair, oneHand, twoHands, none }
+
+    /// The holds this implement allows. A pair is only ever a pair; the
+    /// single, the rings and the bell are one hand or two; the beam is two.
+    var holds: Set<Hold> {
+        switch self {
+        case .dumbbells: [.pair]
+        case .singleDumbbell, .rings, .kettlebell: [.oneHand, .twoHands]
+        case .beam: [.twoHands]
+        case .band: [.twoHands, .oneHand]
+        case .walkingPad, .bodyweight: [.none]
+        }
+    }
+
     /// What a *particular* move asks you to pick up.
     ///
     /// `label` describes the whole inventory, which is what the equipment
@@ -431,6 +448,27 @@ enum MoveLibrary {
         Move(name: "Plank pull-through", equipment: .singleDumbbell,
              cue: "From a high plank, drag the dumbbell under your chest to the other side, hand by hand. The hips stay quiet.",
              loadPounds: 10),
+        // The single dumbbell on the pair's big movements (August 2026, her
+        // ask: "select a higher dumbbell weight like 10 lb"). One hand where
+        // the bell does it one-handed, both hands where the bell is held by
+        // the horns. Each name carries the movement's noun so a refusal of
+        // "row" still covers it, and each borrows the pair move's muscles,
+        // form and pattern by alias rather than copying them. No drawings.
+        Move(name: "Single-dumbbell row", equipment: .singleDumbbell,
+             cue: "Hinge, free hand braced on your thigh, the dumbbell in the other. Pull it to your hip; the elbow goes back, not out.",
+             loadPounds: 10, sided: .sides),
+        Move(name: "Single-dumbbell goblet squat", equipment: .singleDumbbell,
+             cue: "The dumbbell held upright at the chest in both hands. Sit between the hips, elbows inside the knees.",
+             loadPounds: 10),
+        Move(name: "Single-dumbbell floor press", equipment: .singleDumbbell,
+             cue: "On your back, the dumbbell in both hands over the chest. Press straight up; the floor stops your elbows.",
+             loadPounds: 10),
+        Move(name: "Single-dumbbell overhead press", equipment: .singleDumbbell,
+             cue: "The dumbbell in one hand at the shoulder. Press straight up, ribs down; the free hand on the hip.",
+             loadPounds: 10, sided: .sides),
+        Move(name: "Single-dumbbell curl", equipment: .singleDumbbell,
+             cue: "The dumbbell in one hand, elbow pinned to your side. Three counts down every time.",
+             loadPounds: 10, sided: .sides),
         // The posture set (August 2026). The band was bought for one job — her
         // words: a routine "that will get rid of my tech neck/slouch hump" —
         // and these six are the standard prescription for it: wake the deep
@@ -705,6 +743,12 @@ enum MoveLibrary {
             if pa != pb { return pa < pb }
             let sa = Shape.order(of: a.element), sb = Shape.order(of: b.element)
             if sa != sb { return sa < sb }
+            // Inside a rank, keep one pattern together — rows before vertical
+            // pulls rather than interleaved — so the library's sub-heads
+            // read as groups.
+            let ka = MoveTaxonomy.pattern(for: a.element.name).map { MovePattern.allCases.firstIndex(of: $0) ?? 99 } ?? 99
+            let kb = MoveTaxonomy.pattern(for: b.element.name).map { MovePattern.allCases.firstIndex(of: $0) ?? 99 } ?? 99
+            if ka != kb { return ka < kb }
             return a.offset < b.offset
         }.map(\.element)
     }

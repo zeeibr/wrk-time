@@ -1212,7 +1212,7 @@ struct MovePlateTests {
                              "cat cow", "bird dog", "push-up", "walk", "incline walk",
                              "floor press", "pullover",
                              // The mat, August 2026: none of these stand.
-                             "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press"]
+                             "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press", "single-dumbbell floor press"]
 
     @Test("Consecutive panels differ enough to read as a change")
     func panelsDiffer() {
@@ -1252,7 +1252,7 @@ struct MovePlateTests {
          "beam triceps extension", "ring bridge", "dead bug press",
          "dumbbell floor press",
          // The mat and the kneel (August 2026) place every joint.
-         "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press"].contains(strip.key)
+         "forearm plank", "side plank", "lying leg raise", "bicycle crunch", "plank shoulder tap", "superman", "one-leg bridge", "side leg lift", "reverse tabletop hold", "russian twist", "plank pull-through", "thread the needle", "child's pose reach", "tall-kneeling press", "single-dumbbell floor press"].contains(strip.key)
     }
 }
 

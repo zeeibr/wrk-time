@@ -849,136 +849,231 @@ struct MovePicker: View {
     @Environment(\.modelContext) private var context
     let onPick: (Move) -> Void
 
-    /// The working flow pool — built-ins plus her approved flow additions, the
-    /// same set the practice and the warm-ups draw from.
+    /// Picks gather here and go in together. Her complaint: the list was a
+    /// flat scroll of a hundred and twenty rows, one pick a visit, so
+    /// building a five-move routine was five trips through it.
+    @State private var basket: [Move] = []
+    @State private var query = ""
+    @State private var pattern: MovePattern?
+    /// Sections are closed by default and open on tap, on a search, or on
+    /// a chip — the headings are the overview, the rows are the detail.
+    @State private var open: Set<String> = []
+    @State private var showingFlow = false
+
     private var flowPool: [Move] { MoveLibrary.flow + CustomMoves.flow(in: context) }
-    /// Her approved strength additions, offered under their own heading since
-    /// they belong to no built-in equipment group's fixed list.
-    private var customStrength: [Move] {
-        CustomMoves.strength(in: context).map { $0.applyingLoad(from: loads) }
-    }
-    /// Her loads, so a picked move goes into the routine at the weight she
-    /// actually uses.
     private var loads: [String: Double] { MoveOverrides.table(in: context) }
 
-    /// The owned strength library in running order, one section per
-    /// pattern, the mat's patterns after the standing ones.
-    private var patternGroups: [(title: String, moves: [Move])] {
-        let strength = MoveLibrary.ordered(
-            MoveLibrary.available.filter { $0.kind == .strength }.map { $0.applyingLoad(from: loads) })
+    /// The owned strength library and her additions, in running order.
+    private var strength: [Move] {
+        MoveLibrary.ordered(
+            (MoveLibrary.available.filter { $0.kind == .strength } + CustomMoves.strength(in: context))
+                .map { $0.applyingLoad(from: loads) })
+    }
+
+    private var narrowed: [Move] {
+        strength.filter { move in
+            (pattern == nil || MoveTaxonomy.pattern(for: move.name) == pattern)
+                && (query.isEmpty || matches(move))
+        }
+    }
+
+    private func matches(_ move: Move) -> Bool {
+        let q = query.lowercased()
+        return move.name.lowercased().contains(q)
+            || move.equipment.shortLabel.lowercased().contains(q)
+            || (MoveMuscles.groups(for: move.name) ?? "").contains(q)
+            || (MoveTaxonomy.pattern(for: move.name)?.label.lowercased().contains(q) ?? false)
+    }
+
+    /// One section per position, pattern sub-heads inside.
+    private var groups: [(title: String, moves: [Move])] {
         var out: [(title: String, moves: [Move])] = []
-        for move in strength {
-            let position = MoveTaxonomy.position(for: move.name) ?? .standing
-            let pattern = MoveTaxonomy.pattern(for: move.name)?.label ?? "Other"
-            let title = switch position {
-            case .standing: pattern
-            case .kneeling: "Kneeling · \(pattern)"
-            case .floor: "On the mat · \(pattern)"
-            }
-            if let index = out.firstIndex(where: { $0.title == title }) {
-                out[index].moves.append(move)
-            } else {
-                out.append((title, [move]))
-            }
+        for move in narrowed {
+            let title = (MoveTaxonomy.position(for: move.name) ?? .standing).label
+            if let i = out.firstIndex(where: { $0.title == title }) { out[i].moves.append(move) }
+            else { out.append((title, [move])) }
         }
         return out
     }
 
+    private func inBasket(_ move: Move) -> Bool { basket.contains { $0.id == move.id } }
+    private func toggle(_ move: Move) {
+        if let i = basket.firstIndex(where: { $0.id == move.id }) { basket.remove(at: i) }
+        else { basket.append(move) }
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                // The morning practice first: it is what she reaches for most
-                // often, and burying it under five equipment headings would
-                // make the thing she does daily the hardest thing to find.
-                if !flowPool.isEmpty {
-                    SwiftUI.Section {
-                        ForEach(flowPool) { move in
+            VStack(spacing: 0) {
+                chips
+                List {
+                    if query.isEmpty, pattern == nil {
+                        flowSection
+                    }
+                    ForEach(groups, id: \.title) { group in
+                        SwiftUI.Section {
+                            if isOpen(group.title) {
+                                ForEach(Array(group.moves.enumerated()), id: \.element.id) { index, move in
+                                    if let head = subhead(at: index, in: group.moves) {
+                                        Text(head).almanacLabel(Palette.mute, small: true)
+                                            .listRowBackground(Palette.oat)
+                                            .listRowSeparator(.hidden)
+                                    }
+                                    Button { toggle(move) } label: { row(move, picked: inBasket(move)) }
+                                        .buttonStyle(.plain)
+                                        .listRowBackground(Palette.oat)
+                                        .listRowSeparatorTint(Palette.rule)
+                                }
+                            }
+                        } header: {
                             Button {
-                                onPick(move)
-                                dismiss()
-                            } label: { row(move) }
+                                if open.contains(group.title) { open.remove(group.title) } else { open.insert(group.title) }
+                            } label: {
+                                HStack {
+                                    Text(group.title).almanacLabel(small: true)
+                                    Spacer()
+                                    Text("\(group.moves.count)").almanacLabel(Palette.mute, small: true).tabular()
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(Palette.mute)
+                                        .rotationEffect(.degrees(isOpen(group.title) ? 0 : -90))
+                                }
+                                .contentShape(Rectangle())
+                            }
                             .buttonStyle(.plain)
-                            .listRowBackground(Palette.oat)
-                            .listRowSeparatorTint(Palette.rule)
                         }
-                    } header: {
-                        Text("Flow · qi gong and lymphatic").almanacLabel(small: true)
-                    } footer: {
-                        Text("These open the session rather than joining the rotation — they are a practice, not a set.")
-                            .font(.almanacBodySmall)
-                            .foregroundStyle(Palette.mute)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Palette.oat.ignoresSafeArea())
+                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: "Name, muscle, kit or pattern")
 
-                // The strength library the way the Moves tab lists it now:
-                // by pattern, standing before the mat, the implement a fact
-                // on the row. Picking "a hinge" is the question a routine
-                // asks; which drawer it came from is not.
-                ForEach(patternGroups, id: \.title) { group in
-                    SwiftUI.Section {
-                        ForEach(group.moves) { move in
-                            Button {
-                                onPick(move)
-                                dismiss()
-                            } label: { row(move) }
-                            .buttonStyle(.plain)
-                            .listRowBackground(Palette.oat)
-                            .listRowSeparatorTint(Palette.rule)
+                if !basket.isEmpty {
+                    Rule(firm: true)
+                    Button {
+                        basket.forEach(onPick)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(basket.count == 1 ? "Add 1 move" : "Add \(basket.count) moves")
+                                .font(.almanacBody).foregroundStyle(Palette.oat)
+                            Spacer()
+                            Text(basket.map(\.name).joined(separator: " · "))
+                                .almanacLabel(Palette.sage, small: true)
+                                .lineLimit(1)
                         }
-                    } header: {
-                        Text(group.title).almanacLabel(small: true)
+                        .padding(.horizontal, 18).padding(.vertical, 14)
+                        .background(Palette.ink)
                     }
-                }
-
-                if !customStrength.isEmpty {
-                    SwiftUI.Section {
-                        ForEach(customStrength) { move in
-                            Button {
-                                onPick(move)
-                                dismiss()
-                            } label: { row(move) }
-                            .buttonStyle(.plain)
-                            .listRowBackground(Palette.oat)
-                            .listRowSeparatorTint(Palette.rule)
-                        }
-                    } header: {
-                        Text("Your additions").almanacLabel(small: true)
-                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Palette.oat)
                 }
             }
-            .listStyle(.plain)
-            // Without this the rows keep `systemBackground` — white in light
-            // mode, black in dark — so the picker was the one screen not in
-            // the document register, and in dark mode ink names sat on black.
-            .scrollContentBackground(.hidden)
-            .background(Palette.oat.ignoresSafeArea())
             .navigationTitle("Your kit")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.foregroundStyle(Palette.ink)
+                }
+            }
         }
     }
 
-    /// Name, cue, and the plate. The diagram is the point of the row here: a
-    /// list of thirty-eight names is a vocabulary test, and she asked to be
-    /// able to see the shape before choosing it.
-    private func row(_ move: Move) -> some View {
+    /// A section is open if she opened it, or if she is narrowing — a search
+    /// or a chip is a request to see the rows.
+    private func isOpen(_ title: String) -> Bool {
+        open.contains(title) || !query.isEmpty || pattern != nil
+    }
+
+    private func subhead(at index: Int, in moves: [Move]) -> String? {
+        func head(_ m: Move) -> String { MoveTaxonomy.pattern(for: m.name)?.label ?? "Hers" }
+        let now = head(moves[index])
+        guard index > 0 else { return now }
+        return head(moves[index - 1]) == now ? nil : now
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MovePattern.allCases, id: \.self) { p in
+                    let on = pattern == p
+                    Button { pattern = on ? nil : p } label: {
+                        Text(p.label)
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(on ? Palette.oat : Palette.ink)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(on ? Palette.ink : Color.clear)
+                            .overlay(Rectangle().strokeBorder(on ? Palette.ink : Palette.ruleFirm, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
+        .background(Palette.oat)
+    }
+
+    @ViewBuilder
+    private var flowSection: some View {
+        SwiftUI.Section {
+            if showingFlow {
+                ForEach(flowPool) { move in
+                    Button { toggle(move) } label: { row(move, picked: inBasket(move)) }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Palette.oat)
+                        .listRowSeparatorTint(Palette.rule)
+                }
+            }
+        } header: {
+            Button { showingFlow.toggle() } label: {
+                HStack {
+                    Text("Flow · qi gong and lymphatic").almanacLabel(small: true)
+                    Spacer()
+                    Text("\(flowPool.count)").almanacLabel(Palette.mute, small: true).tabular()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.mute)
+                        .rotationEffect(.degrees(showingFlow ? 0 : -90))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } footer: {
+            if showingFlow {
+                Text("These open the session rather than joining the rotation — they are a practice, not a set.")
+                    .font(.almanacBodySmall)
+                    .foregroundStyle(Palette.mute)
+            }
+        }
+    }
+
+    private func row(_ move: Move, picked: Bool) -> some View {
         HStack(spacing: 12) {
-            // A constant 66x66 cell whatever the facing. A front-facing
-            // signature panel is square and a side one is half as wide; letting
-            // the cell follow would give the list a ragged left edge on the
-            // name column, in a document register built on things lining up.
-            MoveStrip(move: move, style: .signature)
-                .frame(width: 66, height: 66)
+            Rectangle()
+                .fill(picked ? Palette.ink : Color.clear)
+                .frame(width: 9, height: 9)
+                .overlay(Rectangle().strokeBorder(picked ? Palette.ink : Palette.ruleFirm, lineWidth: 1))
+            if MoveStrip.exists(for: move) {
+                MoveStrip(move: move, style: .signature)
+                    .frame(width: 48, height: 48)
+            } else {
+                Color.clear.frame(width: 48, height: 48)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(move.name).font(.almanacBody).foregroundStyle(Palette.ink)
-                // The implement was the section heading; now the sections
-                // are patterns, so the row says what to pick up.
                 if move.kind == .strength {
-                    Text(move.equipmentLabel).almanacLabel(Palette.mute, small: true)
+                    Text([move.equipmentLabel, MoveMuscles.groups(for: move.name)].compactMap { $0 }
+                            .joined(separator: " · "))
+                        .almanacLabel(Palette.mute, small: true)
                 }
-                Text(move.cue).font(.almanacBodySmall).foregroundStyle(Palette.mute)
             }
+            Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
     }
 }

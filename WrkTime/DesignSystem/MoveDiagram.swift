@@ -667,6 +667,8 @@ enum MovePlates {
         // an entry the move does not contain — a clean, in these two cases.
         "kettlebell rack hold", "kettlebell suitcase hold",
 
+
+
         // THE DISTINGUISHING FACT IS INVISIBLE IN BOTH PROJECTIONS. A grip
         // rotation, a wheel turn, a step that goes back *and* across, a chop
         // across the body: side-on collapses the across, front-on mirrors
@@ -1158,6 +1160,36 @@ enum MovePlates {
                 .holding { [.bells([$0.hand])] },
             .side(anchorX: 0.26, sink: 0.45, lean: 58, shoulder: 2, elbow: 2)
                 .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+
+        // The single on the pair's movements (August 2026): the same drawing
+        // as the pair or the bell, with one dumbbell in the hand that holds
+        // it. Keyed by full name so "row" and "curl" cannot claim them.
+        Strip(key: "single-dumbbell row", equipment: .singleDumbbell, facing: .side, panels: [
+            .side(anchorX: 0.22, sink: 0.90, lean: 58, shoulder: 4, elbow: 4)
+                .holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.22, sink: 0.90, lean: 58, shoulder: -84, elbow: 68)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+        Strip(key: "single-dumbbell goblet squat", equipment: .singleDumbbell, facing: .side, panels: [
+            .side(anchorX: 0.21, sink: 1.00, shoulder: 20, elbow: 142)
+                .holding { [.bells([$0.hand])] },
+            .side(anchorX: 0.21, sink: 0.34, lean: 26, shoulder: 10, elbow: 150)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 1),
+        Strip(key: "single-dumbbell floor press", equipment: .singleDumbbell, facing: .front, panels: [
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 90, armBend: -76)
+                .holding { [.bells([$0.hand])] },
+            .supine(width: 1.0, kneeUp: 1.15, armAngle: 0, armBend: 4)
+                .holding { [.bells([$0.hand])] }
+        ], signature: 0),
+        Strip(key: "single-dumbbell overhead press", equipment: .singleDumbbell, facing: .side, panels: [
+            .side(shoulder: 30, elbow: -160).holding { [.bells([$0.hand])] },
+            .side(shoulder: 178, elbow: 2).holding { [.bells([$0.hand])] }
+        ], signature: 1),
+        Strip(key: "single-dumbbell curl", equipment: .singleDumbbell, facing: .side, panels: [
+            .side(shoulder: 6, elbow: 34).holding { [.bells([$0.hand])] },
+            .side(shoulder: 6, elbow: 140).holding { [.bells([$0.hand])] }
         ], signature: 1),
 
         // Seated and leaning back, the bell in both hands: it swings from one
