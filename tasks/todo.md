@@ -217,3 +217,27 @@ lists by pattern.
 Closed the same night: EMOM ticks, the recovery log, the live calls (all
 three passed after one prompt fix), installed on her phone over Wi-Fi.
 Nothing open.
+
+## The watch app — 23 August 2026
+
+Plan: docs/WATCH-PLAN.md. Branch claude/ai-fitness-planner-ios-nh2obt.
+
+- [x] Phase 0 — Core/ carve-out; SessionLink types + stub; watch app and
+      watch-widget targets in the hand-written pbxproj (own commit);
+      ActiveSession.ownerRaw; WatchTimerView interface stub. 343 tests pass;
+      empty watch app builds for the watchOS simulator.
+- [x] Walk dedupe (her ask, mid-build): overlapping Health walk recordings
+      merge to one entry counting the union of time, sources named.
+- [ ] Phase 1 (agent A) — WatchTimerView, WatchHaptics, TimerFace,
+      WatchScheduleTests, screenshots.
+- [ ] Phase 2 (agent B) — SessionLink over WCSession, phone-side install,
+      SessionLinkTests, OwnershipTests.
+- [ ] Phase 3 (agent C) — WatchWorkout (HKWorkoutSession), Signals
+      heart-rate line.
+- [ ] Phase 4 (agent D) — WatchTodayView, WatchSnapshots, complications,
+      WatchTodayTests, screenshots.
+- [ ] Integration — merge the four, wire WatchTimerView to SessionLink +
+      WatchWorkout + snapshot running fields, full suite, paired-simulator
+      mirror check, 40mm small-face pass.
+- [ ] Phase 5 — device pass (her watch: Series 6 40mm, paired to the
+      iPhone 17 Pro), HANDOFF/CLAUDE.md/one-pager/todo updates, push.
