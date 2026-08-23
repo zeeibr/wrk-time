@@ -464,6 +464,14 @@ final class CustomMove {
     var formFeel: String?
     var formWrong: String?
     var formStopIf: String?
+    /// The review's classification, so an addition files into the body
+    /// sections and the rotation's slots. Optional: rows approved before
+    /// the review was asked have none.
+    var patternRaw: String?
+    var positionRaw: Int?
+
+    var pattern: MovePattern? { patternRaw.flatMap(MovePattern.init(rawValue:)) }
+    var position: MovePosition? { positionRaw.flatMap(MovePosition.init(rawValue:)) }
 
     var form: MoveForm? {
         guard let formSetUp, let formMovement, let formFeel, let formWrong, let formStopIf,
@@ -499,6 +507,14 @@ enum CustomMoves {
     static func all(in context: ModelContext) -> [CustomMove] {
         (try? context.fetch(FetchDescriptor<CustomMove>(
             sortBy: [SortDescriptor(\.addedAt)]))) ?? []
+    }
+
+    /// Puts every approved addition's pattern and position where the
+    /// taxonomy can answer for it. Called at launch and after a review.
+    static func registerTaxonomy(in context: ModelContext) {
+        for row in all(in: context) where row.status == .approved {
+            MoveTaxonomy.register(row.name, pattern: row.pattern, position: row.position)
+        }
     }
 
     /// Form notes for a move by name: the library's table first, then an

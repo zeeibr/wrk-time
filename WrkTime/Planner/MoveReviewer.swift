@@ -37,6 +37,20 @@ struct MoveReviewer: Sendable {
         /// The five form lines, required of an approval. Optional in the
         /// struct so a stored response from before they were asked decodes.
         var form: Form?
+        /// `MovePattern.rawValue` and "standing" / "kneeling" / "floor".
+        /// Optional so a stored response from before they were asked decodes.
+        var pattern: String?
+        var position: String?
+
+        var movePattern: MovePattern? { pattern.flatMap(MovePattern.init(rawValue:)) }
+        var movePosition: MovePosition? {
+            switch position {
+            case "standing": .standing
+            case "kneeling": .kneeling
+            case "floor": .floor
+            default: nil
+            }
+        }
 
         struct Form: Codable, Sendable {
             var setUp: String
@@ -241,7 +255,7 @@ struct MoveReviewer: Sendable {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["name", "verdict", "kind", "equipment", "loadPounds",
-                             "cue", "sided", "muscles", "note", "form"],
+                             "cue", "sided", "muscles", "note", "form", "pattern", "position"],
                 "properties": [
                     "name": [
                         "type": "string",
@@ -283,6 +297,16 @@ struct MoveReviewer: Sendable {
                     "note": [
                         "type": "string",
                         "description": "For a rejection, one plain sentence saying why. For an approval, empty."
+                    ],
+                    "pattern": [
+                        "type": "string",
+                        "enum": MovePattern.allCases.map(\.rawValue),
+                        "description": "The movement pattern a strength move trains: squat, hinge, lunge, pushHorizontal, pushVertical, pullHorizontal, pullVertical, carry, coreAntiRotation, coreFlexion, coreExtension, or accessory for single-joint work. For flow, accessory."
+                    ],
+                    "position": [
+                        "type": "string",
+                        "enum": ["standing", "kneeling", "floor"],
+                        "description": "Where the body is: standing; kneeling (tall or half, legs taken out so the trunk holds her up); floor for anything on the mat, seated or on all fours."
                     ],
                     "form": [
                         "type": "object",
@@ -339,6 +363,11 @@ struct MoveReviewer: Sendable {
         Mark a move 'sides' when it is done one leg or arm at a time, and \
         'directions' when it runs one way and then the other, like a halo. The \
         timer then gives each side its own full work interval.
+
+        PATTERN AND POSITION
+        Every move names its pattern and its position. Kneeling means the legs \
+        are taken out so the trunk has to hold her up; a move on the mat, \
+        seated, or on all fours is floor.
 
         FORM
         Every approval carries five form lines for someone who has never been \

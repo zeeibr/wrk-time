@@ -40,7 +40,10 @@ struct CoachBriefTests {
         #expect(!prompt.contains("A light resistance band"))
         let schema = MoveReviewer.schema as NSDictionary
         let defs = (schema["$defs"] as? [String: Any])?["move"] as? [String: Any]
-        #expect((defs?["required"] as? [String])?.contains("form") == true)
+        let required = defs?["required"] as? [String] ?? []
+        #expect(required.contains("form") && required.contains("pattern") && required.contains("position"))
+        let position = (defs?["properties"] as? [String: Any])?["position"] as? [String: Any]
+        #expect(position?["enum"] as? [String] == ["standing", "kneeling", "floor"])
     }
 
     @Test("The week's schema asks for a mode on every session")
@@ -153,5 +156,33 @@ struct RecoveryLogTests {
         RecoveryLog.record(.ease, on: day(20), defaults: d)
         RecoveryLog.record(.hold, on: day(0), defaults: d)
         #expect((d.dictionary(forKey: RecoveryLog.key) ?? [:]).count == 1)
+    }
+}
+
+
+@Suite("Her additions have a place")
+struct CustomTaxonomyTests {
+    @Test("A registered addition answers like a built-in; an unknown name does not")
+    func registry() {
+        #expect(MoveTaxonomy.pattern(for: "Tall-kneeling lateral raise") == nil)
+        MoveTaxonomy.register("Tall-kneeling lateral raise", pattern: .accessory, position: .kneeling)
+        #expect(MoveTaxonomy.pattern(for: "tall-kneeling lateral raise") == .accessory)
+        #expect(MoveTaxonomy.position(for: "Tall-kneeling lateral raise") == .kneeling)
+        // Half a classification registers nothing.
+        MoveTaxonomy.register("Half classified", pattern: .squat, position: nil)
+        #expect(MoveTaxonomy.pattern(for: "Half classified") == nil)
+    }
+
+    @Test("The review's words decode to the app's positions")
+    func decode() throws {
+        let json = """
+        {"name":"Kneeling kickback","verdict":"approved","kind":"strength","equipment":"bodyweight",
+         "loadPounds":0,"cue":"","sided":"sides","muscles":"glutes, core","note":"",
+         "pattern":"coreExtension","position":"kneeling",
+         "form":{"setUp":"","movement":"","feel":"","wrong":"","stopIf":""}}
+        """
+        let entry = try JSONDecoder().decode(MoveReviewer.Entry.self, from: Data(json.utf8))
+        #expect(entry.movePattern == .coreExtension)
+        #expect(entry.movePosition == .kneeling)
     }
 }

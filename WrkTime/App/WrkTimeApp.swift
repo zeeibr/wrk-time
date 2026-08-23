@@ -91,6 +91,9 @@ struct RootView: View {
             seedPostureRoutine()
             seedCoreRoutine()
             seedAfterMealRoutine()
+            // Her additions' pattern and position, so the taxonomy answers
+            // for them from the first screen.
+            CustomMoves.registerTaxonomy(in: context)
             seedUpperRoutines()
             await planCurrentWeekIfNeeded()
         }

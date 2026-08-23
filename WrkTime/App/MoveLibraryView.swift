@@ -364,6 +364,9 @@ struct MoveLibraryView: View {
         row.sidedRaw = entry.sided == "none" ? nil : entry.sided
         row.muscles = entry.muscles.isEmpty ? nil : entry.muscles
         row.note = entry.note.isEmpty ? nil : entry.note
+        row.patternRaw = entry.movePattern?.rawValue
+        row.positionRaw = entry.movePosition?.rawValue
+        MoveTaxonomy.register(row.name, pattern: entry.movePattern, position: entry.movePosition)
         if let form = entry.form {
             row.formSetUp = form.setUp
             row.formMovement = form.movement
@@ -846,7 +849,12 @@ struct MoveLibraryView: View {
         }
         // Her kit only. A drawer she does not have is not a row to scroll
         // past — Settings is where it comes back.
-        let strength = MoveLibrary.available
+        // Her approved additions file in beside the built-ins once the
+        // review has said where they go; one without a position stays in
+        // "Your additions" alone.
+        let additions = CustomMoves.strength(in: context)
+            .filter { MoveTaxonomy.position(for: $0.name) != nil }
+        let strength = (MoveLibrary.available + additions)
             .filter { $0.kind == .strength }
             .filter { patternFilter == nil || MoveTaxonomy.pattern(for: $0.name) == patternFilter }
         // Kneeling is its own section, not a sub-head of the mat: the

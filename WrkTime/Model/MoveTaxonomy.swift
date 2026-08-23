@@ -105,11 +105,38 @@ enum MovePosition: Int, CaseIterable, Codable, Comparable {
 
 enum MoveTaxonomy {
     static func pattern(for name: String) -> MovePattern? {
-        table[MovePreference.key(name)]?.0
+        let key = MovePreference.key(name)
+        return table[key]?.0 ?? registry.read(key)?.0
     }
 
     static func position(for name: String) -> MovePosition? {
-        table[MovePreference.key(name)]?.1
+        let key = MovePreference.key(name)
+        return table[key]?.1 ?? registry.read(key)?.1
+    }
+
+    /// Her own approved additions, classified by the review. The built-in
+    /// table is typed; these arrive at approval and are re-registered from
+    /// the store at launch, so an addition files into the body sections and
+    /// the rotation builder like anything built in.
+    static func register(_ name: String, pattern: MovePattern?, position: MovePosition?) {
+        guard let pattern, let position else { return }
+        registry.write(MovePreference.key(name), (pattern, position))
+    }
+
+    /// A small locked table: read from views on the main actor, written at
+    /// approval and at launch.
+    private static let registry = Registry()
+    private final class Registry: @unchecked Sendable {
+        private var table: [String: (MovePattern, MovePosition)] = [:]
+        private let lock = NSLock()
+        func read(_ key: String) -> (MovePattern, MovePosition)? {
+            lock.lock(); defer { lock.unlock() }
+            return table[key]
+        }
+        func write(_ key: String, _ value: (MovePattern, MovePosition)) {
+            lock.lock(); defer { lock.unlock() }
+            table[key] = value
+        }
     }
 
     /// Setup seconds the timer adds between two moves, from the coach brief
