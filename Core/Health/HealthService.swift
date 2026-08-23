@@ -32,6 +32,31 @@ protocol HealthService: Sendable {
 
     /// Record a finished session so it counts toward the Activity rings.
     func saveWorkout(start: Date, end: Date, activeEnergyKilocalories: Double?) async throws
+
+    /// What the heart did across one session, read back from Health.
+    ///
+    /// The watch collects it during the session; the phone reads it afterwards
+    /// like it reads the walks — nothing is stored, because Health already
+    /// holds it and a second copy could only ever disagree.
+    ///
+    /// Nil when there are no samples in the window: a session done without the
+    /// watch on has no heart rate, and a zero would be a reading it never took.
+    func sessionHeartRate(start: Date, end: Date) async -> SessionHeartRate?
+}
+
+/// Average and peak heart rate across a session, in beats per minute.
+///
+/// Two numbers rather than a curve: the curve is Health's job and it draws it
+/// better. These are the two the app has anything to say about.
+struct SessionHeartRate: Equatable, Sendable {
+    let average: Double
+    let peak: Double
+
+    /// "121 avg · 148 peak" — rounded, because a heart rate to one decimal
+    /// place claims a precision a wrist sensor does not have.
+    var summary: String {
+        "\(Int(average.rounded())) avg · \(Int(peak.rounded())) peak"
+    }
 }
 
 struct WeightReading: Equatable, Sendable {
@@ -189,6 +214,10 @@ struct StubHealthService: HealthService {
     }
 
     func saveWorkout(start: Date, end: Date, activeEnergyKilocalories: Double?) async throws {}
+
+    func sessionHeartRate(start: Date, end: Date) async -> SessionHeartRate? {
+        SessionHeartRate(average: 121, peak: 148)
+    }
 
     static let sampleWeights: [WeightReading] = {
         (0..<28).map { day in

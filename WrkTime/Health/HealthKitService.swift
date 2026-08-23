@@ -138,6 +138,36 @@ final class HealthKitService: HealthService, @unchecked Sendable {
         })
     }
 
+    /// Average and peak heart rate between two instants.
+    ///
+    /// A statistics query rather than a sample query: Health does the
+    /// arithmetic where the samples live, and the app never holds a session's
+    /// worth of beats in memory to average them itself.
+    ///
+    /// Unfiltered by source on purpose — the watch writes these, but so does
+    /// Whoop, and a session worked with only the strap on still had a heart
+    /// rate. Nil when the window holds nothing.
+    func sessionHeartRate(start: Date, end: Date) async -> SessionHeartRate? {
+        guard start < end,
+              let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return nil }
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end,
+                                                    options: [.strictStartDate, .strictEndDate])
+
+        let statistics: HKStatistics? = await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(quantityType: type,
+                                          quantitySamplePredicate: predicate,
+                                          options: [.discreteAverage, .discreteMax]) { _, result, _ in
+                continuation.resume(returning: result)
+            }
+            store.execute(query)
+        }
+
+        guard let average = statistics?.averageQuantity()?.doubleValue(for: unit),
+              let peak = statistics?.maximumQuantity()?.doubleValue(for: unit) else { return nil }
+        return SessionHeartRate(average: average, peak: peak)
+    }
+
     private func quantitySamples(type: HKQuantityType, since: Date) async -> [HKQuantitySample] {
         await withCheckedContinuation { continuation in
             let predicate = HKQuery.predicateForSamples(withStart: since, end: nil)

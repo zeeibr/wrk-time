@@ -23,6 +23,10 @@ struct SignalsView: View {
 
     @State private var recovery = RecoverySnapshot()
     @State private var walks: [RecordedWalk] = []
+    /// Read from Health on every appearance, never stored — the same
+    /// arrangement the walks have, and for the same reason: Health already
+    /// holds it, and a copy in the store could only ever disagree with it.
+    @State private var lastSessionHeartRate: SessionHeartRate?
     @State private var loaded = false
     @State private var loggingWeight = false
     @AppStorage(PlannerService.Memo.walkMinutes) private var walkTarget = 0
@@ -48,6 +52,9 @@ struct SignalsView: View {
             recovery = await health.recoverySnapshot()
             RecoveryLog.record(recovery.guidance)
             walks = await health.walks(since: Date.now.addingTimeInterval(-14 * 86_400))
+            if let last = lastFinished {
+                lastSessionHeartRate = await health.sessionHeartRate(start: last.start, end: last.end)
+            }
             loaded = true
         }
     }
@@ -87,6 +94,23 @@ struct SignalsView: View {
                     .padding(.top, 12)
             }
 
+            // Only when Health has samples across the session's own hours.
+            // No placeholder row, no em dash, no zero: a session worked
+            // without the watch on had a heart rate this app never saw, and
+            // saying so with a number would be inventing one.
+            if let heartRate = lastSessionHeartRate, let last = lastFinished {
+                DetailLine(label: "Last session",
+                           value: heartRate.summary,
+                           note: last.note)
+                    .padding(.top, 10)
+
+                Text("Averaged and peaked across the session's own hours, read from Health — the watch records it, the plan does not train from it.")
+                    .font(.almanacBodySmall)
+                    .foregroundStyle(Palette.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
+
             if loaded, recovery.sleepHours == nil, recovery.hrv == nil {
                 Text("Nothing came through from Health. The plan holds as written — a missing signal is never read as a bad one.")
                     .font(.almanacBodySmall)
@@ -110,6 +134,56 @@ struct SignalsView: View {
         case .ease: "Down on your usual"
         case .push: "Up on your usual"
         case .hold: "As usual"
+        }
+    }
+
+    /// The last thing she finished, whichever kind it was.
+    ///
+    /// A mark and one of her own workouts are the same question here — "what
+    /// did I last do" — so both are asked and the later one wins. The bounds
+    /// are the session's own, not a guessed window: a planned session ended at
+    /// `completedAt` and ran for as long as it was written to, a `RoutineRun`
+    /// ended at `finishedAt` and ran for its recorded seconds.
+    ///
+    /// The written length is used rather than the elapsed clock for the same
+    /// reason `plannedSeconds` decides what counts as substantial, and it is
+    /// clamped: a routine of no length would ask Health for an empty window,
+    /// and a corrupt one would ask for a day of somebody's heart.
+    private var lastFinished: FinishedSession? {
+        var latest = sessions.compactMap { session -> FinishedSession? in
+            guard let end = session.completedAt else { return nil }
+            return FinishedSession(title: session.title,
+                                   length: session.routine?.schedule.total ?? 0,
+                                   end: end)
+        }.max { $0.end < $1.end }
+
+        if let run = runs.max(by: { $0.finishedAt < $1.finishedAt }),
+           run.finishedAt > (latest?.end ?? .distantPast) {
+            latest = FinishedSession(title: run.name,
+                                     length: run.seconds,
+                                     end: run.finishedAt)
+        }
+        return latest
+    }
+
+    /// One finished thing, reduced to what a Health query and a row need.
+    private struct FinishedSession {
+        let title: String
+        let length: TimeInterval
+        let end: Date
+
+        /// Between a minute and three hours. Neither bound is reachable by a
+        /// routine this app writes; they are there so a row with nothing in it
+        /// cannot turn into a query for everything.
+        var start: Date {
+            end.addingTimeInterval(-min(max(length, 60), 3 * 3600))
+        }
+
+        /// "Push and pull · Wed Aug 20", or just the day when the row was
+        /// recorded without a name.
+        var note: String {
+            let day = end.formatted(.dateTime.weekday(.abbreviated).month().day())
+            return title.isEmpty ? day : "\(title) · \(day)"
         }
     }
 
@@ -442,14 +516,25 @@ private struct WalkBar: View {
 private struct DetailLine: View {
     let label: String
     let value: String
+    /// What the number is *of* — the session it came from, the day it was.
+    /// Under the label rather than beside the value, so the column of numbers
+    /// down the right stays a column.
+    var note: String?
 
     var body: some View {
         VStack(spacing: 0) {
             Rule()
-            HStack {
-                Text(label)
-                    .font(.almanacBody)
-                    .foregroundStyle(Palette.ink)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.almanacBody)
+                        .foregroundStyle(Palette.ink)
+                    if let note {
+                        Text(note)
+                            .font(.almanacBodySmall)
+                            .foregroundStyle(Palette.mute)
+                    }
+                }
                 Spacer(minLength: 8)
                 Text(value).almanacLabel(Palette.mute).tabular()
             }
